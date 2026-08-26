@@ -47,7 +47,9 @@ export default async function OwnerDashboard() {
   });
 
   // Compute quick metrics
+  const totalUsersCount = await prisma.user.count();
   const totalCandidatesCount = await prisma.user.count({ where: { role: "CANDIDATE" } });
+  const totalSettersCount = await prisma.user.count({ where: { role: "SETTER" } });
   const liveSessionsCount = activeSessions.filter(s => s.status === "LIVE").length;
 
   return (
@@ -95,7 +97,8 @@ export default async function OwnerDashboard() {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Registered</p>
-            <p className="text-2xl font-black text-cyan-600 mt-0.5">{totalCandidatesCount} Users</p>
+            <p className="text-2xl font-black text-cyan-600 mt-0.5">{totalUsersCount} Users</p>
+            <p className="text-[10px] text-slate-400 font-medium">{totalCandidatesCount} Candidates &bull; {totalSettersCount} Setters</p>
           </div>
         </div>
 
