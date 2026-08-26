@@ -21,14 +21,17 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-      <div className="p-6 border-b flex justify-between items-center bg-slate-50">
-        <h3 className="font-semibold text-slate-800">Pending Review Queue</h3>
-        <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-soft overflow-hidden">
+      <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+        <div>
+          <h3 className="font-bold text-slate-900 text-sm tracking-tight">Question Review & Quality Queue</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Author submissions pending owner verification</p>
+        </div>
+        <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full border border-amber-200">
           {questions.length} Pending
         </span>
       </div>
-      <div className="divide-y max-h-[600px] overflow-y-auto">
+      <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
         {questions.map(q => {
           let parsedOptions = [];
           try {
@@ -37,42 +40,42 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
 
           return (
             <div key={q.id} className="p-6">
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
                 <div>
                   <div className="flex gap-2 mb-2">
-                    <span className="text-xs font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded uppercase tracking-wide">
+                    <span className="text-[10px] font-extrabold bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full uppercase tracking-wider border border-brand-100">
                       {q.category}
                     </span>
-                    <span className="text-xs font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded uppercase tracking-wide">
+                    <span className="text-[10px] font-extrabold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
                       {q.difficultyLevel}
                     </span>
                     {q.isExtracted && (
-                      <span className="text-xs font-semibold bg-purple-100 text-purple-800 px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
-                        🤖 AI Extracted
+                      <span className="text-[10px] font-extrabold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                        🤖 AI Parsed
                       </span>
                     )}
                   </div>
-                  <h4 className="font-medium text-slate-900 text-lg">{q.text}</h4>
+                  <h4 className="font-bold text-slate-900 text-base">{q.text}</h4>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleReview(q.id, "REJECT")}
                     disabled={loadingId === q.id}
-                    className="px-4 py-1.5 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors disabled:opacity-50 border border-rose-100"
                   >
                     Reject
                   </button>
                   <button
                     onClick={() => handleReview(q.id, "APPROVE")}
                     disabled={loadingId === q.id}
-                    className="px-4 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-all shadow-brand disabled:opacity-50"
                   >
                     Approve
                   </button>
                 </div>
               </div>
               
-              <div className="space-y-2 pl-4 border-l-2 border-slate-200">
+              <div className="space-y-2 pl-4 border-l-2 border-brand-200 mt-4">
                 {parsedOptions.map((opt: any, idx: number) => {
                   let correctAnsText = "";
                   try {
@@ -84,14 +87,14 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
 
                   const isCorrect = correctAnsText === opt.text;
                   return (
-                    <div key={idx} className={`p-3 rounded-lg flex items-start gap-3 ${isCorrect ? 'bg-green-50 border border-green-200' : 'bg-slate-50 border border-slate-100'}`}>
-                      <div className={`mt-0.5 w-4 h-4 rounded-full flex-shrink-0 ${isCorrect ? 'bg-green-500' : 'bg-slate-300'}`} />
+                    <div key={idx} className={`p-3 rounded-xl flex items-start gap-3 text-xs ${isCorrect ? 'bg-emerald-50/70 border border-emerald-200' : 'bg-slate-50 border border-slate-100'}`}>
+                      <div className={`mt-0.5 w-3.5 h-3.5 rounded-full flex-shrink-0 ${isCorrect ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                       <div>
-                        <p className={`font-medium text-sm ${isCorrect ? 'text-green-900' : 'text-slate-700'}`}>
+                        <p className={`font-semibold ${isCorrect ? 'text-emerald-900' : 'text-slate-700'}`}>
                           {opt.text}
                         </p>
                         {opt.explanation && (
-                          <p className="text-xs text-slate-500 mt-1 italic">
+                          <p className="text-[11px] text-slate-500 mt-1 italic">
                             Explanation: {opt.explanation}
                           </p>
                         )}

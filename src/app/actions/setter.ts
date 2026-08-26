@@ -36,7 +36,7 @@ export async function createQuestionAction(formData: FormData) {
 
   const qType = (formData.get("qType") as string) || "MCQ_SINGLE";
 
-  const options = [];
+  const options: { text: string; explanation: string | null; imageUrl: string | null }[] = [];
   if (qType === "MCQ_SINGLE" || qType === "MCQ_MULTI") {
     for (let i = 0; i < 4; i++) {
       const text = formData.get(`option${i}`) as string;

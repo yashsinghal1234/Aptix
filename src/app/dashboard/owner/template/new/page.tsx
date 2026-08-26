@@ -18,7 +18,7 @@ export default async function NewTemplatePage() {
   });
 
   return (
-    <div className="p-8 max-w-7xl mx-auto bg-slate-50 min-h-screen">
+    <div className="max-w-7xl mx-auto pb-12">
       <CreateTemplateForm allQuestions={allQuestions} />
     </div>
   );

@@ -53,19 +53,41 @@ export async function getAttemptStatusAction(attemptId: string) {
 
   let detailedResults = null;
   if (attempt.status === "SUBMITTED" || attempt.session.status === "COMPLETED") {
-    const config = attempt.session.exam.configSnapshot ? JSON.parse(attempt.session.exam.configSnapshot) : {};
-    if (config.showCorrectAnswers || config.showExplanation) {
+    const showCorrect = attempt.session.exam.showCorrectAnswers ?? true;
+    const showExpl = attempt.session.exam.showExplanation ?? false;
+    
+    if (showCorrect || showExpl) {
       const sessionQuestions = await prisma.question.findMany({
         where: { examSessions: { some: { id: attempt.examSessionId } } }
       });
       detailedResults = attempt.responses.map(r => {
         const q = sessionQuestions.find(sq => sq.id === r.questionId);
+        let correctAns: string | undefined = undefined;
+        let explanationText: string | undefined = undefined;
+
+        if (q && showCorrect) {
+          try {
+            const parsed = JSON.parse(q.answerData);
+            correctAns = parsed.correctAnswer || (parsed.correctAnswers ? parsed.correctAnswers.join(", ") : q.answerData);
+          } catch(e) {
+            correctAns = q.answerData;
+          }
+        }
+
+        if (q && showExpl) {
+          try {
+            const parsedOpts = JSON.parse(q.options);
+            const optWithExp = parsedOpts.find((opt: any) => opt.explanation);
+            if (optWithExp) explanationText = optWithExp.explanation;
+          } catch(e) {}
+        }
+
         return {
           questionId: r.questionId,
           isCorrect: r.isCorrect,
           earnedPoints: r.earnedPoints,
-          correctAnswer: config.showCorrectAnswers ? q?.correctAnswer : undefined,
-          explanation: config.showExplanation ? q?.explanation : undefined
+          correctAnswer: correctAns,
+          explanation: explanationText
         };
       });
     }

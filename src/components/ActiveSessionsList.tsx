@@ -14,11 +14,15 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
   }, []);
 
   if (initialSessions.length === 0) {
-    return <p className="text-slate-500 text-sm">No active exam sessions.</p>;
+    return (
+      <div className="text-center py-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+        <p className="text-slate-400 text-xs font-semibold">No active or live exam sessions currently running.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {initialSessions.map(session => {
         let effectiveStatus = session.status;
         const startTime = session.startTime ? new Date(session.startTime) : null;
@@ -27,36 +31,56 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
           effectiveStatus = "LIVE";
         }
 
+        const isLive = effectiveStatus === "LIVE";
+
         return (
-          <div key={session.id} className="flex justify-between items-center p-4 border rounded-lg border-l-4 border-l-indigo-500 bg-indigo-50/30">
-            <div>
-              <h3 className="font-semibold text-slate-800">{session.exam.title}</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Status: <span className="font-medium text-indigo-700">{effectiveStatus} {session.status !== effectiveStatus ? "(Auto)" : ""}</span> | Attempts: {session._count?.attempts || 0}
-              </p>
+          <div key={session.id} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-2xl border transition-all ${
+            isLive ? 'bg-emerald-50/30 border-emerald-200/80 shadow-soft-sm' : 'bg-white border-slate-200/80 shadow-soft-sm'
+          }`}>
+            <div className="mb-3 sm:mb-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                  isLive ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-50 text-brand-700'
+                }`}>
+                  {effectiveStatus} {session.status !== effectiveStatus ? "(Auto-Live)" : ""}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">|</span>
+                <span className="text-xs text-slate-500 font-bold">{session._count?.attempts || 0} Candidates</span>
+              </div>
+              <h3 className="font-bold text-slate-900 text-sm">{session.exam.title}</h3>
+              {startTime && (
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Scheduled: {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({startTime.toLocaleDateString()})
+                </p>
+              )}
             </div>
-            <div className="flex flex-col gap-2">
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <Link 
                 href={`/dashboard/owner/session/${session.id}`}
-                className="text-xs px-3 py-1.5 text-center bg-white border border-slate-200 text-slate-700 rounded font-medium hover:bg-slate-50 transition-colors"
+                className="flex-1 sm:flex-initial text-center text-xs px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 hover:border-slate-300 transition-all shadow-soft-sm"
               >
                 Live Monitor
               </Link>
               {effectiveStatus === "SCHEDULED" && (
-                <form action={setSessionStatusAction}>
+                <form action={async (formData) => {
+                  await setSessionStatusAction(formData);
+                }} className="flex-1 sm:flex-initial">
                   <input type="hidden" name="sessionId" value={session.id} />
                   <input type="hidden" name="status" value="LIVE" />
-                  <button className="w-full text-xs px-3 py-1.5 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors">
-                    Force Go Live
+                  <button className="w-full text-xs px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-sm">
+                    Go Live
                   </button>
                 </form>
               )}
               {effectiveStatus === "LIVE" && (
-                <form action={setSessionStatusAction}>
+                <form action={async (formData) => {
+                  await setSessionStatusAction(formData);
+                }} className="flex-1 sm:flex-initial">
                   <input type="hidden" name="sessionId" value={session.id} />
                   <input type="hidden" name="status" value="COMPLETED" />
-                  <button className="w-full text-xs px-3 py-1.5 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-colors">
-                    End Now
+                  <button className="w-full text-xs px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-all shadow-sm">
+                    End Session
                   </button>
                 </form>
               )}

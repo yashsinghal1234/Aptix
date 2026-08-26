@@ -35,24 +35,37 @@ export default async function Home() {
   if (!activeSession) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
-        <header className="bg-white border-b px-8 py-4 flex justify-between items-center shadow-sm">
+        <header className="bg-navy-900 border-b border-navy-800 px-8 py-3.5 flex justify-between items-center shadow-md">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">A</div>
-            <h1 className="text-xl font-bold text-slate-800">Aptix</h1>
+            <img src="/aptix-logo.png" alt="Aptix" className="h-7 object-contain brightness-0 invert" />
+            <h1 className="text-lg font-bold text-white tracking-tight">Aptix Assessment</h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-slate-600">Welcome, {name}</span>
+            <span className="text-xs font-semibold text-slate-300 bg-navy-800 px-3 py-1.5 rounded-full border border-slate-700">
+              Candidate: <span className="text-white font-bold">{name}</span>
+            </span>
             <form action={logoutAction}>
-              <button className="text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-md transition-colors">
+              <button className="text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3.5 py-1.5 rounded-lg transition-colors border border-slate-700">
                 Log Out
               </button>
             </form>
           </div>
         </header>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="bg-white p-8 rounded-xl border text-center shadow-sm max-w-sm w-full">
-            <h2 className="text-xl font-bold text-slate-800 mb-2">No Exams Available</h2>
-            <p className="text-slate-500">There are currently no active or scheduled exams.</p>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="bg-white p-10 rounded-2xl border border-slate-100/80 text-center shadow-soft-xl max-w-md w-full">
+            <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm border border-brand-100">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-extrabold text-slate-800 mb-2 tracking-tight">No Exams Scheduled</h2>
+            <p className="text-slate-500 text-sm font-medium leading-relaxed mb-6">
+              There are currently no active assessments assigned to your account. This page will automatically refresh when an exam goes live.
+            </p>
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-brand-600 bg-brand-50 py-2 px-4 rounded-full w-fit mx-auto border border-brand-100">
+              <span className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
+              <span>Listening for live sessions...</span>
+            </div>
             <NoExamPoller />
           </div>
         </div>

@@ -57,19 +57,19 @@ export function OwnerSessionTimer({
   }, [startTime, durationMinutes, extendedUntil, status, hasEnded, synced, getServerTime]);
 
   if (status === "COMPLETED") {
-    return <span className="font-mono text-slate-500">Ended</span>;
+    return <span className="font-mono text-slate-400 text-xs font-bold">Ended</span>;
   }
 
   if (timeLeft === null) {
-    return <span className="font-mono text-slate-500">Waiting for start</span>;
+    return <span className="font-mono text-slate-400 text-xs">Waiting</span>;
   }
 
   const m = Math.floor(timeLeft / 60);
   const s = timeLeft % 60;
   
   return (
-    <span className={`font-mono font-bold ${timeLeft < 300 ? 'text-red-600 animate-pulse' : 'text-indigo-600'}`}>
-      {m}:{s.toString().padStart(2, '0')}
+    <span className={`font-mono font-black text-xs ${timeLeft < 300 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
+      {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
     </span>
   );
 }

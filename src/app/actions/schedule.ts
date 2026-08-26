@@ -38,7 +38,8 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
     data: {
       title,
       durationMinutes,
-      negativeMarking,
+      negativeMarkingEnabled: negativeMarking > 0,
+      negativeMarksValue: negativeMarking,
       createdBySetterId: payload.userId as string,
       questions: {
         connect: selectedQuestionIds.map((id) => ({ id }))
