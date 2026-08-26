@@ -22,7 +22,7 @@ export default async function DashboardLayout({
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center p-1.5 shadow-md border border-slate-700/50 shrink-0">
-              <img src="/aptix-logo.png" alt="Aptix" className="h-full w-full object-contain" />
+              <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
             </div>
             <div>
               <span className="font-black text-xl tracking-tight text-white block">Aptix</span>

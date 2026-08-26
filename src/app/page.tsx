@@ -38,7 +38,7 @@ export default async function Home() {
         <header className="bg-navy-900 border-b border-navy-800 px-8 py-3.5 flex justify-between items-center shadow-md">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shadow-sm shrink-0">
-              <img src="/aptix-logo.png" alt="Aptix" className="h-full w-full object-contain" />
+              <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
             </div>
             <h1 className="text-lg font-bold text-white tracking-tight">Aptix Assessment</h1>
           </div>

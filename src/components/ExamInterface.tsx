@@ -314,7 +314,7 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
             <div className="relative z-10">
               <div className="flex items-center gap-2.5 mb-6">
                 <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center p-0.5 shadow-sm shrink-0">
-                  <img src="/aptix-logo.png" alt="Aptix" className="h-full w-full object-contain" />
+                  <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
                 </div>
                 <span className="text-xs uppercase tracking-widest font-bold text-brand-200">Aptix Assessment</span>
               </div>
@@ -595,7 +595,7 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center p-0.5 shadow-sm shrink-0">
-                <img src="/aptix-logo.png" alt="Aptix" className="h-full w-full object-contain" />
+                <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
               </div>
               <span className="font-extrabold text-white text-base tracking-tight hidden sm:inline">Aptix</span>
             </div>
