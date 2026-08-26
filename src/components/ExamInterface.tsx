@@ -51,7 +51,7 @@ export function ExamInterface({
   const [timeUntilStart, setTimeUntilStart] = useState(0);
   const [timeLeft, setTimeLeft] = useState(session.durationMinutes * 60);
   const [isForcedLive, setIsForcedLive] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sessionStatus, setSessionStatus] = useState(session.status);
   const [tabSwitchWarning, setTabSwitchWarning] = useState<string | null>(null);
@@ -82,6 +82,12 @@ export function ExamInterface({
   useEffect(() => { 
     answersRef.current = answers; 
   }, [answers]);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+  }, []);
 
   // Crash Recovery & Deterministic Shuffling Initialization
   useEffect(() => {
@@ -121,7 +127,9 @@ export function ExamInterface({
       setVisited(new Set(answeredIds));
       if (!isAlreadySubmitted) {
         setIsRecovered(true);
-        setHasStarted(true); // Automatically resume directly into test
+        if (config.requireFullscreen === false) {
+          setHasStarted(true);
+        }
       }
 
       // Jump to first unanswered question
@@ -386,6 +394,7 @@ export function ExamInterface({
     if (config.requireFullscreen !== false) {
       try {
         await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
       } catch (err) {
         console.warn("Fullscreen request failed", err);
       }
@@ -404,8 +413,10 @@ export function ExamInterface({
       if (statusData.status === "IN_PROGRESS" && isFinished) {
         setIsFinished(false);
         isFinishingRef.current = false;
-        setHasStarted(true);
+        setHasStarted(false); // Force through fullscreen entry button
+        setIsFullscreen(false);
         setIsRecovered(true);
+        blurCountRef.current = 0;
         if (statusData.extendedUntil) {
           setCurrentExtendedUntil(new Date(statusData.extendedUntil));
         }
@@ -560,7 +571,7 @@ export function ExamInterface({
                 onClick={startExamFullscreen}
                 className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm rounded-xl shadow-brand hover:shadow-lg transition-all flex items-center justify-center gap-2 group"
               >
-                <span>Start Assessment</span>
+                <span>{isRecovered ? "🖥️ Enter Fullscreen & Resume Assessment" : "Start Assessment"}</span>
                 <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
@@ -692,6 +703,7 @@ export function ExamInterface({
             onClick={async () => {
               try {
                 await document.documentElement.requestFullscreen();
+                setIsFullscreen(true);
               } catch (err) {
                 console.warn(err);
               }
