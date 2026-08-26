@@ -25,8 +25,8 @@ export function LoginForm() {
 
       <div className="bg-white p-10 rounded-2xl shadow-soft-xl max-w-md w-full border border-slate-100/80 relative z-10">
         <div className="text-center mb-8 flex flex-col items-center">
-          <div className="w-16 h-16 rounded-2xl bg-navy-900 flex items-center justify-center p-3 shadow-md mb-4">
-            <img src="/aptix-logo.png" alt="Aptix Logo" className="h-full w-full object-contain brightness-0 invert" />
+          <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-center p-2.5 shadow-soft mb-4">
+            <img src="/aptix-logo.png" alt="Aptix Logo" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Aptix Assessment</h1>
           <p className="text-slate-500 mt-1.5 text-sm font-medium">Please enter your credentials to begin</p>

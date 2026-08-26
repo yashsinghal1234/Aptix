@@ -312,8 +312,10 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
           {/* Left Purple Accent Banner (matching reference design) */}
           <div className="md:w-5/12 bg-gradient-to-br from-brand-600 via-brand-700 to-indigo-800 text-white p-8 md:p-10 flex flex-col justify-between relative overflow-hidden">
             <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-6">
-                <img src="/aptix-logo.png" alt="Aptix" className="h-6 object-contain brightness-0 invert" />
+              <div className="flex items-center gap-2.5 mb-6">
+                <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center p-0.5 shadow-sm shrink-0">
+                  <img src="/aptix-logo.png" alt="Aptix" className="h-full w-full object-contain" />
+                </div>
                 <span className="text-xs uppercase tracking-widest font-bold text-brand-200">Aptix Assessment</span>
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4 leading-snug">
@@ -591,8 +593,10 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
         {/* Dark Navy Navbar (matching reference bottom-left) */}
         <header className="bg-navy-900 border-b border-navy-800 px-6 py-3.5 flex justify-between items-center shadow-md sticky top-0 z-30">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <img src="/aptix-logo.png" alt="Aptix" className="h-6 object-contain brightness-0 invert" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center p-0.5 shadow-sm shrink-0">
+                <img src="/aptix-logo.png" alt="Aptix" className="h-full w-full object-contain" />
+              </div>
               <span className="font-extrabold text-white text-base tracking-tight hidden sm:inline">Aptix</span>
             </div>
             <div className="h-4 w-px bg-navy-700 hidden sm:block" />
