@@ -88,6 +88,32 @@ export async function saveDraftAnswerAction(
 
   const userId = payload.userId as string;
 
+  // Check-on-Access (Lazy Evaluation): Auto-submit if deadline has passed
+  const attempt = await prisma.candidateAttempt.findUnique({
+    where: { id: attemptId },
+    include: { session: true }
+  });
+
+  if (!attempt || attempt.userId !== userId) return { error: "Attempt not found" };
+
+  if (attempt.status === "SUBMITTED") {
+    return { error: "Assessment already submitted", isSubmitted: true };
+  }
+
+  const sessionStart = attempt.session.startTime || attempt.session.createdAt;
+  const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
+  const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
+  const now = new Date();
+
+  if (now > effectiveEnd) {
+    // Deadline passed: Auto-submit immediately
+    await prisma.candidateAttempt.update({
+      where: { id: attemptId },
+      data: { status: "SUBMITTED", submittedAt: now }
+    });
+    return { error: "Assessment time expired", isSubmitted: true };
+  }
+
   const q = await prisma.question.findUnique({
     where: { id: questionId }
   });

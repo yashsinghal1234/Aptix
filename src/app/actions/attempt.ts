@@ -41,6 +41,21 @@ export async function getAttemptStatusAction(attemptId: string) {
   
   if (!attempt) return null;
   
+  // Check-on-Access (Lazy Auto-Submit on Deadline)
+  const now = new Date();
+  const sessionStart = attempt.session.startTime || attempt.session.createdAt;
+  const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
+  const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
+
+  let currentStatus = attempt.status;
+  if (currentStatus === "IN_PROGRESS" && now > effectiveEnd) {
+    await prisma.candidateAttempt.update({
+      where: { id: attemptId },
+      data: { status: "SUBMITTED", submittedAt: now }
+    });
+    currentStatus = "SUBMITTED";
+  }
+
   const score = attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0);
 
   let totalMarks = attempt.session.totalMarks || attempt.session.exam.totalMarks || 0;
@@ -52,7 +67,7 @@ export async function getAttemptStatusAction(attemptId: string) {
   }
 
   let detailedResults = null;
-  if (attempt.status === "SUBMITTED" || attempt.session.status === "COMPLETED") {
+  if (currentStatus === "SUBMITTED" || attempt.session.status === "COMPLETED") {
     const showCorrect = attempt.session.exam.showCorrectAnswers ?? true;
     const showExpl = attempt.session.exam.showExplanation ?? false;
     
