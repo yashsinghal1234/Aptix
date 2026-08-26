@@ -22,10 +22,11 @@ export default async function OwnerDashboard() {
     where: { role: "SETTER" }
   });
 
-  const pendingQuestions = await prisma.question.findMany({
-    where: { status: "SUBMITTED" },
-    orderBy: { createdAt: "asc" }
+  const allQuestions = await prisma.question.findMany({
+    orderBy: { createdAt: "desc" }
   });
+
+  const pendingQuestions = allQuestions.filter(q => q.status === "SUBMITTED");
 
   // Fetch Exam Templates
   const templates = await prisma.exam.findMany({
@@ -115,7 +116,7 @@ export default async function OwnerDashboard() {
 
       {/* Question Review Queue */}
       <div id="review-queue" className="grid grid-cols-1 gap-8">
-        <ReviewQuestions questions={pendingQuestions} />
+        <ReviewQuestions questions={allQuestions} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

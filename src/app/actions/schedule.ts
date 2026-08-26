@@ -94,3 +94,19 @@ export async function reviewQuestionAction(questionId: string, action: "APPROVE"
   revalidatePath("/dashboard/owner");
   return { success: true };
 }
+
+export async function approveAllQuestionsAction() {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  await prisma.question.updateMany({
+    where: { status: { in: ["SUBMITTED", "DRAFT"] } },
+    data: { status: "APPROVED" }
+  });
+
+  revalidatePath("/dashboard/owner");
+  revalidatePath("/dashboard/setter/bank");
+  return { success: true };
+}
