@@ -102,7 +102,7 @@ export default async function OwnerDashboard() {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-soft flex items-center gap-4">
+        <a href="#review-queue" className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-soft flex items-center gap-4 hover:border-amber-300 transition-colors">
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 shrink-0">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           </div>
@@ -110,14 +110,13 @@ export default async function OwnerDashboard() {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending Review</p>
             <p className="text-2xl font-black text-amber-600 mt-0.5">{pendingQuestions.length} Qs</p>
           </div>
-        </div>
+        </a>
       </div>
 
-      {pendingQuestions.length > 0 && (
-        <div className="grid grid-cols-1 gap-8">
-          <ReviewQuestions questions={pendingQuestions} />
-        </div>
-      )}
+      {/* Question Review Queue */}
+      <div id="review-queue" className="grid grid-cols-1 gap-8">
+        <ReviewQuestions questions={pendingQuestions} />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Templates */}

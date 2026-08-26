@@ -14,8 +14,22 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
 
   if (questions.length === 0) {
     return (
-      <div className="bg-white p-8 rounded-xl border shadow-sm text-center">
-        <p className="text-slate-500">No questions currently pending review.</p>
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-soft flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shrink-0">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+          </div>
+          <div>
+            <h4 className="font-extrabold text-sm text-slate-900">Question Review Queue is Up to Date</h4>
+            <p className="text-xs text-slate-400 mt-0.5">No questions currently awaiting review. All submissions are processed.</p>
+          </div>
+        </div>
+        <a
+          href="/dashboard/setter/bank"
+          className="px-4 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-100 transition-colors shrink-0"
+        >
+          Browse Question Bank &rarr;
+        </a>
       </div>
     );
   }
