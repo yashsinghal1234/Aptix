@@ -1,10 +1,7 @@
 <div align="center">
-  <img src="public/aptix-logo.png" alt="Aptix Logo" width="120" />
   <h1>Aptix Assessment Platform</h1>
   
   <p>A highly secure, robust, and scalable examination and assessment platform built for the Kinesis Technical Society (KTS).</p>
-
-  <img src="public/kts-logo.png" alt="KTS Logo" width="80" />
 </div>
 
 <br />
