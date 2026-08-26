@@ -171,7 +171,7 @@ export default async function OwnerDashboard() {
                         title="Schedule Start Time (Optional)"
                       />
                       <button className="text-xs px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold transition-all shadow-brand whitespace-nowrap">
-                        Launch Session &rarr;
+                        Launch Session →
                       </button>
                     </form>
                   </div>

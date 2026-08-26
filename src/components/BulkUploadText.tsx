@@ -177,7 +177,7 @@ export function BulkUploadText() {
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                  Parse & Run AI Quality Check &rarr;
+                  Parse & Run AI Quality Check →
                 </>
               )}
             </button>
@@ -444,7 +444,7 @@ export function BulkUploadText() {
                         onClick={() => handleSaveSingle(qIdx, "SUBMITTED")}
                         className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors disabled:opacity-50"
                       >
-                        Accept & Submit for Review &rarr;
+                        Accept & Submit for Review →
                       </button>
                     </div>
                   </div>

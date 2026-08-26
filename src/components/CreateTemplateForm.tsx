@@ -352,7 +352,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
           type="submit"
           className="px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl shadow-brand hover:shadow-lg transition-all disabled:opacity-50"
         >
-          {loading ? "Saving Template..." : "Save Assessment Template &rarr;"}
+          {loading ? "Saving Template..." : "Save Assessment Template →"}
         </button>
       </div>
     </form>

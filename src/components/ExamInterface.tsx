@@ -294,7 +294,7 @@ export function ExamInterface({
   useEffect(() => {
     if (!hasStarted || isFinished || isFinishingRef.current) return;
 
-    const handleBlur = () => {
+    const handleSecurityInfraction = (type: "WINDOW_BLUR" | "FULLSCREEN_EXIT", description: string) => {
       if (isFinishingRef.current || isFinished || !hasStarted) return;
 
       blurCountRef.current += 1;
@@ -302,16 +302,30 @@ export function ExamInterface({
       const maxLimit = config.tabSwitchLimit !== undefined ? parseInt(String(config.tabSwitchLimit), 10) : 0;
 
       // Log cheat signal only during live exam
-      logCheatSignalAction(session.id, "WINDOW_BLUR", `Candidate switched away from the exam window (Switch #${count}).`);
+      logCheatSignalAction(session.id, type, `${description} (Infraction #${count}).`);
       
       if (maxLimit > 0) {
         if (count >= maxLimit) {
           isFinishingRef.current = true;
-          setTabSwitchWarning(`Maximum allowed tab switches (${maxLimit}) reached. Auto-submitting exam.`);
+          setTabSwitchWarning(`Maximum allowed security limit (${maxLimit}) reached. Auto-submitting assessment now.`);
           executeSubmit();
         } else {
-          setTabSwitchWarning(`⚠️ Tab switch warning: ${count} of ${maxLimit} allowed switches used. Exceeding will auto-submit.`);
+          setTabSwitchWarning(`⚠️ Security Warning: ${count} of ${maxLimit} allowed infractions used (${type === "FULLSCREEN_EXIT" ? "Exited Fullscreen" : "Tab Switched"}). Exceeding will auto-submit.`);
         }
+      } else if (config.autoSubmitOnFullscreenExit && type === "FULLSCREEN_EXIT") {
+        isFinishingRef.current = true;
+        setTabSwitchWarning("Exited full-screen mode. Assessment automatically submitted.");
+        executeSubmit();
+      }
+    };
+
+    const handleBlur = () => {
+      handleSecurityInfraction("WINDOW_BLUR", "Candidate switched away from the exam window or tab");
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleSecurityInfraction("WINDOW_BLUR", "Candidate minimized window or changed active tab");
       }
     };
 
@@ -320,18 +334,20 @@ export function ExamInterface({
       if (config.requireFullscreen === false) return;
       
       if (!document.fullscreenElement) {
-        logCheatSignalAction(session.id, "FULLSCREEN_EXIT", "Candidate exited full-screen mode.");
         setIsFullscreen(false);
+        handleSecurityInfraction("FULLSCREEN_EXIT", "Candidate exited full-screen mode");
       } else {
         setIsFullscreen(true);
       }
     };
 
     window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
 
     return () => {
       window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, [hasStarted, isFinished, session.id, config, executeSubmit]);
@@ -1000,7 +1016,7 @@ export function ExamInterface({
                       disabled={currentQuestion === 0}
                       className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-all shadow-soft-sm"
                     >
-                      &larr; Previous
+                      ← Previous
                     </button>
                   )}
                 </div>

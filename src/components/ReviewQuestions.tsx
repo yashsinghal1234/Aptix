@@ -28,7 +28,7 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
           href="/dashboard/setter/bank"
           className="px-4 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-100 transition-colors shrink-0"
         >
-          Browse Question Bank &rarr;
+          Browse Question Bank →
         </a>
       </div>
     );

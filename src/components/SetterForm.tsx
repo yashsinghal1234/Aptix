@@ -48,7 +48,7 @@ export function SetterForm() {
           type="submit"
           className="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-brand whitespace-nowrap"
         >
-          Add Author &rarr;
+          Add Author →
         </button>
       </form>
     </div>
