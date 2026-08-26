@@ -46,13 +46,15 @@ export function ExamInterface({
   const [visited, setVisited] = useState<Set<string>>(new Set());
   const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
   
-  const [isFinished, setIsFinished] = useState(false);
+  const isAlreadySubmitted = attempt.status === "SUBMITTED";
+  const [isFinished, setIsFinished] = useState(isAlreadySubmitted);
   const [timeUntilStart, setTimeUntilStart] = useState(0);
   const [timeLeft, setTimeLeft] = useState(session.durationMinutes * 60);
   const [isForcedLive, setIsForcedLive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sessionStatus, setSessionStatus] = useState(session.status);
+  const [tabSwitchWarning, setTabSwitchWarning] = useState<string | null>(null);
   
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [finalTotalMarks, setFinalTotalMarks] = useState<number | null>(null);
@@ -65,7 +67,7 @@ export function ExamInterface({
 
   const answersRef = useRef(answers);
   const timeSpentRef = useRef<Record<string, number>>({});
-  const isFinishingRef = useRef(false);
+  const isFinishingRef = useRef(isAlreadySubmitted);
   const blurCountRef = useRef(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -117,8 +119,10 @@ export function ExamInterface({
     const answeredIds = Object.keys(mergedAnswers);
     if (answeredIds.length > 0) {
       setVisited(new Set(answeredIds));
-      setIsRecovered(true);
-      setHasStarted(true); // Automatically resume directly into test
+      if (!isAlreadySubmitted) {
+        setIsRecovered(true);
+        setHasStarted(true); // Automatically resume directly into test
+      }
 
       // Jump to first unanswered question
       const firstUnansweredIndex = finalQuestions.findIndex(q => !mergedAnswers[q.id]);
@@ -128,10 +132,11 @@ export function ExamInterface({
     } else if (finalQuestions.length > 0) {
       setVisited(new Set([finalQuestions[0].id]));
     }
-  }, [dbQuestions, attempt.shuffleSeed, config, attempt.id, initialAnswers]);
+  }, [dbQuestions, attempt.shuffleSeed, config, attempt.id, initialAnswers, isAlreadySubmitted]);
 
   // Debounced Autosave to Server + Instant Local Storage Mirror
   const handleAnswerSelect = useCallback((optValue: any, explicitQId?: string) => {
+    if (isFinished || isFinishingRef.current) return;
     const qId = explicitQId || questions[currentQuestion]?.id;
     if (!qId) return;
 
@@ -169,7 +174,7 @@ export function ExamInterface({
         setSyncStatus("cached"); // Offline or network blip; buffered locally
       }
     }, 1500);
-  }, [attempt.id, currentQuestion, questions]);
+  }, [attempt.id, currentQuestion, questions, isFinished]);
 
   const jumpToQuestion = useCallback((index: number) => {
     if (index >= 0 && index < questions.length) {
@@ -214,7 +219,6 @@ export function ExamInterface({
                     (sessionStatus === "LIVE" ? now : null);
       
       if (!start) {
-        // If no start time and not live, we are just waiting indefinitely
         setTimeUntilStart(999999);
         return;
       }
@@ -229,7 +233,6 @@ export function ExamInterface({
       } else if (now < start) {
         setTimeUntilStart(Math.floor((start - now) / 1000));
       } else {
-        // Scheduled time has passed, they can start
         setTimeUntilStart(0);
         if (now < end) {
           setTimeLeft(Math.floor((end - now) / 1000));
@@ -245,23 +248,76 @@ export function ExamInterface({
     return () => clearInterval(timer);
   }, [session, currentExtendedUntil, isFinished, hasStarted, isForcedLive, sessionStatus, synced, getServerTime]);
 
-  // Anti-cheating Listeners
+  const executeSubmit = useCallback(async () => {
+    if (isFinishingRef.current && isFinished) return;
+    isFinishingRef.current = true;
+    setShowSubmitConfirm(false);
+    if (typeof document !== "undefined" && document.fullscreenElement) {
+      document.exitFullscreen().catch(err => console.log(err));
+    }
+    
+    const stringifiedAnswers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(answersRef.current)) {
+      stringifiedAnswers[k] = typeof v === "string" ? v : JSON.stringify(v);
+    }
+    
+    await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current);
+    setIsFinished(true);
+
+    if (config.resultVisibility === "IMMEDIATE") {
+      const statusData = await getAttemptStatusAction(attempt.id);
+      if (statusData) {
+        setFinalScore(statusData.score);
+        setFinalTotalMarks(statusData.totalMarks);
+        if (statusData.detailedResults) {
+          setDetailedResults(statusData.detailedResults);
+        }
+      }
+    }
+  }, [attempt.id, config.resultVisibility, isFinished]);
+
   useEffect(() => {
-    if (!hasStarted || isFinished) return;
+    if (shouldAutoSubmit && !isFinishingRef.current) {
+      executeSubmit();
+    }
+  }, [shouldAutoSubmit, executeSubmit]);
+
+  const handleFinishTest = useCallback(async (force = false) => {
+    if (force) {
+      executeSubmit();
+    } else {
+      setShowSubmitConfirm(true);
+    }
+  }, [executeSubmit]);
+
+  // Anti-cheating Listeners (strictly active ONLY while hasStarted && !isFinished)
+  useEffect(() => {
+    if (!hasStarted || isFinished || isFinishingRef.current) return;
 
     const handleBlur = () => {
+      if (isFinishingRef.current || isFinished || !hasStarted) return;
+
       blurCountRef.current += 1;
-      logCheatSignalAction(session.id, "WINDOW_BLUR", `Candidate switched away from the exam window (Count: ${blurCountRef.current}).`);
+      const count = blurCountRef.current;
+      const maxLimit = config.tabSwitchLimit !== undefined ? parseInt(String(config.tabSwitchLimit), 10) : 0;
+
+      // Log cheat signal only during live exam
+      logCheatSignalAction(session.id, "WINDOW_BLUR", `Candidate switched away from the exam window (Switch #${count}).`);
       
-      if (config.tabSwitchLimit && blurCountRef.current > config.tabSwitchLimit) {
-        alert(`You have exceeded the maximum allowed tab switches (${config.tabSwitchLimit}). Your exam is being automatically submitted.`);
-        handleFinishTest(true); // Force submit
+      if (maxLimit > 0) {
+        if (count >= maxLimit) {
+          isFinishingRef.current = true;
+          setTabSwitchWarning(`Maximum allowed tab switches (${maxLimit}) reached. Auto-submitting exam.`);
+          executeSubmit();
+        } else {
+          setTabSwitchWarning(`⚠️ Tab switch warning: ${count} of ${maxLimit} allowed switches used. Exceeding will auto-submit.`);
+        }
       }
     };
 
     const handleFullscreenChange = () => {
-      if (isFinishingRef.current) return;
-      if (config.requireFullscreen === false) return; // Skip if fullscreen not required
+      if (isFinishingRef.current || isFinished || !hasStarted) return;
+      if (config.requireFullscreen === false) return;
       
       if (!document.fullscreenElement) {
         logCheatSignalAction(session.id, "FULLSCREEN_EXIT", "Candidate exited full-screen mode.");
@@ -278,7 +334,7 @@ export function ExamInterface({
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
-  }, [hasStarted, isFinished, session.id, config]);
+  }, [hasStarted, isFinished, session.id, config, executeSubmit]);
 
   // Track time spent per question
   useEffect(() => {
@@ -304,47 +360,6 @@ export function ExamInterface({
     }
     setHasStarted(true);
   };
-
-  const executeSubmit = useCallback(async () => {
-    isFinishingRef.current = true;
-    setShowSubmitConfirm(false);
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(err => console.log(err));
-    }
-    
-    const stringifiedAnswers: Record<string, string> = {};
-    for (const [k, v] of Object.entries(answersRef.current)) {
-      stringifiedAnswers[k] = typeof v === "string" ? v : JSON.stringify(v);
-    }
-    
-    await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current);
-    setIsFinished(true);
-
-    if (config.resultVisibility === "IMMEDIATE") {
-      const statusData = await getAttemptStatusAction(attempt.id);
-      if (statusData) {
-        setFinalScore(statusData.score);
-        setFinalTotalMarks(statusData.totalMarks);
-        if (statusData.detailedResults) {
-          setDetailedResults(statusData.detailedResults);
-        }
-      }
-    }
-  }, [attempt.id, config.resultVisibility]);
-
-  useEffect(() => {
-    if (shouldAutoSubmit && !isFinishingRef.current) {
-      executeSubmit();
-    }
-  }, [shouldAutoSubmit, executeSubmit]);
-
-  const handleFinishTest = useCallback(async (force = false) => {
-    if (force) {
-      executeSubmit();
-    } else {
-      setShowSubmitConfirm(true);
-    }
-  }, [executeSubmit]);
 
   useEffect(() => {
     if (isFinished) return;
@@ -836,6 +851,22 @@ export function ExamInterface({
                     {markedForReview.has(questions[currentQuestion].id) ? "Marked" : "Mark for Review"}
                   </button>
                 </div>
+
+                {/* Real-time Tab Switch Warning Banner */}
+                {tabSwitchWarning && (
+                  <div className="mb-6 p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⚠️</span>
+                      <span>{tabSwitchWarning}</span>
+                    </div>
+                    <button 
+                      onClick={() => setTabSwitchWarning(null)}
+                      className="text-amber-600 hover:text-amber-800 text-[11px] font-extrabold ml-3"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
 
                 {/* Question Stem */}
                 <h2 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug mb-6">
