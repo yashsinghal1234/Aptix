@@ -203,3 +203,89 @@ export async function endSessionAction(formData: FormData) {
   revalidatePath("/dashboard/owner");
   return { success: true };
 }
+
+export async function reopenCandidateAttemptAction(formData: FormData) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  const attemptId = formData.get("attemptId") as string;
+  const minutes = parseInt(formData.get("minutes") as string || "10", 10);
+
+  const attempt = await prisma.candidateAttempt.findUnique({
+    where: { id: attemptId },
+    include: { session: true }
+  });
+
+  if (!attempt) return { error: "Attempt not found" };
+
+  const newExtendedUntil = new Date(Date.now() + minutes * 60000);
+
+  await prisma.candidateAttempt.update({
+    where: { id: attemptId },
+    data: {
+      status: "IN_PROGRESS",
+      submittedAt: null,
+      extendedUntil: newExtendedUntil
+    }
+  });
+
+  if (attempt.session.status === "COMPLETED") {
+    await prisma.examSession.update({
+      where: { id: attempt.examSessionId },
+      data: { status: "LIVE", extendedUntil: newExtendedUntil }
+    });
+  }
+
+  revalidatePath(`/dashboard/owner/session/${attempt.examSessionId}`);
+  revalidatePath("/dashboard/owner/candidates");
+  return { success: true };
+}
+
+export async function resetCandidateAttemptAction(formData: FormData) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  const attemptId = formData.get("attemptId") as string;
+  const minutes = parseInt(formData.get("minutes") as string || "0", 10);
+
+  const attempt = await prisma.candidateAttempt.findUnique({
+    where: { id: attemptId },
+    include: { session: true }
+  });
+
+  if (!attempt) return { error: "Attempt not found" };
+
+  // Clear previous responses and cheat flags
+  await prisma.candidateResponse.deleteMany({ where: { attemptId } });
+  await prisma.cheatFlag.deleteMany({ where: { userId: attempt.userId, examSessionId: attempt.examSessionId } });
+
+  const durationMins = minutes > 0 ? minutes : attempt.session.durationMinutes;
+  const newExtendedUntil = new Date(Date.now() + durationMins * 60000);
+
+  // Reset attempt with fresh shuffle seed and time
+  await prisma.candidateAttempt.update({
+    where: { id: attemptId },
+    data: {
+      status: "IN_PROGRESS",
+      submittedAt: null,
+      createdAt: new Date(),
+      shuffleSeed: Math.floor(Math.random() * 1000000),
+      extendedUntil: newExtendedUntil
+    }
+  });
+
+  if (attempt.session.status === "COMPLETED") {
+    await prisma.examSession.update({
+      where: { id: attempt.examSessionId },
+      data: { status: "LIVE", extendedUntil: newExtendedUntil }
+    });
+  }
+
+  revalidatePath(`/dashboard/owner/session/${attempt.examSessionId}`);
+  revalidatePath("/dashboard/owner/candidates");
+  return { success: true };
+}

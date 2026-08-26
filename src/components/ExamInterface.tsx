@@ -378,23 +378,33 @@ export function ExamInterface({
   };
 
   useEffect(() => {
-    if (isFinished) return;
     const interval = setInterval(async () => {
       const statusData = await getAttemptStatusAction(attempt.id);
       if (!statusData) return;
       
       setSessionStatus(statusData.sessionStatus);
 
+      // Instant live resume if Owner reopens the test from SUBMITTED -> IN_PROGRESS
+      if (statusData.status === "IN_PROGRESS" && isFinished) {
+        setIsFinished(false);
+        isFinishingRef.current = false;
+        setHasStarted(true);
+        setIsRecovered(true);
+        if (statusData.extendedUntil) {
+          setCurrentExtendedUntil(new Date(statusData.extendedUntil));
+        }
+      }
+
       if (statusData.sessionStatus === "LIVE" && !hasStarted && timeUntilStart > 0) {
         setIsForcedLive(true);
-      } else if (statusData.sessionStatus === "COMPLETED") {
+      } else if (statusData.sessionStatus === "COMPLETED" && !isFinished) {
         handleFinishTest(true);
       }
 
       if (statusData.extendedUntil) {
         setCurrentExtendedUntil(new Date(statusData.extendedUntil));
       }
-    }, 15000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [attempt.id, isFinished, hasStarted, timeUntilStart, handleFinishTest]);
 

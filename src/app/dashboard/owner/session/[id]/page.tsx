@@ -4,7 +4,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
-import { extendSessionTimeAction, extendCandidateTimeAction, endSessionAction } from "@/app/actions/session";
+import { 
+  extendSessionTimeAction, 
+  extendCandidateTimeAction, 
+  endSessionAction,
+  reopenCandidateAttemptAction,
+  resetCandidateAttemptAction
+} from "@/app/actions/session";
 import { OwnerSessionTimer } from "@/components/OwnerSessionTimer";
 import { LiveSessionAutoRefresh } from "@/components/LiveSessionAutoRefresh";
 
@@ -244,7 +250,7 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
                         )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        {session.status !== "COMPLETED" && attempt.status === "IN_PROGRESS" && (
+                        {attempt.status === "IN_PROGRESS" && (
                           <div className="flex justify-end items-center gap-1.5">
                             {[5, 10, 15].map(mins => (
                               <form key={mins} action={async (formData) => {
@@ -263,6 +269,43 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
                                 Ext
                               </span>
                             )}
+                          </div>
+                        )}
+
+                        {attempt.status === "SUBMITTED" && (
+                          <div className="flex justify-end items-center gap-2">
+                            {/* Reopen & Resume Form */}
+                            <form action={async (formData) => {
+                              "use server";
+                              await reopenCandidateAttemptAction(formData);
+                            }}>
+                              <input type="hidden" name="attemptId" value={attempt.id} />
+                              <input type="hidden" name="minutes" value="10" />
+                              <button 
+                                type="submit" 
+                                title="Reopen attempt: Keeps saved answers and adds 10 minutes"
+                                className="text-[11px] px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition-colors border border-emerald-200 shadow-sm flex items-center gap-1"
+                              >
+                                <span>🔓</span>
+                                <span>Reopen (+10m)</span>
+                              </button>
+                            </form>
+
+                            {/* Reset / Retake Form */}
+                            <form action={async (formData) => {
+                              "use server";
+                              await resetCandidateAttemptAction(formData);
+                            }}>
+                              <input type="hidden" name="attemptId" value={attempt.id} />
+                              <button 
+                                type="submit" 
+                                title="Full Reset: Clears answers and grants a fresh retake"
+                                className="text-[11px] px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-lg transition-colors border border-amber-200 shadow-sm flex items-center gap-1"
+                              >
+                                <span>🔄</span>
+                                <span>Reset Retake</span>
+                              </button>
+                            </form>
                           </div>
                         )}
                       </td>

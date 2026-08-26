@@ -185,13 +185,52 @@ export default async function CandidateRecordsPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         {latestAttempt ? (
-                          <Link
-                            href={`/dashboard/owner/results/${latestAttempt.examSessionId}/candidate/${latestAttempt.id}`}
-                            className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-100 transition-colors"
-                          >
-                            <span>Audit Report</span>
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-                          </Link>
+                          <div className="flex justify-end items-center gap-1.5 flex-wrap">
+                            <Link
+                              href={`/dashboard/owner/results/${latestAttempt.examSessionId}/candidate/${latestAttempt.id}`}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-100 transition-colors"
+                            >
+                              <span>Audit</span>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                            </Link>
+
+                            {latestAttempt.status === "SUBMITTED" && (
+                              <>
+                                <form action={async (formData) => {
+                                  "use server";
+                                  const { reopenCandidateAttemptAction } = await import("@/app/actions/session");
+                                  await reopenCandidateAttemptAction(formData);
+                                }}>
+                                  <input type="hidden" name="attemptId" value={latestAttempt.id} />
+                                  <input type="hidden" name="minutes" value="10" />
+                                  <button 
+                                    type="submit" 
+                                    title="Reopen: Keeps previous answers and grants 10 minutes"
+                                    className="text-[11px] px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition-colors border border-emerald-200 shadow-sm flex items-center gap-1"
+                                  >
+                                    <span>🔓</span>
+                                    <span>Reopen (+10m)</span>
+                                  </button>
+                                </form>
+
+                                <form action={async (formData) => {
+                                  "use server";
+                                  const { resetCandidateAttemptAction } = await import("@/app/actions/session");
+                                  await resetCandidateAttemptAction(formData);
+                                }}>
+                                  <input type="hidden" name="attemptId" value={latestAttempt.id} />
+                                  <button 
+                                    type="submit" 
+                                    title="Full Reset: Clears answers and grants a fresh retake"
+                                    className="text-[11px] px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-lg transition-colors border border-amber-200 shadow-sm flex items-center gap-1"
+                                  >
+                                    <span>🔄</span>
+                                    <span>Retake</span>
+                                  </button>
+                                </form>
+                              </>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-slate-300 text-xs font-medium">—</span>
                         )}
