@@ -3,10 +3,20 @@
 import { useRef, useState } from "react";
 import { createQuestionAction } from "@/app/actions/setter";
 import { uploadImageAction } from "@/app/actions/upload";
+import { analyzeSingleQuestionAction } from "@/app/actions/extract";
+import {
+  FIXED_TOPICS,
+  FIXED_DIFFICULTIES,
+  ParsedQuestionWithAI
+} from "@/lib/ai-question-analyzer";
 
 export function AddQuestionForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<ParsedQuestionWithAI | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string>(FIXED_TOPICS[0]);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("MEDIUM");
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [actionType, setActionType] = useState<"draft" | "submit">("draft");
@@ -302,28 +312,49 @@ export function AddQuestionForm() {
               </div>
             )}
             <div>
-              <label htmlFor="category" className="block text-sm font-medium text-slate-700 mb-1">Topic</label>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="category" className="block text-sm font-medium text-slate-700">Topic</label>
+                {aiAnalysis && (
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                    AI Suggested
+                  </span>
+                )}
+              </div>
               <select
                 id="category"
                 name="category"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-white"
+                value={selectedTopic}
+                onChange={(e) => setSelectedTopic(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-white text-xs font-semibold"
               >
-                <option value="Logical">Logical Reasoning</option>
-                <option value="Quantitative">Quantitative Aptitude</option>
-                <option value="Verbal">Verbal Ability</option>
-                <option value="Technical">Technical / Domain</option>
+                {FIXED_TOPICS.map((topic) => (
+                  <option key={topic} value={topic}>
+                    {topic}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label htmlFor="difficultyLevel" className="block text-sm font-medium text-slate-700 mb-1">Difficulty</label>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="difficultyLevel" className="block text-sm font-medium text-slate-700">Difficulty</label>
+                {aiAnalysis && (
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                    {aiAnalysis.confidence}% Conf.
+                  </span>
+                )}
+              </div>
               <select
                 id="difficultyLevel"
                 name="difficultyLevel"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-white"
+                value={selectedDifficulty}
+                onChange={(e) => setSelectedDifficulty(e.target.value)}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-white text-xs font-semibold"
               >
-                <option value="EASY">Easy</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HARD">Hard</option>
+                {FIXED_DIFFICULTIES.map((diff) => (
+                  <option key={diff} value={diff}>
+                    {diff}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -349,9 +380,82 @@ export function AddQuestionForm() {
               />
             </div>
           </div>
+
+          {/* AI Quality Audit Results Card (if triggered) */}
+          {aiAnalysis && (
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 mt-4">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+                  <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wide">
+                    AI Quality & Distractor Audit Results
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
+                  Score: {aiAnalysis.qualityFeedback.overallScore}/10
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <span className="font-bold text-slate-700 block mb-1">🔍 Distractor Health:</span>
+                  <ul className="text-slate-600 text-[11px] list-disc list-inside space-y-1">
+                    {aiAnalysis.qualityFeedback.distractorCritique.map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <span className="font-bold text-slate-700 block mb-1">⚖️ Ambiguity Check:</span>
+                  <span className={`text-[11px] font-bold ${aiAnalysis.qualityFeedback.ambiguityStatus === "PASSED" ? "text-emerald-700" : "text-amber-700"}`}>
+                    {aiAnalysis.qualityFeedback.ambiguityMessage}
+                  </span>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                  <span className="font-bold text-slate-700 block mb-1">🛡️ Question Bank:</span>
+                  <span className="text-[11px] font-medium text-slate-600">
+                    {aiAnalysis.qualityFeedback.duplicateMatch.found
+                      ? `⚠️ Similar question in bank (${aiAnalysis.qualityFeedback.duplicateMatch.similarityScore}% match)`
+                      : "✅ No duplicate found in question bank."}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="pt-6 border-t flex justify-between items-center">
+        <div className="pt-6 border-t flex flex-wrap gap-3 justify-between items-center">
+          <button
+            type="button"
+            disabled={analyzing}
+            onClick={async () => {
+              if (!formRef.current) return;
+              const text = (formRef.current.elements.namedItem("text") as HTMLTextAreaElement)?.value;
+              if (!text) {
+                setError("Please fill in the question text first.");
+                return;
+              }
+              setAnalyzing(true);
+              setError(null);
+              const opts = [0, 1, 2, 3].map(
+                (i) => (formRef.current?.elements.namedItem(`option${i}`) as HTMLInputElement)?.value || `Option ${i+1}`
+              );
+              const correct = parseInt((formRef.current.elements.namedItem("correctAnswer") as HTMLSelectElement)?.value || "0", 10);
+              const res = await analyzeSingleQuestionAction(text, opts, correct);
+              setAnalyzing(false);
+              if (res.analysis) {
+                setAiAnalysis(res.analysis);
+                setSelectedTopic(res.analysis.category);
+                setSelectedDifficulty(res.analysis.difficultyLevel);
+              }
+            }}
+            className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {analyzing ? "Auditing..." : "✨ AI Quality & Tagging Check"}
+          </button>
+
           <div className="flex gap-3 ml-auto">
             <button
               type="submit"
