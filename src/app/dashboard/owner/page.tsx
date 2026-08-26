@@ -9,6 +9,7 @@ import Link from "next/link";
 import { createSessionAction, setSessionStatusAction } from "@/app/actions/session";
 import { deleteTemplateAction } from "@/app/actions/template";
 import { ActiveSessionsList } from "@/components/ActiveSessionsList";
+import { LaunchSessionForm } from "@/components/LaunchSessionForm";
 
 export default async function OwnerDashboard() {
   const token = cookies().get("token")?.value;
@@ -160,21 +161,7 @@ export default async function OwnerDashboard() {
                       </form>
                     </div>
 
-                    <form action={async (formData) => {
-                      "use server";
-                      await createSessionAction(formData);
-                    }} className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-slate-100">
-                      <input type="hidden" name="examId" value={template.id} />
-                      <input 
-                        type="datetime-local" 
-                        name="startTime" 
-                        className="text-xs px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none flex-1 text-slate-700 font-medium"
-                        title="Schedule Start Time (Optional)"
-                      />
-                      <button className="text-xs px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold transition-all shadow-brand whitespace-nowrap">
-                        Launch Session →
-                      </button>
-                    </form>
+                    <LaunchSessionForm templateId={template.id} />
                   </div>
                 ))}
               </div>

@@ -5,6 +5,24 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 
+function parseStartTime(startTimeStr: string | null | undefined, tzOffsetStr: string | null | undefined): Date | undefined {
+  if (!startTimeStr || !startTimeStr.trim()) return undefined;
+  
+  if (startTimeStr.includes("Z") || /[+-]\d{2}:\d{2}$/.test(startTimeStr)) {
+    const d = new Date(startTimeStr);
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+
+  const rawDate = new Date(startTimeStr);
+  if (isNaN(rawDate.getTime())) return undefined;
+
+  const tzOffset = tzOffsetStr ? parseInt(tzOffsetStr, 10) : 0;
+  if (!isNaN(tzOffset) && tzOffset !== 0) {
+    return new Date(rawDate.getTime() + tzOffset * 60000);
+  }
+  return rawDate;
+}
+
 export async function createSessionAction(formData: FormData) {
   const token = cookies().get("token")?.value;
   if (!token) return { error: "Unauthorized" };
@@ -15,7 +33,8 @@ export async function createSessionAction(formData: FormData) {
   if (!examId) return { error: "Missing examId" };
   
   const startTimeStr = formData.get("startTime") as string;
-  const startTime = startTimeStr ? new Date(startTimeStr) : undefined;
+  const tzOffsetStr = formData.get("timezoneOffset") as string;
+  const startTime = parseStartTime(startTimeStr, tzOffsetStr);
 
   const template = await prisma.exam.findUnique({
     where: { id: examId },

@@ -13,12 +13,31 @@ const scheduleSchema = z.object({
   negativeMarking: z.number().min(0),
 });
 
+function parseStartTime(startTimeStr: string | null | undefined, tzOffsetStr: string | null | undefined): Date {
+  if (!startTimeStr || !startTimeStr.trim()) return new Date();
+  
+  if (startTimeStr.includes("Z") || /[+-]\d{2}:\d{2}$/.test(startTimeStr)) {
+    const d = new Date(startTimeStr);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+
+  const rawDate = new Date(startTimeStr);
+  if (isNaN(rawDate.getTime())) return new Date();
+
+  const tzOffset = tzOffsetStr ? parseInt(tzOffsetStr, 10) : 0;
+  if (!isNaN(tzOffset) && tzOffset !== 0) {
+    return new Date(rawDate.getTime() + tzOffset * 60000);
+  }
+  return rawDate;
+}
+
 export async function createScheduledExamAction(formData: FormData, selectedQuestionIds: string[]) {
   const token = cookies().get("token")?.value;
   if (!token) return { error: "Unauthorized" };
   const payload = await verifyToken(token);
   if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
 
+  const tzOffsetStr = formData.get("timezoneOffset") as string;
   const parsed = scheduleSchema.safeParse({
     title: formData.get("title"),
     durationMinutes: parseInt(formData.get("durationMinutes") as string, 10),
@@ -31,7 +50,7 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
   }
 
   const { title, durationMinutes, startTime: startTimeStr, negativeMarking } = parsed.data;
-  const startTime = startTimeStr ? new Date(startTimeStr) : new Date();
+  const startTime = parseStartTime(startTimeStr, tzOffsetStr);
 
   // First, create the blueprint (Exam)
   const exam = await prisma.exam.create({

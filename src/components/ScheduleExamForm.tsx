@@ -28,6 +28,15 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
     setError(null);
 
     const formData = new FormData(e.currentTarget);
+    formData.append("timezoneOffset", new Date().getTimezoneOffset().toString());
+
+    const startTimeVal = formData.get("startTime") as string;
+    if (startTimeVal) {
+      const localDate = new Date(startTimeVal);
+      if (!isNaN(localDate.getTime())) {
+        formData.set("startTime", localDate.toISOString());
+      }
+    }
     
     const res = await createScheduledExamAction(formData, Array.from(selectedIds));
     

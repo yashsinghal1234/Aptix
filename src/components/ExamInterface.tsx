@@ -215,25 +215,41 @@ export function ExamInterface({
 
     const calculateTimes = () => {
       const now = getServerTime();
-      const start = session.startTime ? new Date(session.startTime).getTime() : 
-                    (sessionStatus === "LIVE" ? now : null);
+      const rawStart = session.startTime ? new Date(session.startTime).getTime() : null;
       
-      if (!start) {
+      // If session is officially LIVE or forced live
+      if (isForcedLive || sessionStatus === "LIVE") {
+        setTimeUntilStart(0);
+        
+        // If rawStart was set in the past, use it; otherwise start clock from now
+        const effectiveStart = (rawStart && rawStart <= now) ? rawStart : (rawStart ? Math.min(rawStart, now) : now);
+        const baseEnd = effectiveStart + (session.durationMinutes * 60 * 1000);
+        const end = currentExtendedUntil ? currentExtendedUntil.getTime() : baseEnd;
+        
+        if (now < end) {
+          setTimeLeft(Math.floor((end - now) / 1000));
+        } else {
+          setTimeLeft(0);
+          if (!isFinished && hasStarted) setShouldAutoSubmit(true);
+        }
+        return;
+      }
+
+      // Scheduled session: waiting for start time
+      if (!rawStart) {
         setTimeUntilStart(999999);
         return;
       }
 
-      const baseEnd = start + (session.durationMinutes * 60 * 1000);
-      const end = currentExtendedUntil ? currentExtendedUntil.getTime() : baseEnd;
-      
-      if (isForcedLive || sessionStatus === "LIVE") {
-        setTimeUntilStart(0);
-        if (now < end) setTimeLeft(Math.floor((end - now) / 1000));
-        else { setTimeLeft(0); if (!isFinished && hasStarted) setShouldAutoSubmit(true); }
-      } else if (now < start) {
-        setTimeUntilStart(Math.floor((start - now) / 1000));
+      if (now < rawStart) {
+        // Exam hasn't started yet: countdown to start
+        setTimeUntilStart(Math.floor((rawStart - now) / 1000));
       } else {
+        // Exam is in progress
         setTimeUntilStart(0);
+        const baseEnd = rawStart + (session.durationMinutes * 60 * 1000);
+        const end = currentExtendedUntil ? currentExtendedUntil.getTime() : baseEnd;
+
         if (now < end) {
           setTimeLeft(Math.floor((end - now) / 1000));
         } else {
