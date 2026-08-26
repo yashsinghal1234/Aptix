@@ -3,14 +3,17 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 
-function isOwner() {
-  const role = cookies().get("userRole")?.value;
-  return role === "OWNER";
+async function isOwner() {
+  const token = cookies().get("token")?.value;
+  if (!token) return false;
+  const payload = await verifyToken(token);
+  return payload?.role === "OWNER";
 }
 
 export async function createSetterAction(formData: FormData) {
-  if (!isOwner()) return { error: "Unauthorized" };
+  if (!(await isOwner())) return { error: "Unauthorized" };
 
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
@@ -28,7 +31,7 @@ export async function createSetterAction(formData: FormData) {
 }
 
 export async function removeSetterAction(id: string) {
-  if (!isOwner()) return { error: "Unauthorized" };
+  if (!(await isOwner())) return { error: "Unauthorized" };
 
   await prisma.user.update({
     where: { id },

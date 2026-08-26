@@ -3,14 +3,17 @@
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 
-function isAuthorized() {
-  const role = cookies().get("userRole")?.value;
-  return role === "OWNER" || role === "SETTER";
+async function isAuthorized() {
+  const token = cookies().get("token")?.value;
+  if (!token) return false;
+  const payload = await verifyToken(token);
+  return payload?.role === "OWNER" || payload?.role === "SETTER";
 }
 
 export async function uploadImageAction(formData: FormData) {
-  if (!isAuthorized()) return { error: "Unauthorized" };
+  if (!(await isAuthorized())) return { error: "Unauthorized" };
 
   const file = formData.get("image") as File;
   if (!file) {

@@ -6,6 +6,7 @@ import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
 import { extendSessionTimeAction, extendCandidateTimeAction, endSessionAction } from "@/app/actions/session";
 import { OwnerSessionTimer } from "@/components/OwnerSessionTimer";
+import { LiveSessionAutoRefresh } from "@/components/LiveSessionAutoRefresh";
 
 export default async function LiveSessionMonitor({ params }: { params: { id: string } }) {
   const token = cookies().get("token")?.value;
@@ -57,6 +58,8 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
             }`}>
               {session.status}
             </span>
+            <span className="text-slate-300">&bull;</span>
+            <LiveSessionAutoRefresh status={session.status} />
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
