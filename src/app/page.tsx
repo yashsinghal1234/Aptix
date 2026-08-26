@@ -75,9 +75,10 @@ export default async function Home() {
     );
   }
 
-  // Attempt creation
+  // Fetch or create attempt with existing responses for instant crash recovery
   let attempt = await prisma.candidateAttempt.findFirst({
-    where: { userId, examSessionId: activeSession.id }
+    where: { userId, examSessionId: activeSession.id },
+    include: { responses: true }
   });
 
   if (!attempt) {
@@ -87,35 +88,30 @@ export default async function Home() {
         examSessionId: activeSession.id,
         shuffleSeed: Math.floor(Math.random() * 1000000),
         status: "IN_PROGRESS"
-      }
+      },
+      include: { responses: true }
     });
   }
 
-  // Security: Strip correctAnswer and IRT params before sending to the client component!
-  const sanitizedQuestions = activeSession.questions.map(q => {
-    let parsedOptions = [];
-    try {
-      parsedOptions = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-    } catch (e) {
-      console.error("Failed to parse options", e);
+  // Use High-Performance Cache: Prevents Thundering Herd read spike on 500-1000 concurrent starts
+  const { getCachedSessionQuestions } = await import("@/lib/exam-cache");
+  const sanitizedQuestions = await getCachedSessionQuestions(activeSession.id);
+
+  // Map saved responses into initial answers dictionary for seamless recovery
+  const initialAnswers: Record<string, string> = {};
+  if (attempt.responses && attempt.responses.length > 0) {
+    for (const r of attempt.responses) {
+      initialAnswers[r.questionId] = r.selectedOption;
     }
-    
-    return {
-      id: q.id,
-      text: q.text,
-      imageUrl: q.imageUrl,
-      options: parsedOptions,
-      category: q.category,
-      type: q.type, // Make sure type is sent so UI renders correctly!
-    };
-  });
+  }
 
   return (
     <ExamInterface 
       candidateName={name} 
       session={activeSession} 
       attempt={attempt} 
-      dbQuestions={sanitizedQuestions} 
+      dbQuestions={sanitizedQuestions}
+      initialAnswers={initialAnswers}
     />
   );
 }

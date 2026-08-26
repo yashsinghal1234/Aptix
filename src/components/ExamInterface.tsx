@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { logoutAction } from "@/app/actions/auth";
-import { submitExamAction } from "@/app/actions/exam";
+import { submitExamAction, saveDraftAnswerAction } from "@/app/actions/exam";
 import { logCheatSignalAction } from "@/app/actions/cheat";
 import { getAttemptStatusAction } from "@/app/actions/attempt";
 import { useServerTime } from "@/hooks/useServerTime";
@@ -23,11 +23,25 @@ function shuffleArray<T>(array: T[], rng: () => number): T[] {
   return newArr;
 }
 
-export function ExamInterface({ candidateName, session, attempt, dbQuestions }: { candidateName: string, session: any, attempt: any, dbQuestions: any[] }) {
+export function ExamInterface({ 
+  candidateName, 
+  session, 
+  attempt, 
+  dbQuestions,
+  initialAnswers = {}
+}: { 
+  candidateName: string; 
+  session: any; 
+  attempt: any; 
+  dbQuestions: any[];
+  initialAnswers?: Record<string, string>;
+}) {
   const [hasStarted, setHasStarted] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [answers, setAnswers] = useState<Record<string, any>>(initialAnswers);
+  const [syncStatus, setSyncStatus] = useState<"saved" | "syncing" | "cached">("saved");
+  const [isRecovered, setIsRecovered] = useState(false);
   
   const [visited, setVisited] = useState<Set<string>>(new Set());
   const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
@@ -45,10 +59,16 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
   const [detailedResults, setDetailedResults] = useState<any[] | null>(null);
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
 
+  const [currentExtendedUntil, setCurrentExtendedUntil] = useState<Date | null>(
+    attempt.extendedUntil ? new Date(attempt.extendedUntil) : (session.extendedUntil ? new Date(session.extendedUntil) : null)
+  );
+
   const answersRef = useRef(answers);
   const timeSpentRef = useRef<Record<string, number>>({});
   const isFinishingRef = useRef(false);
   const blurCountRef = useRef(0);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const config = useMemo(() => {
     try {
       return session.configSnapshot ? JSON.parse(session.configSnapshot) : {};
@@ -56,9 +76,12 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
       return {};
     }
   }, [session.configSnapshot]);
-  useEffect(() => { answersRef.current = answers; }, [answers]);
 
-  // Initialize and shuffle once on mount
+  useEffect(() => { 
+    answersRef.current = answers; 
+  }, [answers]);
+
+  // Crash Recovery & Deterministic Shuffling Initialization
   useEffect(() => {
     const rng = createPRNG(attempt.shuffleSeed);
     
@@ -74,14 +97,111 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
     }));
     
     setQuestions(finalQuestions);
-    if (finalQuestions.length > 0) {
+
+    // Check Local Storage Crash Buffer
+    let localSaved: Record<string, any> = {};
+    const localKey = `aptix_attempt_${attempt.id}`;
+    try {
+      const stored = localStorage.getItem(localKey);
+      if (stored) {
+        localSaved = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn("Could not read local attempt cache", e);
+    }
+
+    // Merge DB saved responses with client offline buffer
+    const mergedAnswers = { ...initialAnswers, ...localSaved };
+    setAnswers(mergedAnswers);
+
+    const answeredIds = Object.keys(mergedAnswers);
+    if (answeredIds.length > 0) {
+      setVisited(new Set(answeredIds));
+      setIsRecovered(true);
+      setHasStarted(true); // Automatically resume directly into test
+
+      // Jump to first unanswered question
+      const firstUnansweredIndex = finalQuestions.findIndex(q => !mergedAnswers[q.id]);
+      if (firstUnansweredIndex !== -1) {
+        setCurrentQuestion(firstUnansweredIndex);
+      }
+    } else if (finalQuestions.length > 0) {
       setVisited(new Set([finalQuestions[0].id]));
     }
-  }, [dbQuestions, attempt.shuffleSeed, config]);
+  }, [dbQuestions, attempt.shuffleSeed, config, attempt.id, initialAnswers]);
 
-  const [currentExtendedUntil, setCurrentExtendedUntil] = useState<Date | null>(
-    attempt.extendedUntil ? new Date(attempt.extendedUntil) : (session.extendedUntil ? new Date(session.extendedUntil) : null)
-  );
+  // Debounced Autosave to Server + Instant Local Storage Mirror
+  const handleAnswerSelect = useCallback((optValue: any, explicitQId?: string) => {
+    const qId = explicitQId || questions[currentQuestion]?.id;
+    if (!qId) return;
+
+    setAnswers(prev => {
+      const next = { ...prev, [qId]: optValue };
+      answersRef.current = next;
+
+      // 1. Instant local persistence
+      try {
+        localStorage.setItem(`aptix_attempt_${attempt.id}`, JSON.stringify(next));
+      } catch (e) {}
+
+      return next;
+    });
+
+    setSyncStatus("syncing");
+
+    // 2. Debounced background flush to PostgreSQL / SQLite
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(async () => {
+      const stringifiedValue = typeof optValue === "string" ? optValue : JSON.stringify(optValue);
+      const timeSpentSec = Math.floor((timeSpentRef.current[qId] || 0) / 1000);
+
+      try {
+        const res = await saveDraftAnswerAction(attempt.id, qId, stringifiedValue, timeSpentSec);
+        if (res && res.success) {
+          setSyncStatus("saved");
+        } else {
+          setSyncStatus("cached");
+        }
+      } catch (err) {
+        setSyncStatus("cached"); // Offline or network blip; buffered locally
+      }
+    }, 1500);
+  }, [attempt.id, currentQuestion, questions]);
+
+  const jumpToQuestion = useCallback((index: number) => {
+    if (index >= 0 && index < questions.length) {
+      const targetQId = questions[index].id;
+      setVisited(prev => new Set(prev).add(targetQId));
+      setCurrentQuestion(index);
+    }
+  }, [questions]);
+
+  const handleNext = useCallback(() => {
+    if (currentQuestion < questions.length - 1) {
+      jumpToQuestion(currentQuestion + 1);
+    }
+  }, [currentQuestion, questions.length, jumpToQuestion]);
+
+  const handlePrev = useCallback(() => {
+    if (currentQuestion > 0) {
+      jumpToQuestion(currentQuestion - 1);
+    }
+  }, [currentQuestion, jumpToQuestion]);
+
+  const toggleMarkForReview = useCallback(() => {
+    const qId = questions[currentQuestion]?.id;
+    if (!qId) return;
+
+    setMarkedForReview(prev => {
+      const next = new Set(prev);
+      if (next.has(qId)) next.delete(qId);
+      else next.add(qId);
+      return next;
+    });
+  }, [currentQuestion, questions]);
 
   const { getServerTime, synced } = useServerTime();
 
@@ -395,40 +515,6 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
     );
   }
 
-  const jumpToQuestion = (i: number) => {
-    setCurrentQuestion(i);
-    setVisited((prev) => new Set(prev).add(questions[i].id));
-  };
-
-  const handleNext = () => {
-    if (currentQuestion < questions.length - 1) {
-      jumpToQuestion(currentQuestion + 1);
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentQuestion > 0) {
-      jumpToQuestion(currentQuestion - 1);
-    }
-  };
-
-  const handleAnswerSelect = (option: string) => {
-    setAnswers({
-      ...answers,
-      [questions[currentQuestion].id]: option,
-    });
-  };
-
-  const toggleMarkForReview = () => {
-    const qId = questions[currentQuestion].id;
-    setMarkedForReview((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(qId)) newSet.delete(qId);
-      else newSet.add(qId);
-      return newSet;
-    });
-  };
-
   if (isFinished) {
     const isTimeout = timeLeft <= 0;
     return (
@@ -605,7 +691,29 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Real-time Cloud Autosave Status Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-navy-800/80 border border-slate-700 text-slate-300">
+              {syncStatus === "saved" && (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-emerald-300">Cloud Synced</span>
+                </>
+              )}
+              {syncStatus === "syncing" && (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="text-amber-300">Autosaving...</span>
+                </>
+              )}
+              {syncStatus === "cached" && (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                  <span className="text-cyan-300">Buffered Locally</span>
+                </>
+              )}
+            </div>
+
             {/* Pill-shaped Countdown Timer (matching reference design) */}
             <div className={`flex items-center gap-2.5 px-4 py-1.5 rounded-full border text-xs font-bold tracking-wider ${
               timeLeft < 300 
@@ -627,6 +735,22 @@ export function ExamInterface({ candidateName, session, attempt, dbQuestions }: 
             </button>
           </div>
         </header>
+
+        {/* Crash Recovery Notification Banner */}
+        {isRecovered && (
+          <div className="bg-indigo-900 text-indigo-100 text-xs px-6 py-2 flex items-center justify-between border-b border-indigo-800">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path></svg>
+              <span><strong>Assessment Restored:</strong> Resumed where you left off. All your previous answers and progress have been saved.</span>
+            </div>
+            <button 
+              onClick={() => setIsRecovered(false)}
+              className="text-indigo-300 hover:text-white text-[11px] font-bold"
+            >
+              ✕ Dismiss
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 flex px-4 md:px-8 py-8 gap-6 max-w-7xl mx-auto w-full">
           {/* Question Palette Sidebar */}

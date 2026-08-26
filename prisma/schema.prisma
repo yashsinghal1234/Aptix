@@ -155,6 +155,10 @@ model CandidateAttempt {
   user             User        @relation(fields: [userId], references: [id])
   session          ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
   responses        CandidateResponse[]
+
+  @@unique([userId, examSessionId])
+  @@index([examSessionId])
+  @@index([status])
 }
 
 model Question {
@@ -179,6 +183,9 @@ model Question {
   examSessions    ExamSession[]
   responses       CandidateResponse[]
   questionStats   QuestionStats[]
+
+  @@index([status])
+  @@index([category])
 }
 
 model CandidateResponse {
@@ -194,6 +201,10 @@ model CandidateResponse {
   user             User             @relation(fields: [userId], references: [id])
   attempt          CandidateAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   question         Question         @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([userId])
 }
 
 model AuditLog {
@@ -204,6 +215,8 @@ model AuditLog {
   timestamp DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model CheatFlag {
@@ -216,4 +229,7 @@ model CheatFlag {
 
   user          User        @relation(fields: [userId], references: [id])
   session       ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+
+  @@index([examSessionId, userId])
 }
+
