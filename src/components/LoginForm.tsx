@@ -6,11 +6,9 @@ export function LoginForm() {
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
       <div className="bg-white p-10 rounded-2xl shadow-xl max-w-md w-full border border-slate-100">
-        <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold mx-auto mb-4 text-xl">
-            A
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800">Aptitude Platform</h1>
+        <div className="text-center mb-8 flex flex-col items-center">
+          <img src="/aptix-logo.png" alt="Aptix Logo" className="h-16 mb-4 object-contain" />
+          <h1 className="text-2xl font-bold text-slate-800">Aptix Assessment Platform</h1>
           <p className="text-slate-500 mt-2 text-sm">Please login to begin your assessment</p>
         </div>
         
@@ -42,6 +40,11 @@ export function LoginForm() {
             Start Assessment
           </button>
         </form>
+        
+        <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col items-center justify-center opacity-80">
+          <span className="text-xs text-slate-400 mb-2 uppercase tracking-wider font-semibold">Powered By</span>
+          <img src="/kts-logo.png" alt="Kinesis Technical Society" className="h-10 object-contain mix-blend-multiply" />
+        </div>
       </div>
     </main>
   );

@@ -21,10 +21,8 @@ export default async function DashboardLayout({
       <aside className="w-64 bg-slate-900 text-white shrink-0 hidden md:flex flex-col">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center font-bold">
-              A
-            </div>
-            <span className="font-semibold text-lg tracking-wide">Aptix Admin</span>
+            <img src="/aptix-logo.png" alt="Aptix" className="w-10 h-10 object-contain brightness-0 invert" />
+            <span className="font-bold text-xl tracking-wide">Aptix Admin</span>
           </div>
           <nav className="space-y-2">
             {isOwner && (
