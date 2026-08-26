@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      String   // 'OWNER' | 'SETTER' | 'CANDIDATE'
+  createdAt DateTime @default(now())
+
+  candidateResponses CandidateResponse[]
+  attempts           CandidateAttempt[]
+  auditLogs          AuditLog[]
+  cheatFlags         CheatFlag[]
+}
+
+model Exam {
+  id               String   @id @default(cuid())
+  // 1. Basic Info
+  title            String
+  description      String?
+  instructions     String?
+  subject          String?
+  
+  // 2. Question Selection
+  selectionMode           String   @default("MANUAL") // MANUAL, RULE_BASED
+  randomizeQuestionOrder  Boolean  @default(false)
+  randomizeOptionOrder    Boolean  @default(false)
+  
+  // 3. Scoring Rules
+  totalMarks              Float    @default(0)
+  marksPerQuestion        Float    @default(1.0)
+  negativeMarkingEnabled  Boolean  @default(false)
+  negativeMarksValue      Float    @default(0)
+  partialCreditEnabled    Boolean  @default(false)
+  passCriteria            Float    @default(50) // percentage
+  
+  // 4. Timing Defaults
+  durationMinutes         Int
+  defaultStartWindowHours Int?
+
+  // 5. Attempt Behavior
+  allowQuestionSkip       Boolean  @default(true)
+  allowAnswerReview       Boolean  @default(true)
+  allowBackNavigation     Boolean  @default(true)
+  maxAttempts             Int      @default(1)
+  questionDisplayMode     String   @default("ONE_AT_A_TIME") // ONE_AT_A_TIME, ALL_ON_ONE_PAGE
+
+  // 6. Result & Feedback
+  resultVisibility        String   @default("IMMEDIATE") // IMMEDIATE, AFTER_RELEASE, NEVER
+  showCorrectAnswers      Boolean  @default(true)
+  showExplanation         Boolean  @default(false)
+
+  // 7. Integrity Settings
+  requireFullscreen       Boolean  @default(true)
+  disableCopyPaste        Boolean  @default(true)
+  tabSwitchLimit          Int?
+  webcamRequired          Boolean  @default(false)
+
+  createdBySetterId String
+  createdAt        DateTime @default(now())
+  isDeleted        Boolean  @default(false)
+
+  // Relations
+  questions        Question[]
+  rules            ExamRule[]
+  sessions         ExamSession[]
+}
+
+model ExamRule {
+  id              String @id @default(cuid())
+  examId          String
+  category        String
+  difficultyLevel String // EASY, MEDIUM, HARD
+  count           Int
+
+  exam            Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+model ExamSession {
+  id               String   @id @default(cuid())
+  examId           String
+  startTime        DateTime?
+  durationMinutes  Int
+  extendedUntil    DateTime? // Global time extension
+  status           String   @default("SCHEDULED") // SCHEDULED, LIVE, COMPLETED
+  createdAt        DateTime @default(now())
+
+  // Snapshotted fields from Exam Template
+  totalMarks             Float     @default(0)
+  passCriteria           Float     @default(50)
+  negativeMarkingEnabled Boolean   @default(false)
+  negativeMarksValue     Float     @default(0)
+  partialCreditEnabled   Boolean   @default(false)
+  configSnapshot         String?   // JSON string of the full Exam template settings
+
+  exam             Exam     @relation(fields: [examId], references: [id])
+  
+  // The actual questions snapshotted for this specific session
+  questions        Question[]
+
+  attempts         CandidateAttempt[]
+  cheatFlags       CheatFlag[]
+  
+  sessionStats     SessionStats?
+  questionStats    QuestionStats[]
+}
+
+model SessionStats {
+  id              String   @id @default(cuid())
+  sessionId       String   @unique
+  meanScore       Float
+  medianScore     Float
+  passRate        Float
+  highestScore    Float
+  lowestScore     Float
+  scoreDistribution String // JSON array of counts per decile or bucket
+  computedAt      DateTime @default(now())
+
+  session         ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model QuestionStats {
+  id              String   @id @default(cuid())
+  sessionId       String
+  questionId      String
+  
+  pValue          Float    // Difficulty index (0 to 1)
+  discrimination  Float    // Discrimination index (-1 to 1)
+  avgTimeSpent    Float    // Average time in seconds
+  distractors     String   // JSON representing distractor breakdown
+
+  session         ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question        Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
+  @@unique([sessionId, questionId])
+}
+
+model CandidateAttempt {
+  id               String   @id @default(cuid())
+  userId           String
+  examSessionId    String
+  shuffleSeed      Int      // To deterministically shuffle questions
+  extendedUntil    DateTime? // Individual time extension
+  status           String   @default("IN_PROGRESS") // IN_PROGRESS, SUBMITTED
+  createdAt        DateTime @default(now())
+  submittedAt      DateTime?
+
+  user             User        @relation(fields: [userId], references: [id])
+  session          ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+  responses        CandidateResponse[]
+}
+
+model Question {
+  id              String   @id @default(cuid())
+  text            String
+  imageUrl        String?  
+  options         String   
+  answerData      String   
+  category        String
+  type            String   @default("MCQ_SINGLE")
+  points          Float    @default(1.0)
+  negativePoints  Float    @default(0.0)
+  isExtracted     Boolean  @default(false)
+  difficulty      Float    @default(0.5) 
+  discrimination  Float    @default(1.0) 
+  status          String   @default("APPROVED") 
+  difficultyLevel String   @default("MEDIUM") 
+  authorId        String   @default("SYSTEM")
+  createdAt       DateTime @default(now())
+
+  exams           Exam[]
+  examSessions    ExamSession[]
+  responses       CandidateResponse[]
+  questionStats   QuestionStats[]
+}
+
+model CandidateResponse {
+  id               String   @id @default(cuid())
+  userId           String
+  attemptId        String
+  questionId       String
+  selectedOption   String
+  isCorrect        Boolean
+  earnedPoints     Float    @default(0.0)
+  timeTakenSeconds Int      @default(0)
+
+  user             User             @relation(fields: [userId], references: [id])
+  attempt          CandidateAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question         Question         @relation(fields: [questionId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  details   String?
+  timestamp DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model CheatFlag {
+  id            String   @id @default(cuid())
+  userId        String
+  examSessionId String
+  type          String   
+  description   String?
+  timestamp     DateTime @default(now())
+
+  user          User        @relation(fields: [userId], references: [id])
+  session       ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+}
