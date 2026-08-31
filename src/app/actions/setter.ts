@@ -15,10 +15,10 @@ const optionSchema = z.object({
 });
 
 const questionSchema = z.object({
-  text: z.string().min(1),
+  text: z.string().optional().default(""),
   category: z.string().min(2),
   difficultyLevel: z.enum(["EASY", "MEDIUM", "HARD"]),
-  imageUrl: z.string().nullable(),
+  imageUrl: z.string().nullable().optional(),
   isDraft: z.boolean().default(false)
 });
 
@@ -57,11 +57,20 @@ export async function createQuestionAction(formData: FormData) {
     options.push({ text: "False", explanation: null, imageUrl: null });
   }
 
+  const rawText = ((formData.get("text") as string) || "").trim();
+  const imageUrl = (formData.get("imageUrl") as string) || null;
+
+  if (!rawText && !imageUrl) {
+    return { error: "Please enter question text or attach a question image/diagram." };
+  }
+
+  const textToSave = rawText || "Refer to the image attachment above.";
+
   const parsed = questionSchema.safeParse({
-    text: formData.get("text"),
+    text: textToSave,
     category: formData.get("category"),
     difficultyLevel: formData.get("difficultyLevel") || "MEDIUM",
-    imageUrl: formData.get("imageUrl") || null,
+    imageUrl: imageUrl,
     isDraft: formData.get("actionType") === "draft"
   });
 
@@ -69,7 +78,7 @@ export async function createQuestionAction(formData: FormData) {
     return { error: "Invalid input fields." };
   }
 
-  const { text, category, difficultyLevel, imageUrl, isDraft } = parsed.data;
+  const { text, category, difficultyLevel, isDraft } = parsed.data;
   const points = parseFloat((formData.get("points") as string) || "1.0");
   const negativePoints = parseFloat((formData.get("negativePoints") as string) || "0.0");
 
@@ -100,13 +109,15 @@ export async function createQuestionAction(formData: FormData) {
     answerData = JSON.stringify({ blanks: blanksObj, partialCredit });
   }
 
-  // Duplicate detection
-  const duplicate = await prisma.question.findFirst({
-    where: { text: { equals: text } }
-  });
+  // Duplicate detection (only check if explicit custom text was given)
+  if (rawText.length > 0) {
+    const duplicate = await prisma.question.findFirst({
+      where: { text: { equals: text } }
+    });
 
-  if (duplicate) {
-    return { error: "A question with exactly the same text already exists." };
+    if (duplicate) {
+      return { error: "A question with exactly the same text already exists." };
+    }
   }
 
   await prisma.question.create({

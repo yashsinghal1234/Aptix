@@ -16,30 +16,24 @@ export async function uploadImageAction(formData: FormData) {
   if (!(await isAuthorized())) return { error: "Unauthorized" };
 
   const file = formData.get("image") as File;
-  if (!file) {
+  if (!file || file.size === 0) {
     return { error: "No file uploaded" };
   }
 
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-
-  // Use a unique name to avoid collisions
-  const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-  const filename = `${uniqueSuffix}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-  
-  const uploadDir = join(process.cwd(), "public/uploads");
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: "Image file exceeds 5MB limit. Please upload a smaller image." };
+  }
 
   try {
-    // Ensure the directory exists
-    await mkdir(uploadDir, { recursive: true });
-    
-    const filePath = join(uploadDir, filename);
-    await writeFile(filePath, buffer);
-    
-    // Return the public URL path
-    return { success: true, url: `/uploads/${filename}` };
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const mimeType = file.type || "image/png";
+    const base64 = buffer.toString("base64");
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    return { success: true, url: dataUrl };
   } catch (e) {
-    console.error("Error uploading file:", e);
-    return { error: "Failed to upload file" };
+    console.error("Error processing image upload:", e);
+    return { error: "Failed to process uploaded image" };
   }
 }

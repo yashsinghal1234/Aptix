@@ -25,6 +25,7 @@ export function AddQuestionForm() {
 
   const [qType, setQType] = useState("MCQ_SINGLE");
   const [stemText, setStemText] = useState("");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [optionsList, setOptionsList] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("0");
   const [pointsVal, setPointsVal] = useState("1.0");
@@ -48,6 +49,19 @@ export function AddQuestionForm() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImagePreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setImagePreview(null);
+    }
+  };
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -91,6 +105,7 @@ export function AddQuestionForm() {
       
       // Reset inputs while keeping topic, difficulty & question type for fast authoring
       setStemText("");
+      setImagePreview(null);
       setOptionsList(["", "", "", ""]);
       setCorrectAnswer("0");
       setMultiCorrect([]);
@@ -101,6 +116,8 @@ export function AddQuestionForm() {
       if (formRef.current) {
         const textElem = formRef.current.elements.namedItem("text") as HTMLTextAreaElement;
         if (textElem) textElem.value = "";
+        const imageElem = formRef.current.elements.namedItem("image") as HTMLInputElement;
+        if (imageElem) imageElem.value = "";
         [0, 1, 2, 3].forEach(i => {
           const optElem = formRef.current?.elements.namedItem(`option${i}`) as HTMLInputElement;
           if (optElem) optElem.value = "";
@@ -201,19 +218,18 @@ export function AddQuestionForm() {
               </div>
 
               <div>
-                <label htmlFor="text" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Question Stem
+                <label htmlFor="text" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex justify-between items-center">
+                  <span>Question Stem {imagePreview ? <span className="text-slate-400 font-normal normal-case">(Optional - image attached)</span> : <span className="text-slate-400 font-normal normal-case">(Or attach image below)</span>}</span>
                   {qType === "FILL_BLANK" && <span className="text-indigo-600 font-normal ml-2 lowercase">Use [1], [2] to designate blanks.</span>}
                 </label>
                 <textarea
                   id="text"
                   name="text"
-                  required
                   rows={3}
                   value={stemText}
                   onChange={(e) => setStemText(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 text-xs leading-relaxed font-medium bg-slate-50 focus:bg-white"
-                  placeholder={qType === "FILL_BLANK" ? "e.g. The capital of France is [1] and its national symbol is [2]." : "e.g. A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train?"}
+                  placeholder={qType === "FILL_BLANK" ? "e.g. The capital of France is [1] and its national symbol is [2]." : "e.g. A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train? (Optional if uploading diagram below)"}
                 />
               </div>
 
@@ -224,8 +240,32 @@ export function AddQuestionForm() {
                   name="image"
                   type="file"
                   accept="image/*"
+                  onChange={handleImageChange}
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs text-slate-600 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"
                 />
+                {imagePreview && (
+                  <div className="mt-2.5 p-2 bg-slate-50 border border-slate-200 rounded-2xl relative inline-block">
+                    <img 
+                      src={imagePreview} 
+                      alt="Selected attachment preview" 
+                      className="max-h-40 rounded-xl object-contain border border-slate-200 shadow-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null);
+                        if (formRef.current) {
+                          const imgInput = formRef.current.elements.namedItem("image") as HTMLInputElement;
+                          if (imgInput) imgInput.value = "";
+                        }
+                      }}
+                      className="absolute -top-2 -right-2 bg-rose-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-rose-700 transition-colors"
+                      title="Remove Image"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
 
               {(qType === "MCQ_SINGLE" || qType === "MCQ_MULTI") && (
@@ -582,11 +622,20 @@ export function AddQuestionForm() {
                   </span>
                 </div>
 
-                {/* Question Text */}
-                <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/80 min-h-[70px]">
+                {/* Question Text & Diagram */}
+                <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/80 min-h-[70px] space-y-3">
                   <p className="text-xs text-slate-100 font-medium leading-relaxed">
-                    {stemText || <span className="text-slate-500 italic">Type your question stem on the left to preview...</span>}
+                    {stemText || (imagePreview ? <span className="text-emerald-400 font-semibold italic">Refer to the attached diagram/figure below:</span> : <span className="text-slate-500 italic">Type your question stem or attach an image on the left to preview...</span>)}
                   </p>
+                  {imagePreview && (
+                    <div className="mt-2 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900/80 p-1 flex justify-center">
+                      <img 
+                        src={imagePreview} 
+                        alt="Question diagram preview" 
+                        className="max-h-48 rounded-lg object-contain"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Options Preview */}

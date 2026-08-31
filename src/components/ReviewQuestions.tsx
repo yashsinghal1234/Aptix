@@ -186,6 +186,15 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
                       )}
                     </div>
                     <h4 className="font-bold text-slate-900 text-base">{q.text}</h4>
+                    {q.imageUrl && (
+                      <div className="mt-3">
+                        <img 
+                          src={q.imageUrl} 
+                          alt="Question diagram / attachment" 
+                          className="max-h-52 rounded-2xl border border-slate-200 shadow-sm bg-white p-1 object-contain"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Controls */}

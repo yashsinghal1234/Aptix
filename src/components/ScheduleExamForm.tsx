@@ -232,6 +232,11 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
                       <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{q.difficultyLevel || 'Medium'}</span>
                     </div>
                     <p className="text-sm font-medium text-slate-800 line-clamp-2">{q.text}</p>
+                    {q.imageUrl && (
+                      <div className="mt-1.5">
+                        <img src={q.imageUrl} alt="Diagram" className="max-h-16 rounded-lg border border-slate-200 bg-white object-contain" />
+                      </div>
+                    )}
                   </div>
                 </div>
               ))

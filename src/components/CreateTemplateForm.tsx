@@ -278,7 +278,12 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   <div key={q.id} onClick={() => toggleQuestion(q.id)} className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${selectedIds.has(q.id) ? 'bg-brand-50/80 border-brand-300 text-brand-900 font-semibold' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800'}`}>
                     <div className="flex items-start gap-3">
                       <input type="checkbox" checked={selectedIds.has(q.id)} readOnly className="mt-0.5 accent-brand-600 rounded w-4 h-4 cursor-pointer" />
-                      <div className="flex-1 line-clamp-2">{q.text}</div>
+                      <div className="flex-1">
+                        <div className="line-clamp-2">{q.text}</div>
+                        {q.imageUrl && (
+                          <img src={q.imageUrl} alt="Diagram" className="max-h-12 rounded border mt-1 object-contain" />
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
