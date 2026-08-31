@@ -2,6 +2,8 @@ import React from "react";
 import { prisma } from "@/lib/prisma";
 import { DeleteQuestionButton } from "@/components/DeleteQuestionButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function QuestionBankDashboard() {
   const questions = await prisma.question.findMany({
     orderBy: { category: "asc" }

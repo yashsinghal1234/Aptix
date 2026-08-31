@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
 import { CreateTemplateForm } from "@/components/CreateTemplateForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewTemplatePage() {
   const token = cookies().get("token")?.value;
   if (!token) redirect("/");

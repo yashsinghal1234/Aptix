@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { ScheduleExamForm } from "@/components/ScheduleExamForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function SchedulePage() {
   const allQuestions = await prisma.question.findMany({
     orderBy: { category: "asc" }
