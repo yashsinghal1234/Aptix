@@ -51,12 +51,20 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
 
   const { title, durationMinutes, startTime: startTimeStr, negativeMarking } = parsed.data;
   const startTime = parseStartTime(startTimeStr, tzOffsetStr);
+  const allowedEmailDomain = (formData.get("allowedEmailDomain") as string)?.trim() || null;
+
+  const { generateSessionPin } = await import("@/lib/auth");
+  let pin = generateSessionPin();
+  while (await prisma.examSession.findUnique({ where: { pin } })) {
+    pin = generateSessionPin();
+  }
 
   // First, create the blueprint (Exam)
   const exam = await prisma.exam.create({
     data: {
       title,
       durationMinutes,
+      allowedEmailDomain,
       negativeMarkingEnabled: negativeMarking > 0,
       negativeMarksValue: negativeMarking,
       createdBySetterId: payload.userId as string,
@@ -69,7 +77,9 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
   // Then, schedule a live session from it
   await prisma.examSession.create({
     data: {
+      pin,
       examId: exam.id,
+      allowedEmailDomain,
       durationMinutes,
       startTime,
       status: "SCHEDULED",
@@ -83,12 +93,12 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
     data: {
       userId: payload.userId as string,
       action: "SCHEDULE_EXAM",
-      details: `Scheduled one-off exam: ${title}`,
+      details: `Scheduled one-off exam: ${title} (PIN: ${pin})`,
     }
   });
 
   revalidatePath("/dashboard/owner");
-  return { success: true };
+  return { success: true, pin };
 }
 
 export async function reviewQuestionAction(questionId: string, action: "APPROVE" | "REJECT") {

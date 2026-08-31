@@ -1,0 +1,36 @@
+name: Aptix Platform CI (Tests & Build)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: ⚡ Generate Prisma Client
+        run: npx prisma generate
+
+      - name: 🧪 Execute High-Stakes Critical Path Test Suite
+        run: npm test
+
+      - name: 🏗️ Production Build Verification
+        run: npx next build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://mock:mock@localhost:5432/mock' }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'test_jwt_secret_32_characters_minimum_length_key' }}

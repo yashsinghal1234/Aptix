@@ -20,6 +20,8 @@ export async function GET(request: Request) {
     where: { id: sessionId },
     include: {
       exam: true,
+      questions: true,
+      cheatFlags: true,
       attempts: {
         where: { status: "SUBMITTED" },
         include: {
@@ -35,22 +37,26 @@ export async function GET(request: Request) {
 
   if (!session) return new NextResponse("Session not found", { status: 404 });
 
+  const totalMarks = session.questions.reduce((sum, q) => sum + q.points, 0) || session.totalMarks || session.exam.totalMarks || 1;
+
   // Generate CSV
-  // We will create two sections or just export the Item Analysis first, 
-  // followed by Candidate Scores. Let's export candidate scores per question.
-
   let csv = "CANDIDATE RESULTS\n";
-  csv += "Rank,Name,Email,Total Score,Percentage,Total Time (s)\n";
+  csv += "Rank,Name,Email,Score,Total Marks,Percentage,Status,Integrity Flags,Total Time (s),Submitted At\n";
 
-  const rankedAttempts = session.attempts.map(attempt => ({
-    ...attempt,
-    score: attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0),
-    time: attempt.responses.reduce((sum, r) => sum + r.timeTakenSeconds, 0)
-  })).sort((a, b) => b.score - a.score);
+  const rankedAttempts = session.attempts.map(attempt => {
+    const flagsCount = session.cheatFlags.filter(f => f.userId === attempt.userId).length;
+    return {
+      ...attempt,
+      flagsCount,
+      score: attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0),
+      time: attempt.responses.reduce((sum, r) => sum + r.timeTakenSeconds, 0)
+    };
+  }).sort((a, b) => b.score - a.score);
 
   rankedAttempts.forEach((a, i) => {
-    const percentage = (a.score / session.exam.totalMarks) * 100;
-    csv += `"${i+1}","${a.user.name}","${a.user.email}",${a.score},${percentage.toFixed(2)}%,${a.time}\n`;
+    const percentage = (a.score / totalMarks) * 100;
+    const submittedTime = a.submittedAt ? new Date(a.submittedAt).toISOString() : "N/A";
+    csv += `"${i+1}","${a.user.name}","${a.user.email}",${a.score.toFixed(1)},${totalMarks},${percentage.toFixed(2)}%,"${a.status}",${a.flagsCount},${a.time},"${submittedTime}"\n`;
   });
 
   csv += "\n\nITEM ANALYSIS (QUESTION PERFORMANCE)\n";

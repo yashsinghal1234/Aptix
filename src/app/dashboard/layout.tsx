@@ -1,6 +1,7 @@
 import { logoutAction } from "@/app/actions/auth";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 
 export default async function DashboardLayout({
   children,
@@ -91,7 +92,8 @@ export default async function DashboardLayout({
               {isOwner ? "Admin Portal" : "Setter Portal"}
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <ChangePasswordModal />
             <form action={logoutAction}>
               <button 
                 type="submit" 

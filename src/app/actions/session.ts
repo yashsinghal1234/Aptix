@@ -74,9 +74,18 @@ export async function createSessionAction(formData: FormData) {
     return { error: "Could not create session: The template has no fixed questions, and the auto-pick rules did not find any matching questions in the bank." };
   }
 
+  const { generateSessionPin } = await import("@/lib/auth");
+  let pin = generateSessionPin();
+  // Ensure uniqueness
+  while (await prisma.examSession.findUnique({ where: { pin } })) {
+    pin = generateSessionPin();
+  }
+
   const session = await prisma.examSession.create({
     data: {
+      pin,
       examId,
+      allowedEmailDomain: template.allowedEmailDomain,
       durationMinutes: template.durationMinutes,
       status: "SCHEDULED",
       startTime,
@@ -108,10 +117,11 @@ export async function createSessionAction(formData: FormData) {
   });
 
   revalidatePath("/dashboard/owner");
-  return { success: true, sessionId: session.id };
+  return { success: true, sessionId: session.id, pin };
 }
 
 import { computeSessionAnalytics } from "./analytics";
+
 
 export async function setSessionStatusAction(formData: FormData) {
   const token = cookies().get("token")?.value;

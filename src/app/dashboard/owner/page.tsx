@@ -1,13 +1,14 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import { SetterForm, RemoveSetterButton } from "@/components/SetterForm";
+import { ResetStaffPasswordModal } from "@/components/ResetStaffPasswordModal";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ReviewQuestions } from "@/components/ReviewQuestions";
 import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
 import { createSessionAction, setSessionStatusAction } from "@/app/actions/session";
-import { deleteTemplateAction } from "@/app/actions/template";
+import { deleteTemplateAction, duplicateTemplateAction } from "@/app/actions/template";
 import { ActiveSessionsList } from "@/components/ActiveSessionsList";
 import { LaunchSessionForm } from "@/components/LaunchSessionForm";
 
@@ -151,14 +152,29 @@ export default async function OwnerDashboard() {
                           {template.durationMinutes} mins &bull; {template._count.questions} Fixed Questions &bull; {template._count.rules} Rules
                         </p>
                       </div>
-                      <form action={async () => {
-                        "use server";
-                        await deleteTemplateAction(template.id);
-                      }}>
-                        <button className="text-[11px] px-2.5 py-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors font-bold">
-                          Delete
-                        </button>
-                      </form>
+                      <div className="flex items-center gap-1.5">
+                        <form action={async () => {
+                          "use server";
+                          await duplicateTemplateAction(template.id);
+                        }}>
+                          <button 
+                            type="submit" 
+                            title="Duplicate this template with all questions and rules"
+                            className="text-[11px] px-2.5 py-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors font-bold flex items-center gap-1"
+                          >
+                            <span>📋</span>
+                            <span>Duplicate</span>
+                          </button>
+                        </form>
+                        <form action={async () => {
+                          "use server";
+                          await deleteTemplateAction(template.id);
+                        }}>
+                          <button className="text-[11px] px-2.5 py-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors font-bold">
+                            Delete
+                          </button>
+                        </form>
+                      </div>
                     </div>
 
                     <LaunchSessionForm templateId={template.id} />
@@ -221,7 +237,10 @@ export default async function OwnerDashboard() {
                       <td className="px-6 py-4 font-bold text-slate-900">{s.name}</td>
                       <td className="px-6 py-4 text-slate-600 font-medium">{s.email}</td>
                       <td className="px-6 py-4 text-right">
-                        <RemoveSetterButton id={s.id} />
+                        <div className="flex items-center justify-end gap-2">
+                          <ResetStaffPasswordModal userId={s.id} userName={s.name} userEmail={s.email} />
+                          <RemoveSetterButton id={s.id} />
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -21,3 +21,12 @@ export async function verifyToken(token: string) {
     return null;
   }
 }
+
+export function generateSessionPin(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `APT-${code}`;
+}

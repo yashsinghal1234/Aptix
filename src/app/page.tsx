@@ -23,14 +23,38 @@ export default async function Home() {
   const role = payload.role as string;
   const name = payload.name as string;
   const userId = payload.userId as string;
+  const examSessionId = payload.examSessionId as string | undefined;
 
-  const activeSession = await prisma.examSession.findFirst({
-    where: {
-      status: { in: ["SCHEDULED", "LIVE"] }
-    },
-    include: { exam: true, questions: true },
-    orderBy: { createdAt: "desc" }
-  });
+  let activeSession = null;
+
+  // 1. Resolve session specifically bound to this candidate's token
+  if (examSessionId) {
+    activeSession = await prisma.examSession.findUnique({
+      where: { id: examSessionId },
+      include: { exam: true, questions: true }
+    });
+  }
+
+  // 2. Fallback to candidate's most recent active attempt if session ID wasn't in token
+  if (!activeSession) {
+    const candidateAttempt = await prisma.candidateAttempt.findFirst({
+      where: { userId },
+      include: { session: { include: { exam: true, questions: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    if (candidateAttempt?.session && ["SCHEDULED", "LIVE"].includes(candidateAttempt.session.status)) {
+      activeSession = candidateAttempt.session;
+    }
+  }
+
+  // 3. Fallback to general active session
+  if (!activeSession) {
+    activeSession = await prisma.examSession.findFirst({
+      where: { status: { in: ["SCHEDULED", "LIVE"] } },
+      include: { exam: true, questions: true },
+      orderBy: { createdAt: "desc" }
+    });
+  }
 
   if (!activeSession) {
     return (
@@ -54,19 +78,39 @@ export default async function Home() {
           </div>
         </header>
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="bg-white p-10 rounded-2xl border border-slate-100/80 text-center shadow-soft-xl max-w-md w-full">
-            <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm border border-brand-100">
+          <div className="bg-white p-10 rounded-3xl border border-slate-100 text-center shadow-soft-xl max-w-lg w-full space-y-6">
+            <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-brand-100">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-extrabold text-slate-800 mb-2 tracking-tight">No Exams Scheduled</h2>
-            <p className="text-slate-500 text-sm font-medium leading-relaxed mb-6">
-              There are currently no active assessments assigned to your account. This page will automatically refresh when an exam goes live.
-            </p>
+            
+            <div>
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-2">No Active Exam Right Now</h2>
+              <p className="text-slate-500 text-xs font-medium leading-relaxed">
+                There is currently no live assessment scheduled for your account. This screen is continuously listening and will automatically start when an exam goes live.
+              </p>
+            </div>
+
+            <div className="p-5 bg-slate-50 border border-slate-200/80 rounded-2xl text-left space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🎯</span>
+                <span className="text-xs font-extrabold text-slate-900">Want to warm up while you wait?</span>
+              </div>
+              <p className="text-xs text-slate-600 font-medium">
+                Try out our zero-stakes <strong>Practice Arena</strong> with instant answer feedback and step-by-step explanations.
+              </p>
+              <a
+                href="/practice"
+                className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-brand transition-all"
+              >
+                <span>🚀 Launch Practice Mode</span>
+              </a>
+            </div>
+
             <div className="flex items-center justify-center gap-2 text-xs font-semibold text-brand-600 bg-brand-50 py-2 px-4 rounded-full w-fit mx-auto border border-brand-100">
               <span className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
-              <span>Listening for live sessions...</span>
+              <span>Listening for scheduled exams...</span>
             </div>
             <NoExamPoller />
           </div>

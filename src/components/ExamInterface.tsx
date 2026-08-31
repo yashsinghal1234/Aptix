@@ -83,6 +83,68 @@ export function ExamInterface({
     answersRef.current = answers; 
   }, [answers]);
 
+  const { answeredCount, notAnsweredCount, notVisitedCount, markedCount, ansMarkedCount } = useMemo(() => {
+    let ans = 0;
+    let notAns = 0;
+    let notVis = 0;
+    let mrk = 0;
+    let ansMrk = 0;
+
+    questions.forEach((q, idx) => {
+      const isAns = answers[q.id] !== undefined && answers[q.id] !== "" && !(Array.isArray(answers[q.id]) && answers[q.id].length === 0);
+      const isVis = visited.has(q.id) || idx === currentQuestion;
+      const isMrk = markedForReview.has(q.id);
+
+      if (isAns && isMrk) ansMrk++;
+      else if (isMrk) mrk++;
+      else if (isAns) ans++;
+      else if (isVis) notAns++;
+      else notVis++;
+    });
+
+    return {
+      answeredCount: ans,
+      notAnsweredCount: notAns,
+      notVisitedCount: notVis,
+      markedCount: mrk,
+      ansMarkedCount: ansMrk
+    };
+  }, [questions, answers, visited, markedForReview, currentQuestion]);
+
+  const topicBreakdown = useMemo(() => {
+    if (!detailedResults || detailedResults.length === 0) return null;
+    const catMap: Record<string, { totalPossible: number; earned: number; count: number }> = {};
+
+    dbQuestions.forEach(q => {
+      const cat = q.category || "General";
+      if (!catMap[cat]) catMap[cat] = { totalPossible: 0, earned: 0, count: 0 };
+      catMap[cat].totalPossible += (q.points || 1);
+      catMap[cat].count += 1;
+
+      const res = detailedResults.find(r => r.questionId === q.id);
+      if (res) {
+        catMap[cat].earned += res.earnedPoints;
+      }
+    });
+
+    const list = Object.entries(catMap).map(([name, data]) => {
+      const pct = data.totalPossible > 0 ? Math.round((data.earned / data.totalPossible) * 100) : 0;
+      return {
+        name,
+        earned: data.earned,
+        totalPossible: data.totalPossible,
+        count: data.count,
+        pct: Math.max(0, Math.min(100, pct))
+      };
+    }).sort((a, b) => b.pct - a.pct);
+
+    return {
+      topics: list,
+      strongest: list.length > 0 ? list[0] : null,
+      focusArea: list.length > 1 ? list[list.length - 1] : null
+    };
+  }, [detailedResults, dbQuestions]);
+
   useEffect(() => {
     if (typeof document !== "undefined") {
       setIsFullscreen(!!document.fullscreenElement);
@@ -216,6 +278,36 @@ export function ExamInterface({
     });
   }, [currentQuestion, questions]);
 
+  const handleClearResponse = useCallback(() => {
+    const qId = questions[currentQuestion]?.id;
+    if (!qId) return;
+
+    setAnswers(prev => {
+      const next = { ...prev };
+      delete next[qId];
+      return next;
+    });
+
+    const localKey = `aptix_attempt_${attempt.id}`;
+    try {
+      const local = JSON.parse(localStorage.getItem(localKey) || "{}");
+      delete local[qId];
+      localStorage.setItem(localKey, JSON.stringify(local));
+    } catch {}
+
+    saveDraftAnswerAction(attempt.id, qId, "").catch(err => console.warn(err));
+  }, [currentQuestion, questions, attempt.id]);
+
+  const handleMarkForReviewAndNext = useCallback(() => {
+    const qId = questions[currentQuestion]?.id;
+    if (qId) {
+      setMarkedForReview(prev => new Set(prev).add(qId));
+    }
+    if (currentQuestion < questions.length - 1) {
+      jumpToQuestion(currentQuestion + 1);
+    }
+  }, [currentQuestion, questions, jumpToQuestion]);
+
   const { getServerTime, synced } = useServerTime();
 
   useEffect(() => {
@@ -314,18 +406,21 @@ export function ExamInterface({
     }
   }, [executeSubmit]);
 
-  // Anti-cheating Listeners (strictly active ONLY while hasStarted && !isFinished)
+  // Anti-cheating Telemetry Listeners (strictly active ONLY while hasStarted && !isFinished)
   useEffect(() => {
     if (!hasStarted || isFinished || isFinishingRef.current) return;
 
-    const handleSecurityInfraction = (type: "WINDOW_BLUR" | "FULLSCREEN_EXIT", description: string) => {
+    const handleSecurityInfraction = (
+      type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "COPY_PASTE" | "DEV_TOOLS" | "CONTEXT_MENU", 
+      description: string
+    ) => {
       if (isFinishingRef.current || isFinished || !hasStarted) return;
 
       blurCountRef.current += 1;
       const count = blurCountRef.current;
       const maxLimit = config.tabSwitchLimit !== undefined ? parseInt(String(config.tabSwitchLimit), 10) : 0;
 
-      // Log cheat signal only during live exam
+      // Log cheat signal to database in real-time
       logCheatSignalAction(session.id, type, `${description} (Infraction #${count}).`);
       
       if (maxLimit > 0) {
@@ -334,22 +429,24 @@ export function ExamInterface({
           setTabSwitchWarning(`Maximum allowed security limit (${maxLimit}) reached. Auto-submitting assessment now.`);
           executeSubmit();
         } else {
-          setTabSwitchWarning(`⚠️ Security Warning: ${count} of ${maxLimit} allowed infractions used (${type === "FULLSCREEN_EXIT" ? "Exited Fullscreen" : "Tab Switched"}). Exceeding will auto-submit.`);
+          setTabSwitchWarning(`⚠️ Security Warning: Infraction #${count} of ${maxLimit} allowed logged (${description}). Exceeding will auto-submit.`);
         }
       } else if (config.autoSubmitOnFullscreenExit && type === "FULLSCREEN_EXIT") {
         isFinishingRef.current = true;
         setTabSwitchWarning("Exited full-screen mode. Assessment automatically submitted.");
         executeSubmit();
+      } else {
+        setTabSwitchWarning(`⚠️ Security Alert: Infraction #${count} logged to examiner (${description}).`);
       }
     };
 
     const handleBlur = () => {
-      handleSecurityInfraction("WINDOW_BLUR", "Candidate switched away from the exam window or tab");
+      handleSecurityInfraction("WINDOW_BLUR", "Candidate switched away from exam window or tab");
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        handleSecurityInfraction("WINDOW_BLUR", "Candidate minimized window or changed active tab");
+        handleSecurityInfraction("WINDOW_BLUR", "Candidate minimized window or navigated to another tab");
       }
     };
 
@@ -365,14 +462,62 @@ export function ExamInterface({
       }
     };
 
+    const handleCopy = (e: ClipboardEvent) => {
+      if (config.disableCopyPaste !== false) {
+        e.preventDefault();
+        handleSecurityInfraction("COPY_PASTE", "Candidate attempted to copy assessment content");
+      }
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      if (config.disableCopyPaste !== false) {
+        e.preventDefault();
+        handleSecurityInfraction("COPY_PASTE", "Candidate attempted to paste content into assessment");
+      }
+    };
+
+    const handleCut = (e: ClipboardEvent) => {
+      if (config.disableCopyPaste !== false) {
+        e.preventDefault();
+        handleSecurityInfraction("COPY_PASTE", "Candidate attempted to cut content from assessment");
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      handleSecurityInfraction("CONTEXT_MENU", "Candidate opened right-click context menu");
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Intercept F12 and common DevTools shortcuts
+      if (
+        e.key === "F12" ||
+        (e.ctrlKey && (e.key === "u" || e.key === "U")) ||
+        (e.ctrlKey && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key))
+      ) {
+        e.preventDefault();
+        handleSecurityInfraction("DEV_TOOLS", "Candidate attempted to open browser developer tools / inspect elements");
+      }
+    };
+
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("copy", handleCopy);
+    document.addEventListener("paste", handlePaste);
+    document.addEventListener("cut", handleCut);
+    document.addEventListener("contextmenu", handleContextMenu);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("cut", handleCut);
+      document.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [hasStarted, isFinished, session.id, config, executeSubmit]);
 
@@ -618,16 +763,67 @@ export function ExamInterface({
           
           {config.resultVisibility === "IMMEDIATE" && finalScore !== null && (
             <div className="mb-8 w-full max-w-4xl mx-auto text-left">
-              <div className="p-6 bg-brand-50/60 border border-brand-100 rounded-2xl mb-8 text-center shadow-soft-sm">
+              <div className="p-6 bg-brand-50/60 border border-brand-100 rounded-3xl mb-6 text-center shadow-soft-sm">
                 <h3 className="text-xs font-bold text-brand-800 uppercase tracking-widest mb-1.5">Your Overall Score</h3>
                 <div className="text-4xl font-black text-brand-600 tracking-tight">
                   {typeof finalScore === 'number' ? finalScore.toFixed(1) : 0} <span className="text-lg text-brand-400 font-bold">/ {finalTotalMarks}</span>
                 </div>
+                <div className="mt-2 text-xs font-bold text-slate-500">
+                  Accuracy: {finalTotalMarks ? Math.round(((finalScore || 0) / finalTotalMarks) * 100) : 0}%
+                </div>
               </div>
+
+              {/* Topic Performance Diagnostics */}
+              {topicBreakdown && topicBreakdown.topics.length > 0 && (
+                <div className="mb-8 p-6 bg-slate-50 border border-slate-200 rounded-3xl space-y-5">
+                  <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+                    <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                      <span>📊 Topic Mastery & Performance Breakdown</span>
+                    </h3>
+                    <span className="text-[11px] font-bold text-slate-500">{topicBreakdown.topics.length} Evaluated Areas</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {topicBreakdown.topics.map((t, idx) => (
+                      <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                        <div className="flex justify-between items-center text-xs font-bold mb-2">
+                          <span className="text-slate-800">{t.name}</span>
+                          <span className={`${t.pct >= 75 ? 'text-emerald-600' : t.pct >= 50 ? 'text-brand-600' : 'text-amber-600'}`}>
+                            {t.pct}% ({t.earned.toFixed(1)}/{t.totalPossible} pts)
+                          </span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all ${t.pct >= 75 ? 'bg-emerald-500' : t.pct >= 50 ? 'bg-brand-600' : 'bg-amber-500'}`}
+                            style={{ width: `${t.pct}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-400 mt-1.5 block">{t.count} question{t.count > 1 ? 's' : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Diagnostic Highlights */}
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200/60">
+                    {topicBreakdown.strongest && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                        <span>🎯 Top Strength:</span>
+                        <span>{topicBreakdown.strongest.name} ({topicBreakdown.strongest.pct}%)</span>
+                      </div>
+                    )}
+                    {topicBreakdown.focusArea && topicBreakdown.focusArea.name !== topicBreakdown.strongest?.name && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+                        <span>💡 Recommended Focus:</span>
+                        <span>{topicBreakdown.focusArea.name} ({topicBreakdown.focusArea.pct}%)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {detailedResults && detailedResults.length > 0 && (
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">Detailed Breakdown</h3>
+                  <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">Detailed Question Review</h3>
                   {dbQuestions.map((q, idx) => {
                     const res = detailedResults.find(r => r.questionId === q.id);
                     if (!res) return null;
@@ -676,11 +872,20 @@ export function ExamInterface({
             </div>
           )}
 
-          <form action={logoutAction}>
-            <button className="text-brand-600 font-bold text-sm hover:text-brand-700 hover:underline">
-              Return to Login
+          <div className="flex flex-wrap items-center justify-center gap-4 mt-6">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition-colors flex items-center gap-2"
+            >
+              <span>🖨️ Download / Print Scorecard PDF</span>
             </button>
-          </form>
+            <form action={logoutAction}>
+              <button className="text-brand-600 font-bold text-xs hover:text-brand-700 hover:underline px-4 py-2.5">
+                Return to Login
+              </button>
+            </form>
+          </div>
         </div>
       </main>
     );
@@ -805,6 +1010,22 @@ export function ExamInterface({
           </div>
         </header>
 
+        {tabSwitchWarning && (
+          <div className="bg-rose-600 text-white px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-lg animate-in slide-in-from-top duration-200 sticky top-[57px] z-30">
+            <div className="flex items-center gap-2">
+              <span className="text-base animate-bounce">🚨</span>
+              <span>{tabSwitchWarning}</span>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setTabSwitchWarning(null)}
+              className="px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[11px] font-bold transition-colors ml-4 shrink-0"
+            >
+              Acknowledge
+            </button>
+          </div>
+        )}
+
         {/* Crash Recovery Notification Banner */}
         {isRecovered && (
           <div className="bg-indigo-900 text-indigo-100 text-xs px-6 py-2 flex items-center justify-between border-b border-indigo-800">
@@ -822,88 +1043,130 @@ export function ExamInterface({
         )}
 
         <div className="flex-1 flex px-4 md:px-8 py-8 gap-6 max-w-7xl mx-auto w-full">
-          {/* Question Palette Sidebar */}
-          <aside className="w-64 shrink-0 hidden lg:block">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/70 shadow-soft h-full flex flex-col justify-between">
+          {/* Question Palette Sidebar (GATE / JEE / CAT Standard) */}
+          <aside className="w-72 shrink-0 hidden lg:block">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-soft h-full flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                  <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider">
                     Question Palette
                   </h2>
-                  <span className="text-xs font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
-                    {Object.keys(answers).length} / {questions.length}
+                  <span className="text-xs font-bold text-brand-600 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-100">
+                    {answeredCount + ansMarkedCount} / {questions.length} Ans
                   </span>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 mb-6">
-                  {questions.map((q, i) => {
-                    const qId = q.id;
-                    const isAnswered = answers[qId] !== undefined;
-                    const isVisited = visited.has(qId);
-                    const isMarked = markedForReview.has(qId);
-                    const isActive = i === currentQuestion;
-                    
-                    let style = "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"; 
-                    if (isMarked) style = "bg-amber-100 text-amber-800 border-amber-300 font-bold"; 
-                    else if (isAnswered) style = "bg-brand-600 text-white border-brand-700 font-bold shadow-sm";
-                    else if (isVisited) style = "bg-slate-200 text-slate-700 border-slate-300";
-                    
-                    const ringClass = isActive ? "ring-2 ring-brand-500 ring-offset-2 scale-105" : "";
+                {/* State Counters Summary Grid */}
+                <div className="grid grid-cols-2 gap-1.5 mb-4 text-[11px] font-bold">
+                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/60">
+                    <span className="w-4 h-4 rounded-md bg-emerald-600 text-white flex items-center justify-center text-[10px] shrink-0">{answeredCount}</span>
+                    <span className="truncate">Answered</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200/60">
+                    <span className="w-4 h-4 rounded-md bg-rose-500 text-white flex items-center justify-center text-[10px] shrink-0">{notAnsweredCount}</span>
+                    <span className="truncate">Not Answered</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/60">
+                    <span className="w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] shrink-0">{markedCount}</span>
+                    <span className="truncate">Marked Review</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-purple-50/80 text-purple-900 border border-purple-300">
+                    <span className="w-4 h-4 rounded-md bg-purple-700 text-white flex items-center justify-center text-[10px] shrink-0 relative">
+                      {ansMarkedCount}
+                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                    </span>
+                    <span className="truncate">Ans & Marked</span>
+                  </div>
+                </div>
 
-                    return (
-                      <button
-                        key={qId}
-                        onClick={() => jumpToQuestion(i)}
-                        className={`h-9 w-full rounded-xl font-bold text-xs flex items-center justify-center transition-all border ${style} ${ringClass}`}
-                      >
-                        {i + 1}
-                      </button>
-                    );
-                  })}
+                {/* Question Numbers Grid */}
+                <div className="max-h-[340px] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-4 gap-2">
+                    {questions.map((q, i) => {
+                      const qId = q.id;
+                      const isAns = answers[qId] !== undefined && answers[qId] !== "" && !(Array.isArray(answers[qId]) && answers[qId].length === 0);
+                      const isVis = visited.has(qId) || i === currentQuestion;
+                      const isMrk = markedForReview.has(qId);
+                      const isActive = i === currentQuestion;
+
+                      let style = "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200";
+                      let badge = null;
+
+                      if (isAns && isMrk) {
+                        style = "bg-purple-700 text-white border-purple-800 shadow-sm";
+                        badge = <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white" />;
+                      } else if (isMrk) {
+                        style = "bg-purple-600 text-white border-purple-700 rounded-full shadow-sm";
+                      } else if (isAns) {
+                        style = "bg-emerald-600 text-white border-emerald-700 shadow-sm";
+                      } else if (isVis) {
+                        style = "bg-rose-500 text-white border-rose-600 shadow-sm";
+                      }
+
+                      const ringClass = isActive ? "ring-2 ring-brand-500 ring-offset-2 scale-105 z-10 font-black" : "";
+
+                      return (
+                        <button
+                          key={qId}
+                          onClick={() => jumpToQuestion(i)}
+                          className={`h-9 w-full rounded-xl font-bold text-xs flex items-center justify-center transition-all border relative ${style} ${ringClass}`}
+                        >
+                          {badge}
+                          <span>{i + 1}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              {/* Legend */}
-              <div className="pt-4 border-t border-slate-100 space-y-2 text-[11px] text-slate-500 font-medium">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-brand-600 shrink-0" />
-                  <span>Answered</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-amber-100 border border-amber-300 shrink-0" />
-                  <span>Marked for Review</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 shrink-0" />
-                  <span>Unanswered</span>
-                </div>
+              {/* Legend Footer */}
+              <div className="pt-3 mt-3 border-t border-slate-100 text-[10px] text-slate-400 font-medium text-center">
+                <span>Click any question number to jump directly</span>
               </div>
             </div>
           </aside>
 
-          {/* Main Question Container (matching reference design) */}
+          {/* Main Question Container */}
           <div className="flex-1">
-            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-soft p-6 sm:p-10 min-h-[540px] flex flex-col justify-between">
+            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-soft p-6 sm:p-9 min-h-[540px] flex flex-col justify-between">
               <div>
-                {/* Question Header Badge */}
-                <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
-                  <span className="text-xs font-bold text-brand-600 bg-brand-50 px-3 py-1 rounded-full uppercase tracking-wider">
-                    Question {currentQuestion + 1} of {questions.length}
-                  </span>
+                {/* Question Header Badge & Autosave Confirmation */}
+                <div className="flex flex-wrap justify-between items-center gap-2 mb-6 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold text-brand-700 bg-brand-50 px-3 py-1 rounded-full uppercase tracking-wider border border-brand-100">
+                      Question {currentQuestion + 1} of {questions.length}
+                    </span>
+                    {questions[currentQuestion].category && (
+                      <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                        {questions[currentQuestion].category}
+                      </span>
+                    )}
+                    <span className="text-[11px] font-bold text-slate-400">
+                      (+{questions[currentQuestion].points || 1} / -{questions[currentQuestion].negativePoints || 0} pts)
+                    </span>
+                  </div>
                   
-                  <button 
-                    onClick={toggleMarkForReview}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                      markedForReview.has(questions[currentQuestion].id) 
-                        ? "bg-amber-100 text-amber-800 border-amber-300 shadow-sm" 
-                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill={markedForReview.has(questions[currentQuestion].id) ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                    </svg>
-                    {markedForReview.has(questions[currentQuestion].id) ? "Marked" : "Mark for Review"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Autosaved ✓</span>
+                    </span>
+
+                    <button 
+                      onClick={toggleMarkForReview}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                        markedForReview.has(questions[currentQuestion].id) 
+                          ? "bg-purple-100 text-purple-800 border-purple-300 shadow-sm" 
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill={markedForReview.has(questions[currentQuestion].id) ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                      </svg>
+                      {markedForReview.has(questions[currentQuestion].id) ? "Marked" : "Mark Review"}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Real-time Tab Switch Warning Banner */}
@@ -959,7 +1222,8 @@ export function ExamInterface({
                                   value={val}
                                   onChange={(e) => {
                                     const currentObj = answers[q.id] || {};
-                                    setAnswers({ ...answers, [q.id]: { ...currentObj, [blankId]: e.target.value } });
+                                    const nextObj = { ...currentObj, [blankId]: e.target.value };
+                                    handleAnswerSelect(nextObj, q.id);
                                   }}
                                   className="inline-block w-36 mx-2 px-3 py-1.5 border-b-2 border-brand-500 bg-brand-50/60 outline-none text-center font-bold text-brand-700 transition-colors focus:bg-brand-100 rounded-t-lg"
                                   placeholder={`Blank ${blankId}`}
@@ -980,7 +1244,7 @@ export function ExamInterface({
                             type="number"
                             step="any"
                             value={answers[q.id] || ""}
-                            onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                            onChange={(e) => handleAnswerSelect(e.target.value, q.id)}
                             className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:border-brand-600 focus:ring-0 outline-none text-xl font-mono font-bold text-slate-900"
                             placeholder="e.g. 42.5"
                           />
@@ -994,6 +1258,8 @@ export function ExamInterface({
                         ? (answers[q.id] || []).includes(optText)
                         : answers[q.id] === optText;
 
+                      const optionLabel = String.fromCharCode(65 + idx); // A, B, C, D
+
                       return (
                         <label
                           key={idx}
@@ -1003,14 +1269,12 @@ export function ExamInterface({
                               : "border-slate-200/80 bg-white hover:bg-slate-50/80 text-slate-700 hover:border-slate-300"
                           }`}
                         >
-                          <div className={`w-5 h-5 ${qType === "MCQ_MULTI" ? "rounded-lg" : "rounded-full"} border flex items-center justify-center transition-all ${
+                          <div className={`w-7 h-7 rounded-xl border flex items-center justify-center font-bold text-xs transition-all ${
                             isChecked 
-                              ? "border-brand-600 bg-brand-600 text-white" 
-                              : "border-slate-300 bg-white group-hover:border-slate-400"
+                              ? "border-brand-600 bg-brand-600 text-white shadow-sm" 
+                              : "border-slate-300 bg-slate-50 text-slate-600 group-hover:border-slate-400 group-hover:bg-white"
                           }`}>
-                            {isChecked && (
-                              <div className={qType === "MCQ_MULTI" ? "w-2.5 h-2.5 bg-white rounded-xs" : "w-2 h-2 rounded-full bg-white"} />
-                            )}
+                            {optionLabel}
                           </div>
 
                           <input
@@ -1021,13 +1285,15 @@ export function ExamInterface({
                             onChange={() => {
                               if (qType === "MCQ_MULTI") {
                                 const current = answers[q.id] || [];
+                                let next = [];
                                 if (current.includes(optText)) {
-                                  setAnswers({ ...answers, [q.id]: current.filter((x: string) => x !== optText) });
+                                  next = current.filter((x: string) => x !== optText);
                                 } else {
-                                  setAnswers({ ...answers, [q.id]: [...current, optText] });
+                                  next = [...current, optText];
                                 }
+                                handleAnswerSelect(next, q.id);
                               } else {
-                                handleAnswerSelect(optText);
+                                handleAnswerSelect(optText, q.id);
                               }
                             }}
                             className="sr-only"
@@ -1035,7 +1301,7 @@ export function ExamInterface({
                           {opt.imageUrl && (
                             <img src={opt.imageUrl} alt="Option attachment" className="h-12 w-12 object-cover rounded-xl shadow-sm border border-slate-200" />
                           )}
-                          <span className="text-sm font-medium leading-relaxed">
+                          <span className="text-sm font-medium leading-relaxed flex-1">
                             {optText}
                           </span>
                         </label>
@@ -1045,38 +1311,58 @@ export function ExamInterface({
                 </div>
               </div>
 
-              {/* Navigation Bar Footer */}
-              <div className="flex justify-between items-center pt-6 border-t border-slate-100">
-                <div>
+              {/* Navigation Action Toolbar */}
+              <div className="flex flex-wrap justify-between items-center gap-3 pt-6 border-t border-slate-100">
+                <div className="flex items-center gap-2">
                   {config.allowBackNavigation !== false && (
                     <button 
                       onClick={handlePrev}
                       disabled={currentQuestion === 0}
-                      className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-all shadow-soft-sm"
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-all shadow-soft-sm flex items-center gap-1.5"
                     >
-                      ← Previous
+                      <span>←</span>
+                      <span>Previous</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleClearResponse}
+                    disabled={!answers[questions[currentQuestion]?.id]}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 transition-all flex items-center gap-1.5"
+                    title="Clear current answer choice"
+                  >
+                    <span>🧹</span>
+                    <span>Clear Selection</span>
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2.5">
+                  <button 
+                    onClick={handleMarkForReviewAndNext}
+                    className="px-5 py-2.5 rounded-xl bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200 font-bold text-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <span>🏷️</span>
+                    <span>Mark Review & Next</span>
+                  </button>
+
+                  {currentQuestion === questions.length - 1 ? (
+                    <button
+                      onClick={() => handleFinishTest(false)}
+                      className="px-7 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+                    >
+                      <span>🚀</span>
+                      <span>Submit Assessment</span>
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleNext}
+                      className="px-7 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-brand hover:shadow-lg transition-all flex items-center gap-1.5"
+                    >
+                      <span>Save & Next</span>
+                      <span>→</span>
                     </button>
                   )}
                 </div>
-                
-                {currentQuestion === questions.length - 1 ? (
-                  <button
-                    onClick={() => handleFinishTest(false)}
-                    className="px-8 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-brand hover:shadow-lg transition-all"
-                  >
-                    Submit Assessment
-                  </button>
-                ) : (
-                  <button 
-                    onClick={handleNext}
-                    className="px-8 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-brand hover:shadow-lg transition-all flex items-center gap-1.5"
-                  >
-                    <span>Next</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                )}
               </div>
             </div>
           </div>

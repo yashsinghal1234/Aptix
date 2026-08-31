@@ -57,6 +57,29 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
     return true;
   });
 
+  const selectAllFiltered = () => {
+    const newSet = new Set(selectedIds);
+    filteredQuestions.forEach(q => newSet.add(q.id));
+    setSelectedIds(newSet);
+  };
+
+  const deselectAllFiltered = () => {
+    const newSet = new Set(selectedIds);
+    filteredQuestions.forEach(q => newSet.delete(q.id));
+    setSelectedIds(newSet);
+  };
+
+  const isAllFilteredSelected = filteredQuestions.length > 0 && filteredQuestions.every(q => selectedIds.has(q.id));
+  const isSomeFilteredSelected = filteredQuestions.some(q => selectedIds.has(q.id)) && !isAllFilteredSelected;
+
+  const toggleAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      deselectAllFiltered();
+    } else {
+      selectAllFiltered();
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-8 max-w-5xl mx-auto pb-12">
       {error && (
@@ -68,44 +91,48 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
       {/* Basic Settings */}
       <div className="bg-white p-8 rounded-xl border shadow-sm">
         <h3 className="text-xl font-bold text-slate-800 mb-6">Exam Configuration</h3>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="col-span-2 md:col-span-1">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Exam Title</label>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Title</label>
             <input 
               type="text" 
               name="title" 
-              required
-              placeholder="e.g. Weekly Assessment"
+              required 
+              placeholder="e.g. Mid-term Assessment"
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Duration (minutes)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Subject</label>
             <input 
-              type="number" 
-              name="durationMinutes" 
-              defaultValue="60"
-              required
-              min="1"
+              type="text" 
+              name="subject" 
+              required 
+              placeholder="e.g. Computer Science"
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Start Time (Optional)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Start Time</label>
             <input 
               type="datetime-local" 
               name="startTime" 
+              required 
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Negative Marking</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Duration (Minutes)</label>
             <input 
               type="number" 
-              name="negativeMarking" 
-              defaultValue="0"
-              step="0.01"
-              min="0"
+              name="durationMinutes" 
+              required 
+              min="1"
+              defaultValue="60"
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
@@ -115,19 +142,37 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
       <div className="grid grid-cols-1 gap-8">
         {/* Fixed Question Selection */}
         <div className="bg-white p-8 rounded-xl border shadow-sm flex flex-col max-h-[600px]">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div>
               <h3 className="text-xl font-bold text-slate-800">Select Questions</h3>
-              <p className="text-sm text-slate-500 mt-1">Manually pick specific questions from the bank.</p>
+              <p className="text-sm text-slate-500 mt-1">Pick specific questions from the bank for this session.</p>
             </div>
-            <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-              {selectedIds.size} Selected
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                {selectedIds.size} of {allQuestions.length} Selected
+              </span>
+              <button
+                type="button"
+                onClick={selectAllFiltered}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Select All {filteredQuestions.length > 0 ? `(${filteredQuestions.length})` : ''}
+              </button>
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-4 mb-4">
             <select 
-              className="px-3 py-1.5 text-sm border rounded-lg bg-white flex-1" 
+              className="px-3 py-1.5 text-sm border rounded-lg bg-white flex-1 font-medium text-slate-700" 
               value={filterTopic} 
               onChange={e => setFilterTopic(e.target.value)}
             >
@@ -138,7 +183,7 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
               <option value="Technical">Technical</option>
             </select>
             <select 
-              className="px-3 py-1.5 text-sm border rounded-lg bg-white flex-1" 
+              className="px-3 py-1.5 text-sm border rounded-lg bg-white flex-1 font-medium text-slate-700" 
               value={filterDiff} 
               onChange={e => setFilterDiff(e.target.value)}
             >
@@ -148,10 +193,30 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
               <option value="HARD">Hard</option>
             </select>
           </div>
+
+          {filteredQuestions.length > 0 && (
+            <div 
+              onClick={toggleAllFiltered} 
+              className="flex items-center gap-2.5 px-3.5 py-2.5 bg-slate-100/90 rounded-xl border border-slate-200/80 mb-3 cursor-pointer select-none hover:bg-slate-200/70 transition-colors"
+            >
+              <input 
+                type="checkbox" 
+                checked={isAllFilteredSelected} 
+                ref={el => { if (el) el.indeterminate = isSomeFilteredSelected; }}
+                onChange={() => {}} 
+                className="accent-indigo-600 rounded cursor-pointer w-4 h-4" 
+              />
+              <span className="text-xs font-bold text-slate-700">
+                {isAllFilteredSelected 
+                  ? "Deselect All Filtered Questions" 
+                  : `Select All ${filteredQuestions.length} Filtered Question${filteredQuestions.length === 1 ? '' : 's'}`}
+              </span>
+            </div>
+          )}
           
           <div className="divide-y overflow-y-auto flex-1 pr-2">
             {filteredQuestions.length === 0 ? (
-              <p className="text-slate-500 text-center py-8 text-sm">No questions found.</p>
+              <p className="text-slate-500 text-center py-8 text-sm">No questions found matching current filter.</p>
             ) : (
               filteredQuestions.map(q => (
                 <div key={q.id} className="py-4 flex gap-4 items-start hover:bg-slate-50 p-2 rounded transition-colors cursor-pointer" onClick={() => toggleQuestion(q.id)}>
@@ -159,7 +224,7 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
                     type="checkbox" 
                     checked={selectedIds.has(q.id)}
                     onChange={() => {}} 
-                    className="mt-1.5 w-5 h-5 text-indigo-600 rounded"
+                    className="mt-1.5 w-4 h-4 accent-indigo-600 rounded cursor-pointer"
                   />
                   <div className="flex-1">
                     <div className="flex gap-2 items-center mb-1">

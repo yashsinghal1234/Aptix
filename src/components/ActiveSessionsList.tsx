@@ -38,12 +38,27 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
             isLive ? 'bg-emerald-50/30 border-emerald-200/80 shadow-soft-sm' : 'bg-white border-slate-200/80 shadow-soft-sm'
           }`}>
             <div className="mb-3 sm:mb-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
                   isLive ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-50 text-brand-700'
                 }`}>
                   {effectiveStatus} {session.status !== effectiveStatus ? "(Auto-Live)" : ""}
                 </span>
+                {session.pin && (
+                  <span 
+                    onClick={() => navigator.clipboard.writeText(session.pin)}
+                    title="Click to copy PIN"
+                    className="cursor-pointer text-[10px] font-mono font-extrabold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                  >
+                    <span>PIN: {session.pin}</span>
+                    <span className="text-[9px] opacity-70">📋</span>
+                  </span>
+                )}
+                {session.allowedEmailDomain && (
+                  <span className="text-[10px] font-semibold bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md border border-amber-200">
+                    @{session.allowedEmailDomain.replace(/^@/, '')}
+                  </span>
+                )}
                 <span className="text-xs text-slate-400 font-medium">|</span>
                 <span className="text-xs text-slate-500 font-bold">{session._count?.attempts || 0} Candidates</span>
               </div>

@@ -68,10 +68,20 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
             <LiveSessionAutoRefresh status={session.status} />
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
               {session.exam.title}
             </h1>
+            {session.pin && (
+              <span className="text-xs font-mono font-black bg-indigo-100 text-indigo-800 px-3 py-1 rounded-xl border border-indigo-200 shadow-sm flex items-center gap-1.5">
+                <span>PIN: {session.pin}</span>
+              </span>
+            )}
+            {session.allowedEmailDomain && (
+              <span className="text-xs font-semibold bg-amber-50 text-amber-800 px-2.5 py-1 rounded-xl border border-amber-200">
+                Required Domain: @{session.allowedEmailDomain.replace(/^@/, '')}
+              </span>
+            )}
             {session.status !== "COMPLETED" && (
               <div className="bg-navy-900 text-white px-3.5 py-1.5 rounded-full border border-slate-800 flex items-center gap-2 shadow-sm">
                 <svg className="w-3.5 h-3.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,6 +183,55 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
         </div>
       )}
 
+      {/* Live Security & Telemetry Stream */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-soft">
+        <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>🛡️ Real-Time Proctoring & Integrity Stream</span>
+              {totalFlagsCount > 0 ? (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-100 text-rose-700 border border-rose-200">
+                  {totalFlagsCount} Infraction{totalFlagsCount > 1 ? 's' : ''} Detected
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+                  Zero Infractions
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">Live audit log of candidate tab switches, window blurs, fullscreen exits, and clipboard activity</p>
+          </div>
+        </div>
+
+        {session.cheatFlags.length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-xs font-medium">
+            <span className="text-xl block mb-1">✅</span>
+            All active candidates are adhering to platform integrity parameters.
+          </div>
+        ) : (
+          <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+            {session.cheatFlags.slice().reverse().map(flag => (
+              <div key={flag.id} className="p-3 bg-slate-50 hover:bg-rose-50/50 border border-slate-200/60 rounded-xl flex items-center justify-between transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200 shrink-0">
+                    {flag.type.replace(/_/g, " ")}
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">
+                      {flag.user.name} <span className="font-normal text-slate-400">({flag.user.email})</span>
+                    </p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">{flag.description}</p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold text-slate-400 shrink-0 ml-4 font-mono">
+                  {new Date(flag.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Candidates Progress Table */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-soft overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
@@ -213,7 +272,13 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
                   return (
                     <tr key={attempt.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="px-6 py-4">
-                        <p className="font-bold text-slate-900 text-sm">{attempt.user.name}</p>
+                        <Link 
+                          href={`/dashboard/owner/results/${session.id}/candidate/${attempt.id}`}
+                          className="font-bold text-slate-900 hover:text-brand-600 transition-colors text-sm hover:underline block"
+                          title="View individual candidate scorecard"
+                        >
+                          {attempt.user.name} &rarr;
+                        </Link>
                         <p className="text-[11px] text-slate-400">{attempt.user.email}</p>
                       </td>
                       <td className="px-6 py-4">

@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "clean": "node -e \"try { fs.rmSync('.next', { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch(e){}\"",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
+    "test": "npx -y tsx tests/run-all.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate"
   },

@@ -3,16 +3,18 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  role      String   // 'OWNER' | 'SETTER' | 'CANDIDATE'
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  role         String   // 'OWNER' | 'SETTER' | 'CANDIDATE'
+  passwordHash       String?
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
 
   candidateResponses CandidateResponse[]
   attempts           CandidateAttempt[]
@@ -27,6 +29,7 @@ model Exam {
   description      String?
   instructions     String?
   subject          String?
+  allowedEmailDomain String? // e.g. "kiet.edu" or "@kiet.edu"
   
   // 2. Question Selection
   selectionMode           String   @default("MANUAL") // MANUAL, RULE_BASED
@@ -85,7 +88,9 @@ model ExamRule {
 
 model ExamSession {
   id               String   @id @default(cuid())
+  pin              String?  @unique // 6-char access code e.g. "APT-8042"
   examId           String
+  allowedEmailDomain String? // Institutional domain requirement e.g. "kiet.edu"
   startTime        DateTime?
   durationMinutes  Int
   extendedUntil    DateTime? // Global time extension
@@ -110,6 +115,8 @@ model ExamSession {
   
   sessionStats     SessionStats?
   questionStats    QuestionStats[]
+
+  @@index([pin])
 }
 
 model SessionStats {

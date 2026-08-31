@@ -64,6 +64,29 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     return true;
   });
 
+  const selectAllFiltered = () => {
+    const newSet = new Set(selectedIds);
+    filteredQuestions.forEach(q => newSet.add(q.id));
+    setSelectedIds(newSet);
+  };
+
+  const deselectAllFiltered = () => {
+    const newSet = new Set(selectedIds);
+    filteredQuestions.forEach(q => newSet.delete(q.id));
+    setSelectedIds(newSet);
+  };
+
+  const isAllFilteredSelected = filteredQuestions.length > 0 && filteredQuestions.every(q => selectedIds.has(q.id));
+  const isSomeFilteredSelected = filteredQuestions.some(q => selectedIds.has(q.id)) && !isAllFilteredSelected;
+
+  const toggleAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      deselectAllFiltered();
+    } else {
+      selectAllFiltered();
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-8 max-w-5xl mx-auto pb-24">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -95,72 +118,77 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Template Title</label>
-            <input type="text" name="title" required placeholder="e.g. Technical Aptitude Assessment" className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" />
+            <input type="text" name="title" required placeholder="e.g. Engineering Placement Aptitude - Phase 1" className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Subject / Category</label>
-            <input type="text" name="subject" placeholder="e.g. Engineering & Problem Solving" className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" />
+            <input type="text" name="subject" placeholder="e.g. General Aptitude, Core CS" className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" />
           </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Short Description</label>
-            <input type="text" name="description" placeholder="Brief summary of what this assessment tests" className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" />
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Description</label>
+            <input type="text" name="description" placeholder="Brief context about this assessment template..." className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" />
           </div>
-          <div className="col-span-2">
+          <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Candidate Instructions</label>
-            <textarea name="instructions" rows={3} placeholder="These instructions will be displayed on the candidate onboarding screen." className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" />
+            <textarea name="instructions" rows={2} placeholder="Detailed instructions displayed to the candidate before starting..." className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900 resize-none"></textarea>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Restricted Candidate Email Domain <span className="text-slate-400 font-normal normal-case">(Optional)</span>
+            </label>
+            <input 
+              type="text" 
+              name="allowedEmailDomain" 
+              placeholder="e.g. kiet.edu or @kiet.edu" 
+              className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900" 
+            />
+            <p className="text-[11px] text-slate-400 mt-1">If set, candidates must use an email ending with this domain to start the exam.</p>
           </div>
         </div>
       </section>
 
-      {/* 2. Question Selection */}
+      {/* 2. Blueprint & Selection Mode */}
       <section className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-soft">
         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
           <span className="w-7 h-7 rounded-xl bg-brand-50 text-brand-600 font-extrabold text-xs flex items-center justify-center border border-brand-100">2</span>
-          <h3 className="text-base font-bold text-slate-900 tracking-tight">Question Blueprint & Rules</h3>
+          <h3 className="text-base font-bold text-slate-900 tracking-tight">Question Selection Strategy</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Selection Mode</label>
-            <select name="selectionMode" className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-medium text-slate-900">
+            <select name="selectionMode" className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-600 outline-none transition-all font-semibold text-slate-900">
               <option value="MANUAL">Manual (Fixed Questions)</option>
-              <option value="RULE_BASED">Rule-Based (Auto-Pick)</option>
-              <option value="HYBRID">Hybrid (Both)</option>
+              <option value="RULE_BASED">Dynamic Blueprint (Auto-Pick Rules)</option>
+              <option value="HYBRID">Hybrid (Fixed + Dynamic Auto-Pick)</option>
             </select>
-          </div>
-          <div className="flex items-end pb-2">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" name="randomizeQuestionOrder" className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 accent-brand-600" />
-              <span className="text-xs font-bold text-slate-700">Randomize Question Order</span>
-            </label>
-          </div>
-          <div className="flex items-end pb-2">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" name="randomizeOptionOrder" className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500 accent-brand-600" />
-              <span className="text-xs font-bold text-slate-700">Randomize Option Order</span>
-            </label>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Rule-Based */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          {/* Dynamic Auto-Pick Rules */}
           <div className="bg-slate-50/70 p-6 rounded-2xl border border-slate-200/80">
             <div className="flex justify-between items-center mb-4">
-              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Auto-Pick Rules</h4>
-              <button type="button" onClick={addRule} className="text-xs bg-brand-50 text-brand-700 px-3 py-1 rounded-xl font-bold border border-brand-100 hover:bg-brand-100 transition-colors">+ Add Rule</button>
+              <div>
+                <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Dynamic Auto-Pick Rules</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">System will randomly draw questions per student matching these criteria</p>
+              </div>
+              <button type="button" onClick={addRule} className="text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-xl transition-colors shrink-0">
+                + Add Rule
+              </button>
             </div>
             {rules.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-8">No auto-pick rules defined.</p>
+              <p className="text-xs text-slate-400 italic py-4 text-center bg-white rounded-xl border border-slate-200/60">No dynamic rules added yet.</p>
             ) : (
               <div className="space-y-3">
-                {rules.map(rule => (
-                  <div key={rule.id} className="flex gap-2 items-center bg-white p-2.5 border border-slate-200 rounded-xl shadow-soft-sm">
-                    <select value={rule.category} onChange={e => updateRule(rule.id, "category", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50">
-                      <option value="Quantitative">Quant</option>
+                {rules.map((rule) => (
+                  <div key={rule.id} className="flex gap-2 items-center bg-white p-3 rounded-xl border border-slate-200/80 shadow-sm">
+                    <select value={rule.category} onChange={e => updateRule(rule.id, "category", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50 font-medium">
                       <option value="Logical">Logical</option>
+                      <option value="Quantitative">Quantitative</option>
                       <option value="Verbal">Verbal</option>
-                      <option value="Technical">Tech</option>
+                      <option value="Technical">Technical</option>
                     </select>
-                    <select value={rule.difficultyLevel} onChange={e => updateRule(rule.id, "difficultyLevel", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50">
+                    <select value={rule.difficultyLevel} onChange={e => updateRule(rule.id, "difficultyLevel", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50 font-medium">
                       <option value="EASY">Easy</option>
                       <option value="MEDIUM">Med</option>
                       <option value="HARD">Hard</option>
@@ -174,11 +202,37 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
           </div>
 
           {/* Fixed Selection */}
-          <div className="bg-slate-50/70 p-6 rounded-2xl border border-slate-200/80 flex flex-col h-[400px]">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Fixed Questions ({selectedIds.size})</h4>
+          <div className="bg-slate-50/70 p-6 rounded-2xl border border-slate-200/80 flex flex-col h-[460px]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                  Fixed Questions ({selectedIds.size})
+                </h4>
+                <span className="text-[10px] font-semibold text-slate-400">
+                  of {allQuestions.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={selectAllFiltered}
+                  className="text-[11px] font-bold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 px-2.5 py-1 rounded-lg transition-colors"
+                >
+                  Select All {filteredQuestions.length > 0 ? `(${filteredQuestions.length})` : ''}
+                </button>
+                {selectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2 mb-3">
+
+            <div className="flex gap-2 mb-2.5">
               <select className="text-xs border border-slate-200 rounded-xl p-2 flex-1 bg-white font-medium text-slate-700" value={filterTopic} onChange={e => setFilterTopic(e.target.value)}>
                 <option value="">All Topics</option>
                 <option value="Logical">Logical</option>
@@ -193,15 +247,42 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                 <option value="HARD">Hard</option>
               </select>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-              {filteredQuestions.map(q => (
-                <div key={q.id} onClick={() => toggleQuestion(q.id)} className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${selectedIds.has(q.id) ? 'bg-brand-50/80 border-brand-300 text-brand-900 font-semibold' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800'}`}>
-                  <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={selectedIds.has(q.id)} readOnly className="mt-0.5 accent-brand-600 rounded" />
-                    <div className="flex-1 line-clamp-2">{q.text}</div>
+
+            {filteredQuestions.length > 0 && (
+              <div 
+                onClick={toggleAllFiltered} 
+                className="flex items-center gap-2 px-3 py-2 bg-slate-100 rounded-xl border border-slate-200/80 mb-2 cursor-pointer select-none hover:bg-slate-200/70 transition-colors"
+              >
+                <input 
+                  type="checkbox" 
+                  checked={isAllFilteredSelected} 
+                  ref={el => { if (el) el.indeterminate = isSomeFilteredSelected; }}
+                  onChange={() => {}} 
+                  className="accent-brand-600 rounded cursor-pointer w-4 h-4" 
+                />
+                <span className="text-[11px] font-bold text-slate-700">
+                  {isAllFilteredSelected 
+                    ? "Deselect All Filtered Questions" 
+                    : `Select All ${filteredQuestions.length} Filtered Question${filteredQuestions.length === 1 ? '' : 's'}`}
+                </span>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1.5">
+              {filteredQuestions.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-8 text-center bg-white rounded-xl border border-slate-200/60">
+                  No questions match the current filter.
+                </p>
+              ) : (
+                filteredQuestions.map(q => (
+                  <div key={q.id} onClick={() => toggleQuestion(q.id)} className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${selectedIds.has(q.id) ? 'bg-brand-50/80 border-brand-300 text-brand-900 font-semibold' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800'}`}>
+                    <div className="flex items-start gap-3">
+                      <input type="checkbox" checked={selectedIds.has(q.id)} readOnly className="mt-0.5 accent-brand-600 rounded w-4 h-4 cursor-pointer" />
+                      <div className="flex-1 line-clamp-2">{q.text}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>

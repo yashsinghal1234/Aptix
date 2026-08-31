@@ -11,6 +11,7 @@ const templateSchema = z.object({
   description: z.string().optional(),
   instructions: z.string().optional(),
   subject: z.string().optional(),
+  allowedEmailDomain: z.string().nullable().optional(),
   
   selectionMode: z.string(),
   randomizeQuestionOrder: z.boolean(),
@@ -53,6 +54,7 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
     description: formData.get("description") || undefined,
     instructions: formData.get("instructions") || undefined,
     subject: formData.get("subject") || undefined,
+    allowedEmailDomain: (formData.get("allowedEmailDomain") as string)?.trim() || null,
     
     selectionMode: formData.get("selectionMode") || "MANUAL",
     randomizeQuestionOrder: formData.get("randomizeQuestionOrder") === "on",
@@ -158,4 +160,82 @@ export async function deleteTemplateAction(id: string) {
     return { error: "Failed to delete template. Make sure there are no active sessions using it." };
   }
 }
+
+export async function duplicateTemplateAction(id: string) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  try {
+    const existing = await prisma.exam.findUnique({
+      where: { id },
+      include: {
+        questions: true,
+        rules: true
+      }
+    });
+
+    if (!existing) return { error: "Template not found" };
+
+    const newTemplate = await prisma.exam.create({
+      data: {
+        title: `${existing.title} (Copy)`,
+        description: existing.description,
+        instructions: existing.instructions,
+        subject: existing.subject,
+        allowedEmailDomain: existing.allowedEmailDomain,
+        createdBySetterId: existing.createdBySetterId || (payload.userId as string),
+        selectionMode: existing.selectionMode,
+        randomizeQuestionOrder: existing.randomizeQuestionOrder,
+        randomizeOptionOrder: existing.randomizeOptionOrder,
+        totalMarks: existing.totalMarks,
+        marksPerQuestion: existing.marksPerQuestion,
+        negativeMarkingEnabled: existing.negativeMarkingEnabled,
+        negativeMarksValue: existing.negativeMarksValue,
+        partialCreditEnabled: existing.partialCreditEnabled,
+        passCriteria: existing.passCriteria,
+        durationMinutes: existing.durationMinutes,
+        defaultStartWindowHours: existing.defaultStartWindowHours,
+        allowQuestionSkip: existing.allowQuestionSkip,
+        allowAnswerReview: existing.allowAnswerReview,
+        allowBackNavigation: existing.allowBackNavigation,
+        maxAttempts: existing.maxAttempts,
+        questionDisplayMode: existing.questionDisplayMode,
+        resultVisibility: existing.resultVisibility,
+        showCorrectAnswers: existing.showCorrectAnswers,
+        showExplanation: existing.showExplanation,
+        requireFullscreen: existing.requireFullscreen,
+        disableCopyPaste: existing.disableCopyPaste,
+        tabSwitchLimit: existing.tabSwitchLimit,
+        webcamRequired: existing.webcamRequired,
+        questions: {
+          connect: existing.questions.map(q => ({ id: q.id }))
+        },
+        rules: {
+          create: existing.rules.map(r => ({
+            category: r.category,
+            difficultyLevel: r.difficultyLevel,
+            count: r.count
+          }))
+        }
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId as string,
+        action: "DUPLICATE_TEMPLATE",
+        details: `Duplicated template "${existing.title}" -> "${newTemplate.title}"`,
+      }
+    });
+
+    revalidatePath("/dashboard/owner");
+    return { success: true, newTemplateId: newTemplate.id };
+  } catch (error: any) {
+    console.error("Failed to duplicate template:", error);
+    return { error: error.message || "Failed to clone template" };
+  }
+}
+
 
