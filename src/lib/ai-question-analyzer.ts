@@ -256,13 +256,14 @@ export function generateDraftExplanation(
 export async function analyzeQuestionWithAI(
   text: string,
   rawOptions: string[],
-  correctAnswerIndex: number
+  correctAnswerIndex: number,
+  customExplanation?: string
 ): Promise<ParsedQuestionWithAI> {
   const cleanOptions = rawOptions.map(o => o.trim());
   const taxonomy = classifyTaxonomy(text, cleanOptions);
   const distractorAnalysis = analyzeDistractorQuality(text, cleanOptions, correctAnswerIndex);
   const ambiguity = checkAmbiguity(text, cleanOptions, correctAnswerIndex);
-  const draftExplanation = generateDraftExplanation(text, cleanOptions, correctAnswerIndex, taxonomy.category);
+  const draftExplanation = customExplanation?.trim() || generateDraftExplanation(text, cleanOptions, correctAnswerIndex, taxonomy.category);
 
   // Check for duplicate in DB
   let duplicateMatch = {

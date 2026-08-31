@@ -1,3 +1,5 @@
+import { parseTextBlobToRawItems } from "../src/app/actions/extract";
+
 export function runCSVParserTests() {
   console.log("\n🧪 Running CSV Importer Robustness Tests...");
   let passed = 0;
@@ -53,6 +55,35 @@ export function runCSVParserTests() {
   const line3 = 'What is the capital of France?,Paris,London,Berlin,Madrid,0,General,EASY';
   const parsed3 = parseCSVLine(line3);
   assert("Standard Unquoted CSV Line Parsed", parsed3.length === 8 && parsed3[1] === "Paris");
+
+  // Test 4: Question with "Question 1:" on separate line before stem
+  const textBlob1 = `Question 1:
+A train running at speed of 60 km/hr crosses a pole in 9 seconds. What is the length of train?
+A) 120 metres
+B) 150 metres
+C) 180 metres
+D) 324 metres
+Answer: B`;
+  const items1 = parseTextBlobToRawItems(textBlob1);
+  assert("Separated 'Question 1:' Header correctly extracts real question stem", items1.length === 1 && items1[0].stem === "A train running at speed of 60 km/hr crosses a pole in 9 seconds. What is the length of train?" && items1[0].answerIndex === 1 && items1[0].options[1] === "150 metres");
+
+  // Test 5: Question with inline header "Question 1: What is..."
+  const textBlob2 = `Question 1: What is the capital of France?
+A) London
+B) Paris
+C) Berlin
+D) Madrid
+Answer: B
+Explanation: Paris has been the capital since 508 AD.`;
+  const items2 = parseTextBlobToRawItems(textBlob2);
+  assert("Inline 'Question 1: Stem' header stripped and explanation captured", items2.length === 1 && items2[0].stem === "What is the capital of France?" && items2[0].explanation === "Paris has been the capital since 508 AD.");
+
+  // Test 6: Multiple inline options on single line
+  const textBlob3 = `Q2. Choose the correct color:
+(A) Red (B) Green (C) Blue (D) Yellow
+Ans: (C)`;
+  const items3 = parseTextBlobToRawItems(textBlob3);
+  assert("Multiple inline options on single line parsed accurately", items3.length === 1 && items3[0].options.length === 4 && items3[0].options[2] === "Blue" && items3[0].answerIndex === 2);
 
   return { passed, total };
 }
