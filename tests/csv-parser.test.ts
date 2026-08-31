@@ -1,4 +1,4 @@
-import { parseTextBlobToRawItems } from "../src/app/actions/extract";
+import { parseTextBlobToRawItems } from "../src/lib/question-parser";
 
 export function runCSVParserTests() {
   console.log("\n🧪 Running CSV Importer Robustness Tests...");
