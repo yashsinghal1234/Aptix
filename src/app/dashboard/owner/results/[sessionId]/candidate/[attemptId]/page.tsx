@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export default async function CandidateReportPage({ params }: { params: { sessionId: string, attemptId: string } }) {
   const token = cookies().get("token")?.value;
   if (!token) redirect("/");

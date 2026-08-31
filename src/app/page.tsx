@@ -7,6 +7,8 @@ import { verifyToken } from "@/lib/auth";
 import { logoutAction } from "@/app/actions/auth";
 import { startAttemptAction } from "@/app/actions/attempt";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const cookieStore = cookies();
   const token = cookieStore.get("token")?.value;

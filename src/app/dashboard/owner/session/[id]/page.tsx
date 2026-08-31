@@ -14,6 +14,8 @@ import {
 import { OwnerSessionTimer } from "@/components/OwnerSessionTimer";
 import { LiveSessionAutoRefresh } from "@/components/LiveSessionAutoRefresh";
 
+export const dynamic = "force-dynamic";
+
 export default async function LiveSessionMonitor({ params }: { params: { id: string } }) {
   const token = cookies().get("token")?.value;
   if (!token) redirect("/");

@@ -12,6 +12,8 @@ import { deleteTemplateAction, duplicateTemplateAction } from "@/app/actions/tem
 import { ActiveSessionsList } from "@/components/ActiveSessionsList";
 import { LaunchSessionForm } from "@/components/LaunchSessionForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function OwnerDashboard() {
   const token = cookies().get("token")?.value;
   if (!token) redirect("/");
