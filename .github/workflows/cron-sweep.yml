@@ -17,19 +17,40 @@ jobs:
           APP_URL: ${{ secrets.APP_URL || 'https://aptix.vercel.app' }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          echo "Triggering Aptix Exam Sweeper at $APP_URL..."
-          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X GET "$APP_URL/api/cron/sweep?secret=$CRON_SECRET" -H "Authorization: Bearer $CRON_SECRET")
+          # 1. Normalize and clean APP_URL (strip whitespace, quotes, trailing slashes)
+          CLEAN_URL=$(echo "$APP_URL" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/\/*$//')
           
+          # Default to https:// if protocol scheme is omitted
+          if [[ ! "$CLEAN_URL" =~ ^https?:// ]]; then
+            CLEAN_URL="https://$CLEAN_URL"
+          fi
+
+          # Clean CRON_SECRET (strip whitespace and accidental quotes)
+          CLEAN_SECRET=$(echo "$CRON_SECRET" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+
+          TARGET_ENDPOINT="${CLEAN_URL}/api/cron/sweep"
+          echo "Triggering Aptix Exam Sweeper at $TARGET_ENDPOINT..."
+          
+          # Send GET request with Bearer token authentication
+          RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" \
+            -X GET "$TARGET_ENDPOINT" \
+            -H "Authorization: Bearer $CLEAN_SECRET" \
+            --connect-timeout 15 \
+            --max-time 30 2>&1 || echo -e "\nHTTP_STATUS:CURL_FAILED")
+
           HTTP_BODY=$(echo "$RESPONSE" | sed -e '$d')
           HTTP_STATUS=$(echo "$RESPONSE" | tail -n1 | cut -d':' -f2)
-          
+
           echo "Response Body: $HTTP_BODY"
           echo "HTTP Status: $HTTP_STATUS"
-          
-          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+
+          if [ "$HTTP_STATUS" = "200" ] || ([ "$HTTP_STATUS" -ge 200 ] 2>/dev/null && [ "$HTTP_STATUS" -lt 300 ] 2>/dev/null); then
             echo "✅ Sweeper executed successfully."
-          elif [ "$HTTP_STATUS" -eq 401 ]; then
-            echo "⚠️ Warning: Unauthorized. Please verify that CRON_SECRET matches your Vercel environment variable."
+          elif [ "$HTTP_STATUS" = "401" ]; then
+            echo "⚠️ Warning: Unauthorized (401). Please verify that CRON_SECRET in GitHub Repository Secrets matches your Vercel CRON_SECRET (or JWT_SECRET) environment variable."
+            exit 1
+          elif [ "$HTTP_STATUS" = "CURL_FAILED" ]; then
+            echo "❌ Failed to connect to $TARGET_ENDPOINT. Please verify that your APP_URL secret is a valid, reachable URL."
             exit 1
           else
             echo "❌ Sweeper encountered an issue. HTTP Code: $HTTP_STATUS"
