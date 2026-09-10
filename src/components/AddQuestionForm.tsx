@@ -186,13 +186,20 @@ export function AddQuestionForm() {
                 onClick={() => setShowPreview(!showPreview)}
                 className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-100 transition-colors flex items-center gap-1.5"
               >
-                <span>{showPreview ? "👁️ Hide Preview" : "👁️ Show Live Preview"}</span>
+                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span>{showPreview ? "Hide Live Preview" : "Show Live Preview"}</span>
               </button>
             </div>
 
             {error && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-700">
-                ⚠️ {error}
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-700 flex items-center gap-2">
+                <svg className="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{error}</span>
               </div>
             )}
             {successMsg && (
@@ -513,7 +520,12 @@ export function AddQuestionForm() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                     <div className="bg-white p-3 rounded-xl border border-slate-200">
-                      <span className="font-bold text-slate-700 block mb-1">🔍 Distractor Health:</span>
+                      <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Distractor Health:
+                      </span>
                       <ul className="text-slate-600 text-[11px] list-disc list-inside space-y-1">
                         {aiAnalysis.qualityFeedback.distractorCritique.map((c, i) => (
                           <li key={i}>{c}</li>
@@ -522,18 +534,28 @@ export function AddQuestionForm() {
                     </div>
 
                     <div className="bg-white p-3 rounded-xl border border-slate-200">
-                      <span className="font-bold text-slate-700 block mb-1">⚖️ Ambiguity Check:</span>
+                      <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                        </svg>
+                        Ambiguity Check:
+                      </span>
                       <span className={`text-[11px] font-bold ${aiAnalysis.qualityFeedback.ambiguityStatus === "PASSED" ? "text-emerald-700" : "text-amber-700"}`}>
                         {aiAnalysis.qualityFeedback.ambiguityMessage}
                       </span>
                     </div>
 
                     <div className="bg-white p-3 rounded-xl border border-slate-200">
-                      <span className="font-bold text-slate-700 block mb-1">🛡️ Question Bank:</span>
+                      <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        Question Bank:
+                      </span>
                       <span className="text-[11px] font-medium text-slate-600">
                         {aiAnalysis.qualityFeedback.duplicateMatch.found
-                          ? `⚠️ Similar question in bank (${aiAnalysis.qualityFeedback.duplicateMatch.similarityScore}% match)`
-                          : "✅ No duplicate found in question bank."}
+                          ? `Similar question in bank (${aiAnalysis.qualityFeedback.duplicateMatch.similarityScore}% match)`
+                          : "No duplicate found in question bank."}
                       </span>
                     </div>
                   </div>
@@ -568,7 +590,10 @@ export function AddQuestionForm() {
                 }}
                 className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
-                {analyzing ? "Auditing..." : "✨ AI Quality Check"}
+                <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>{analyzing ? "Auditing..." : "AI Quality Check"}</span>
               </button>
 
               <div className="flex flex-wrap gap-2.5 ml-auto">
@@ -587,7 +612,10 @@ export function AddQuestionForm() {
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 shadow-sm flex items-center gap-1.5"
                   title="Ctrl + Enter to Save and add next"
                 >
-                  {loading ? "Saving..." : "✨ Save & Add Another (Ctrl+Enter)"}
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>{loading ? "Saving..." : "Save & Add Another (Ctrl+Enter)"}</span>
                 </button>
               </div>
             </div>
@@ -695,8 +723,11 @@ export function AddQuestionForm() {
                   </div>
                 )}
 
-                <p className="text-[11px] text-slate-500 text-center pt-2">
-                  ⌨️ Fast keyboard shortcut: Press <strong className="text-slate-400 font-mono">Ctrl + Enter</strong> anywhere to submit and load the next question.
+                <p className="text-[11px] text-slate-500 text-center pt-2 flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                  </svg>
+                  <span>Fast keyboard shortcut: Press <strong className="text-slate-400 font-mono">Ctrl + Enter</strong> anywhere to submit and load the next question.</span>
                 </p>
               </div>
             </div>

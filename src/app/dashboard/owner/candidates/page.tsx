@@ -210,7 +210,9 @@ export default async function CandidateRecordsPage() {
                                     title="Reopen: Keeps previous answers and grants 10 minutes"
                                     className="text-[11px] px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition-colors border border-emerald-200 shadow-sm flex items-center gap-1"
                                   >
-                                    <span>🔓</span>
+                                    <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                                    </svg>
                                     <span>Reopen (+10m)</span>
                                   </button>
                                 </form>
@@ -226,7 +228,9 @@ export default async function CandidateRecordsPage() {
                                     title="Full Reset: Clears answers and grants a fresh retake"
                                     className="text-[11px] px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-lg transition-colors border border-amber-200 shadow-sm flex items-center gap-1"
                                   >
-                                    <span>🔄</span>
+                                    <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
                                     <span>Retake</span>
                                   </button>
                                 </form>

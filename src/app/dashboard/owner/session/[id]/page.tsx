@@ -190,7 +190,10 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
         <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>🛡️ Real-Time Proctoring & Integrity Stream</span>
+              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>Real-Time Proctoring & Integrity Stream</span>
               {totalFlagsCount > 0 ? (
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-100 text-rose-700 border border-rose-200">
                   {totalFlagsCount} Infraction{totalFlagsCount > 1 ? 's' : ''} Detected
@@ -206,8 +209,10 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
         </div>
 
         {session.cheatFlags.length === 0 ? (
-          <div className="text-center py-6 text-slate-400 text-xs font-medium">
-            <span className="text-xl block mb-1">✅</span>
+          <div className="text-center py-6 text-slate-400 text-xs font-medium flex flex-col items-center justify-center">
+            <svg className="w-6 h-6 text-emerald-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             All active candidates are adhering to platform integrity parameters.
           </div>
         ) : (
@@ -310,7 +315,10 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
                       <td className="px-6 py-4">
                         {flags > 0 ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-700 border border-rose-200">
-                            ⚠️ {flags} Flag{flags > 1 ? 's' : ''}
+                            <svg className="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span>{flags} Flag{flags > 1 ? 's' : ''}</span>
                           </span>
                         ) : (
                           <span className="text-slate-300 text-xs font-bold">&mdash;</span>
@@ -353,7 +361,9 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
                                 title="Reopen attempt: Keeps saved answers and adds 10 minutes"
                                 className="text-[11px] px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition-colors border border-emerald-200 shadow-sm flex items-center gap-1"
                               >
-                                <span>🔓</span>
+                                <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                                </svg>
                                 <span>Reopen (+10m)</span>
                               </button>
                             </form>
@@ -369,7 +379,9 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
                                 title="Full Reset: Clears answers and grants a fresh retake"
                                 className="text-[11px] px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold rounded-lg transition-colors border border-amber-200 shadow-sm flex items-center gap-1"
                               >
-                                <span>🔄</span>
+                                <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
                                 <span>Reset Retake</span>
                               </button>
                             </form>

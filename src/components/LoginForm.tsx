@@ -40,8 +40,9 @@ export function LoginForm() {
         </div>
 
         {error && (
-          <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold rounded-xl text-center leading-snug animate-in fade-in duration-200">
-            ⚠️ {error}
+          <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1.5 leading-snug animate-in fade-in duration-200">
+            <svg className="w-3.5 h-3.5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span>{error}</span>
           </div>
         )}
         
@@ -115,9 +116,10 @@ export function LoginForm() {
             <span className="text-slate-500 font-medium">Want to warm up?</span>
             <Link 
               href="/practice" 
-              className="font-bold text-brand-600 hover:text-brand-800 hover:underline transition-colors flex items-center gap-1"
+              className="font-bold text-brand-600 hover:text-brand-800 hover:underline transition-colors flex items-center gap-1.5"
             >
-              <span>🎯 Practice Arena</span>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <span>Practice Arena</span>
             </Link>
           </div>
           <div className="flex items-center justify-between pt-2 border-t border-slate-50">

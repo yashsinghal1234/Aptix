@@ -96,7 +96,9 @@ export default async function Home() {
 
             <div className="p-5 bg-slate-50 border border-slate-200/80 rounded-2xl text-left space-y-3">
               <div className="flex items-center gap-2">
-                <span className="text-lg">🎯</span>
+                <svg className="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
                 <span className="text-xs font-extrabold text-slate-900">Want to warm up while you wait?</span>
               </div>
               <p className="text-xs text-slate-600 font-medium">
@@ -106,7 +108,11 @@ export default async function Home() {
                 href="/practice"
                 className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-brand transition-all"
               >
-                <span>🚀 Launch Practice Mode</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Launch Practice Mode</span>
               </a>
             </div>
 

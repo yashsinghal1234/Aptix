@@ -158,7 +158,10 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
             <div className="flex items-center gap-3 mr-2">
               {currentStreak > 1 && (
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-full animate-bounce">
-                  <span>🔥</span>
+                  <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+                  </svg>
                   <span>{currentStreak} Streak!</span>
                 </div>
               )}
@@ -184,7 +187,9 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
           <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/80 shadow-soft-xl max-w-xl w-full text-left space-y-6">
             <div>
               <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mb-4 border border-brand-100 shadow-sm">
-                <span className="text-2xl">🎯</span>
+                <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
               </div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Adaptive Practice Mode</h2>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -193,8 +198,11 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
             </div>
 
             {error && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-700">
-                ⚠️ {error}
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-700 flex items-center gap-2">
+                <svg className="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{error}</span>
               </div>
             )}
 
@@ -208,7 +216,7 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
                   onChange={e => setSelectedTopic(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none"
                 >
-                  <option value="ALL">🌐 All Topics (Comprehensive Mixed Drill)</option>
+                  <option value="ALL">All Topics (Comprehensive Mixed Drill)</option>
                   {FIXED_TOPICS.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
@@ -275,7 +283,11 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
                 </>
               ) : (
                 <>
-                  <span>🚀 Launch Practice Session</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Launch Practice Session</span>
                 </>
               )}
             </button>
@@ -384,7 +396,9 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
             {revealed[currentQ.id] && (
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 animate-in fade-in">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">💡</span>
+                  <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Solution & Explanation</span>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap font-medium">
@@ -426,7 +440,9 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
         {stage === "COMPLETE" && (
           <div className="bg-white p-8 sm:p-10 rounded-3xl border border-slate-200/80 shadow-soft-xl max-w-xl w-full text-center space-y-6">
             <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-emerald-100 shadow-sm">
-              <span className="text-3xl">🎉</span>
+              <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
 
             <div>
@@ -450,7 +466,13 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
               </div>
               <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-center">
                 <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider block mb-1">Max Streak</span>
-                <span className="text-2xl font-black text-amber-600">{maxStreak} 🔥</span>
+                <span className="text-2xl font-black text-amber-600 flex items-center justify-center gap-1">
+                  <span>{maxStreak}</span>
+                  <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+                  </svg>
+                </span>
               </div>
             </div>
 
@@ -483,9 +505,12 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
                 onClick={() => {
                   setStage("SETUP");
                 }}
-                className="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-brand transition-all"
+                className="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-brand transition-all flex items-center justify-center gap-1.5"
               >
-                🎯 Start Another Practice Drill
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Start Another Practice Drill</span>
               </button>
               <Link
                 href="/"

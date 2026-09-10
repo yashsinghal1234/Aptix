@@ -372,7 +372,12 @@ export function BulkUploadText() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                       {/* Distractor Quality */}
                       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-soft-sm">
-                        <span className="font-bold text-slate-700 block mb-1">🔍 Distractor Health:</span>
+                        <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                          Distractor Health:
+                        </span>
                         <ul className="text-slate-600 space-y-1 text-[11px] list-disc list-inside">
                           {q.qualityFeedback.distractorCritique.map((c, i) => (
                             <li key={i}>{c}</li>
@@ -382,7 +387,12 @@ export function BulkUploadText() {
 
                       {/* Ambiguity Check */}
                       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-soft-sm">
-                        <span className="font-bold text-slate-700 block mb-1">⚖️ Ambiguity Check:</span>
+                        <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                          </svg>
+                          Ambiguity Check:
+                        </span>
                         <div className="flex items-center gap-1.5 mb-1">
                           <span
                             className={`w-2 h-2 rounded-full ${
@@ -404,10 +414,18 @@ export function BulkUploadText() {
 
                       {/* Duplicate Bank Check */}
                       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-soft-sm">
-                        <span className="font-bold text-slate-700 block mb-1">🛡️ Question Bank Duplication:</span>
+                        <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          Question Bank Duplication:
+                        </span>
                         {q.qualityFeedback.duplicateMatch.found ? (
-                          <div className="text-amber-700 text-[11px] font-medium leading-tight">
-                            ⚠️ Similar question already in bank ({q.qualityFeedback.duplicateMatch.similarityScore}% match).
+                          <div className="text-amber-700 text-[11px] font-medium leading-tight flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span>Similar question already in bank ({q.qualityFeedback.duplicateMatch.similarityScore}% match).</span>
                           </div>
                         ) : (
                           <div className="text-emerald-700 text-[11px] font-medium flex items-center gap-1.5">

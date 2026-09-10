@@ -429,14 +429,14 @@ export function ExamInterface({
           setTabSwitchWarning(`Maximum allowed security limit (${maxLimit}) reached. Auto-submitting assessment now.`);
           executeSubmit();
         } else {
-          setTabSwitchWarning(`⚠️ Security Warning: Infraction #${count} of ${maxLimit} allowed logged (${description}). Exceeding will auto-submit.`);
+          setTabSwitchWarning(`Security Warning: Infraction #${count} of ${maxLimit} allowed logged (${description}). Exceeding will auto-submit.`);
         }
       } else if (config.autoSubmitOnFullscreenExit && type === "FULLSCREEN_EXIT") {
         isFinishingRef.current = true;
         setTabSwitchWarning("Exited full-screen mode. Assessment automatically submitted.");
         executeSubmit();
       } else {
-        setTabSwitchWarning(`⚠️ Security Alert: Infraction #${count} logged to examiner (${description}).`);
+        setTabSwitchWarning(`Security Alert: Infraction #${count} logged to examiner (${description}).`);
       }
     };
 
@@ -716,7 +716,10 @@ export function ExamInterface({
                 onClick={startExamFullscreen}
                 className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm rounded-xl shadow-brand hover:shadow-lg transition-all flex items-center justify-center gap-2 group"
               >
-                <span>{isRecovered ? "🖥️ Enter Fullscreen & Resume Assessment" : "Start Assessment"}</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+                <span>{isRecovered ? "Enter Fullscreen & Resume Assessment" : "Start Assessment"}</span>
                 <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
@@ -738,7 +741,6 @@ export function ExamInterface({
             {isTimeout ? (
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
               </svg>
             ) : (
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -747,13 +749,13 @@ export function ExamInterface({
             )}
           </div>
 
-          <h1 className="text-2xl font-extrabold text-slate-900 mb-2 tracking-tight">
-            {isTimeout ? "Out of Time" : "Assessment Completed"}
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
+            {isTimeout ? "Time Has Expired" : "Assessment Complete!"}
           </h1>
-          <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+          <p className="text-slate-500 text-xs font-medium max-w-sm mx-auto mb-8">
             {isTimeout 
-              ? `The time limit has expired and your responses for ${session.exam.title} have been securely submitted.` 
-              : `Thank you, ${candidateName}. Your responses for ${session.exam.title} have been safely submitted and recorded.`
+              ? "Your allocated examination time has completed. Your responses were automatically synchronized and sealed."
+              : "Thank you for completing this assessment. Your responses have been submitted to the evaluating examiner."
             }
           </p>
 
@@ -778,7 +780,10 @@ export function ExamInterface({
                 <div className="mb-8 p-6 bg-slate-50 border border-slate-200 rounded-3xl space-y-5">
                   <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
                     <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                      <span>📊 Topic Mastery & Performance Breakdown</span>
+                      <svg className="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <span>Topic Mastery & Performance Breakdown</span>
                     </h3>
                     <span className="text-[11px] font-bold text-slate-500">{topicBreakdown.topics.length} Evaluated Areas</span>
                   </div>
@@ -807,13 +812,19 @@ export function ExamInterface({
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200/60">
                     {topicBreakdown.strongest && (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
-                        <span>🎯 Top Strength:</span>
+                        <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span>Top Strength:</span>
                         <span>{topicBreakdown.strongest.name} ({topicBreakdown.strongest.pct}%)</span>
                       </div>
                     )}
                     {topicBreakdown.focusArea && topicBreakdown.focusArea.name !== topicBreakdown.strongest?.name && (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
-                        <span>💡 Recommended Focus:</span>
+                        <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <span>Recommended Focus:</span>
                         <span>{topicBreakdown.focusArea.name} ({topicBreakdown.focusArea.pct}%)</span>
                       </div>
                     )}
@@ -878,7 +889,10 @@ export function ExamInterface({
               onClick={() => window.print()}
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition-colors flex items-center gap-2"
             >
-              <span>🖨️ Download / Print Scorecard PDF</span>
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              <span>Download / Print Scorecard PDF</span>
             </button>
             <form action={logoutAction}>
               <button className="text-brand-600 font-bold text-xs hover:text-brand-700 hover:underline px-4 py-2.5">
@@ -1084,7 +1098,9 @@ export function ExamInterface({
         {tabSwitchWarning && (
           <div className="bg-rose-600 text-white px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-lg animate-in slide-in-from-top duration-200 sticky top-[57px] z-30">
             <div className="flex items-center gap-2">
-              <span className="text-base animate-bounce">🚨</span>
+              <svg className="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
               <span>{tabSwitchWarning}</span>
             </div>
             <button 
@@ -1244,7 +1260,9 @@ export function ExamInterface({
                 {tabSwitchWarning && (
                   <div className="mb-6 p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200">
                     <div className="flex items-center gap-2">
-                      <span className="text-base">⚠️</span>
+                      <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
                       <span>{tabSwitchWarning}</span>
                     </div>
                     <button 
@@ -1402,7 +1420,9 @@ export function ExamInterface({
                     className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 transition-all flex items-center gap-1.5"
                     title="Clear current answer choice"
                   >
-                    <span>🧹</span>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                     <span>Clear Selection</span>
                   </button>
                 </div>
@@ -1412,7 +1432,9 @@ export function ExamInterface({
                     onClick={handleMarkForReviewAndNext}
                     className="px-5 py-2.5 rounded-xl bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200 font-bold text-xs transition-colors flex items-center gap-1.5"
                   >
-                    <span>🏷️</span>
+                    <svg className="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
                     <span>Mark Review & Next</span>
                   </button>
 
@@ -1421,7 +1443,9 @@ export function ExamInterface({
                       onClick={() => handleFinishTest(false)}
                       className="px-7 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
                     >
-                      <span>🚀</span>
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
                       <span>Submit Assessment</span>
                     </button>
                   ) : (

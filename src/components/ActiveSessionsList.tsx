@@ -51,7 +51,9 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
                     className="cursor-pointer text-[10px] font-mono font-extrabold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1"
                   >
                     <span>PIN: {session.pin}</span>
-                    <span className="text-[9px] opacity-70">📋</span>
+                    <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                    </svg>
                   </span>
                 )}
                 {session.allowedEmailDomain && (

@@ -52,7 +52,10 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
         onClick={() => setIsOpen(true)}
         className="text-[11px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 px-2.5 py-1.5 rounded-xl transition-colors inline-flex items-center gap-1 shrink-0"
       >
-        <span>🔄 Reset Password</span>
+        <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>Reset Password</span>
       </button>
 
       {isOpen && (
@@ -86,8 +89,11 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
                       <span className="font-mono bg-emerald-100 px-2 py-0.5 rounded font-bold">{result.temporaryPassword}</span>
                     </p>
                   </div>
-                  <p className="text-[11px] text-emerald-700/80 mt-2 font-medium">
-                    🔒 The user will be required to choose their own confidential password upon next login.
+                  <p className="text-[11px] text-emerald-700/80 mt-2 font-medium flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>The user will be required to choose their own confidential password upon next login.</span>
                   </p>
                 </div>
 
@@ -97,7 +103,16 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
                     onClick={handleCopy}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
                   >
-                    {copied ? "✓ Copied to Clipboard!" : "📋 Copy Reset Details"}
+                    {copied ? (
+                      <span>✓ Copied to Clipboard!</span>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                        </svg>
+                        <span>Copy Reset Details</span>
+                      </>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -118,9 +133,12 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
                     <button
                       type="button"
                       onClick={handleAutoGenerate}
-                      className="text-[10px] font-bold text-brand-600 hover:underline"
+                      className="text-[10px] font-bold text-brand-600 hover:underline flex items-center gap-1"
                     >
-                      🎲 Auto-Generate
+                      <svg className="w-3 h-3 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Auto-Generate</span>
                     </button>
                   </div>
                   <input

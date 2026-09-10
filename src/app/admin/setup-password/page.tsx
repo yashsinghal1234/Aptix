@@ -38,8 +38,9 @@ export default function SetupPasswordPage() {
         </div>
 
         {error && (
-          <div className="mb-3 p-2.5 bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-bold rounded-xl text-center animate-in fade-in duration-200">
-            ⚠️ {error}
+          <div className="mb-3 p-2.5 bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1.5 animate-in fade-in duration-200">
+            <svg className="w-3.5 h-3.5 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span>{error}</span>
           </div>
         )}
 
@@ -77,7 +78,8 @@ export default function SetupPasswordPage() {
 
           <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-[10px] text-slate-400 space-y-0.5">
             <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-              <span>🔒 Confidential & Encrypted</span>
+              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+              <span>Confidential & Encrypted</span>
             </div>
             <p>Your password is scrypt-encrypted and never accessible to the administrator.</p>
           </div>
