@@ -647,7 +647,7 @@ export function ExamInterface({
             <div className="relative z-10">
               <div className="flex items-center gap-2.5 mb-6">
                 <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center p-0.5 shadow-sm shrink-0">
-                  <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
+                  <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
                 </div>
                 <span className="text-xs uppercase tracking-widest font-bold text-brand-200">Aptix Assessment</span>
               </div>
@@ -956,7 +956,7 @@ export function ExamInterface({
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2 shrink-0">
               <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center p-1 shadow-md border border-slate-700/60">
-                <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
+                <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
               </div>
               <span className="font-black text-white text-base tracking-tight hidden md:inline">Aptix</span>
             </div>

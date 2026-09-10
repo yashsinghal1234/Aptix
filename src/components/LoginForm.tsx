@@ -30,7 +30,7 @@ export function LoginForm() {
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-soft-xl max-w-[400px] w-full border border-slate-100/90 relative z-10 my-auto">
         <div className="text-center mb-4 flex flex-col items-center">
           <div className="w-12 h-12 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center p-2 shadow-soft mb-2">
-            <img src="/aptix_logo.jpg" alt="Aptix Logo" className="h-full w-full object-contain" />
+            <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
           <span className="text-[9px] font-extrabold uppercase tracking-widest text-brand-600 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-100 mb-1">
             Assessment Portal
@@ -129,11 +129,6 @@ export function LoginForm() {
               Staff Sign In →
             </Link>
           </div>
-        </div>
-
-        <div className="mt-3 pt-2.5 border-t border-slate-100/60 flex items-center justify-center gap-2">
-          <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">In Collaboration With</span>
-          <img src="/kts-logo.png" alt="Kinesis Technical Society" className="h-5 object-contain opacity-70 hover:opacity-100 transition-opacity" />
         </div>
       </div>
     </main>

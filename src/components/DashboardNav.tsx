@@ -118,7 +118,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
       <div className="md:hidden bg-[#090d16] text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 shadow-md">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0">
-            <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
+            <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
           <div>
             <span className="font-black text-base text-white tracking-tight leading-none block">Aptix</span>
@@ -151,7 +151,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
           {/* Logo Header (Desktop) */}
           <div className="hidden md:flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center p-1.5 shadow-md border border-slate-700/50 shrink-0">
-              <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
+              <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
             </div>
             <div>
               <span className="font-black text-xl tracking-tight text-white block">Aptix</span>

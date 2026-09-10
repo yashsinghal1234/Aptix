@@ -29,7 +29,7 @@ export default function StaffLoginPage() {
       <div className="bg-[#0e1526]/95 backdrop-blur-md p-5 sm:p-6 rounded-2xl shadow-2xl max-w-[400px] w-full border border-slate-800 relative z-10 my-auto">
         <div className="text-center mb-4 flex flex-col items-center">
           <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center p-2 shadow-md mb-2 border border-slate-700/60">
-            <img src="/aptix_logo.jpg" alt="Aptix Logo" className="h-full w-full object-contain" />
+            <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
           <span className="text-[9px] font-extrabold uppercase tracking-widest text-indigo-400 bg-indigo-950/80 px-2.5 py-0.5 rounded-full border border-indigo-800/80 mb-1">
             Administrator & Staff Portal

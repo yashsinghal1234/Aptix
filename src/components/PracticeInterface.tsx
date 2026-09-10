@@ -144,12 +144,12 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shadow-sm shrink-0">
-              <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
+              <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
             </div>
             <span className="text-base font-black text-white tracking-tight">Aptix Practice Arena</span>
           </Link>
           <span className="text-[10px] font-extrabold uppercase tracking-wider bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-md border border-brand-500/30">
-            Self-Study &bull; No Stakes
+            Self-Study • No Stakes
           </span>
         </div>
 
