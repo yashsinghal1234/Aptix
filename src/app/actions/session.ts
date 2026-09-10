@@ -23,6 +23,20 @@ function parseStartTime(startTimeStr: string | null | undefined, tzOffsetStr: st
   return rawDate;
 }
 
+function normalizeCategory(cat: string): string {
+  if (!cat) return cat;
+  const lower = cat.toLowerCase().trim();
+  if (lower.startsWith("quant")) return "Quantitative Aptitude";
+  if (lower.startsWith("logic")) return "Logical Reasoning";
+  if (lower.startsWith("verb")) return "Verbal Ability";
+  if (lower.startsWith("data") || lower.startsWith("di")) return "Data Interpretation";
+  if (lower.startsWith("abstract")) return "Abstract Reasoning";
+  if (lower.startsWith("comp") || lower.startsWith("tech")) return "Computer Science & Tech";
+  if (lower.startsWith("gen")) return "General Awareness";
+  if (lower.startsWith("domain")) return "Domain Specific";
+  return cat;
+}
+
 export async function createSessionAction(formData: FormData) {
   const token = cookies().get("token")?.value;
   if (!token) return { error: "Unauthorized" };
@@ -48,15 +62,40 @@ export async function createSessionAction(formData: FormData) {
   // Apply Auto-Pick Rules if they exist
   if (template.rules.length > 0) {
     for (const rule of template.rules) {
-      // Find eligible questions in the bank
-      const eligibleQs = await prisma.question.findMany({
+      const normCat = normalizeCategory(rule.category);
+
+      // Find eligible questions in the bank matching category and difficulty level
+      let eligibleQs = await prisma.question.findMany({
         where: {
           status: "APPROVED",
-          category: rule.category,
-          difficultyLevel: rule.difficultyLevel
+          difficultyLevel: rule.difficultyLevel,
+          OR: [
+            { category: rule.category },
+            { category: normCat },
+            { category: { contains: rule.category, mode: "insensitive" } },
+            { category: { contains: normCat, mode: "insensitive" } }
+          ]
         }
       });
       
+      // If fewer questions found than requested, fallback to any difficulty level for this category
+      if (eligibleQs.length < rule.count) {
+        const existingIds = eligibleQs.map(q => q.id);
+        const fallbackQs = await prisma.question.findMany({
+          where: {
+            status: "APPROVED",
+            OR: [
+              { category: rule.category },
+              { category: normCat },
+              { category: { contains: rule.category, mode: "insensitive" } },
+              { category: { contains: normCat, mode: "insensitive" } }
+            ],
+            ...(existingIds.length > 0 ? { id: { notIn: existingIds } } : {})
+          }
+        });
+        eligibleQs = [...eligibleQs, ...fallbackQs];
+      }
+
       // Randomly pick 'count' questions
       const shuffled = eligibleQs.sort(() => 0.5 - Math.random());
       const picked = shuffled.slice(0, rule.count);
@@ -71,7 +110,7 @@ export async function createSessionAction(formData: FormData) {
   }
 
   if (snapshottedQuestions.length === 0) {
-    return { error: "Could not create session: The template has no fixed questions, and the auto-pick rules did not find any matching questions in the bank." };
+    return { error: "Could not create session: The template has no fixed questions, and no approved questions in the bank matched the auto-pick rules." };
   }
 
   const { generateSessionPin } = await import("@/lib/auth");

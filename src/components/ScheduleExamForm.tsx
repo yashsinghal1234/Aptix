@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createScheduledExamAction } from "@/app/actions/schedule";
 import { useRouter } from "next/navigation";
+import { FIXED_TOPICS } from "@/lib/ai-question-analyzer";
 
 export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
   const router = useRouter();
@@ -177,10 +178,9 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
               onChange={e => setFilterTopic(e.target.value)}
             >
               <option value="">All Topics</option>
-              <option value="Logical">Logical</option>
-              <option value="Quantitative">Quantitative</option>
-              <option value="Verbal">Verbal</option>
-              <option value="Technical">Technical</option>
+              {FIXED_TOPICS.map((topic) => (
+                <option key={topic} value={topic}>{topic}</option>
+              ))}
             </select>
             <select 
               className="px-3 py-1.5 text-sm border rounded-lg bg-white flex-1 font-medium text-slate-700" 

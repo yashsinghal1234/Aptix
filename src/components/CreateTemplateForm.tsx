@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createTemplateAction } from "@/app/actions/template";
 import { useRouter } from "next/navigation";
+import { FIXED_TOPICS, FIXED_DIFFICULTIES } from "@/lib/ai-question-analyzer";
 
 export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   const router = useRouter();
@@ -20,7 +21,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   };
 
   const addRule = () => {
-    setRules([...rules, { id: Math.random().toString(), category: "Quantitative", difficultyLevel: "MEDIUM", count: 5 }]);
+    setRules([...rules, { id: Math.random().toString(), category: FIXED_TOPICS[0], difficultyLevel: "MEDIUM", count: 5 }]);
   };
 
   const updateRule = (id: string, field: string, value: string | number) => {
@@ -182,16 +183,15 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
               <div className="space-y-3">
                 {rules.map((rule) => (
                   <div key={rule.id} className="flex gap-2 items-center bg-white p-3 rounded-xl border border-slate-200/80 shadow-sm">
-                    <select value={rule.category} onChange={e => updateRule(rule.id, "category", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50 font-medium">
-                      <option value="Logical">Logical</option>
-                      <option value="Quantitative">Quantitative</option>
-                      <option value="Verbal">Verbal</option>
-                      <option value="Technical">Technical</option>
+                    <select value={rule.category} onChange={e => updateRule(rule.id, "category", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50 font-medium text-slate-700">
+                      {FIXED_TOPICS.map((topic) => (
+                        <option key={topic} value={topic}>{topic}</option>
+                      ))}
                     </select>
-                    <select value={rule.difficultyLevel} onChange={e => updateRule(rule.id, "difficultyLevel", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50 font-medium">
-                      <option value="EASY">Easy</option>
-                      <option value="MEDIUM">Med</option>
-                      <option value="HARD">Hard</option>
+                    <select value={rule.difficultyLevel} onChange={e => updateRule(rule.id, "difficultyLevel", e.target.value)} className="text-xs border border-slate-200 rounded-lg p-1.5 flex-1 bg-slate-50 font-medium text-slate-700">
+                      {FIXED_DIFFICULTIES.map((diff) => (
+                        <option key={diff} value={diff}>{diff === "MEDIUM" ? "Med" : diff.charAt(0) + diff.slice(1).toLowerCase()}</option>
+                      ))}
                     </select>
                     <input type="number" min="1" value={rule.count} onChange={e => updateRule(rule.id, "count", parseInt(e.target.value)||1)} className="text-xs border border-slate-200 rounded-lg p-1.5 w-16 bg-slate-50 font-bold" />
                     <button type="button" onClick={() => removeRule(rule.id)} className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg text-sm font-bold">&times;</button>
@@ -235,10 +235,9 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
             <div className="flex gap-2 mb-2.5">
               <select className="text-xs border border-slate-200 rounded-xl p-2 flex-1 bg-white font-medium text-slate-700" value={filterTopic} onChange={e => setFilterTopic(e.target.value)}>
                 <option value="">All Topics</option>
-                <option value="Logical">Logical</option>
-                <option value="Quantitative">Quant</option>
-                <option value="Verbal">Verbal</option>
-                <option value="Technical">Tech</option>
+                {FIXED_TOPICS.map((topic) => (
+                  <option key={topic} value={topic}>{topic}</option>
+                ))}
               </select>
               <select className="text-xs border border-slate-200 rounded-xl p-2 flex-1 bg-white font-medium text-slate-700" value={filterDiff} onChange={e => setFilterDiff(e.target.value)}>
                 <option value="">All Diffs</option>

@@ -5,7 +5,7 @@ import { PracticeInterface } from "@/components/PracticeInterface";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Practice Arena &bull; Aptix Assessment",
+  title: "Practice Arena • Aptix Assessment",
   description: "Self-study practice drill for aptitude, logical reasoning, and quantitative problem solving."
 };
 

@@ -9,9 +9,11 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [examPin, setExamPin] = useState("");
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
+    const formData = new FormData(e.currentTarget);
     const res = await candidateLoginAction(formData);
     if (res?.error) {
       setError(res.error);
@@ -43,7 +45,7 @@ export function LoginForm() {
           </div>
         )}
         
-        <form action={handleSubmit} className="space-y-2.5">
+        <form onSubmit={handleSubmit} className="space-y-2.5">
           <div>
             <div className="flex justify-between items-center mb-1">
               <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
@@ -95,7 +97,7 @@ export function LoginForm() {
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl shadow-brand hover:shadow-lg transition-all text-xs tracking-wide mt-2 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl shadow-brand hover:shadow-lg transition-all text-xs tracking-wide mt-2 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
           >
             {loading ? (
               <>

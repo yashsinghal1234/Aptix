@@ -950,24 +950,53 @@ export function ExamInterface({
         onCopy={(e) => { if (config.disableCopyPaste !== false) { e.preventDefault(); return false; } }}
         onPaste={(e) => { if (config.disableCopyPaste !== false) { e.preventDefault(); return false; } }}
       >
-        {/* Dark Navy Navbar (matching reference bottom-left) */}
-        <header className="bg-navy-900 border-b border-navy-800 px-6 py-3.5 flex justify-between items-center shadow-md sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center p-0.5 shadow-sm shrink-0">
+        {/* Enhanced Dark Upper Bar Header */}
+        <header className="bg-[#090d16] border-b border-slate-800/90 px-4 sm:px-6 py-2.5 sm:py-3 flex justify-between items-center shadow-2xl sticky top-0 z-30 relative">
+          {/* Left: Branding & Assessment Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center p-1 shadow-md border border-slate-700/60">
                 <img src="/aptix_logo.jpg" alt="Aptix" className="h-full w-full object-contain" />
               </div>
-              <span className="font-extrabold text-white text-base tracking-tight hidden sm:inline">Aptix</span>
+              <span className="font-black text-white text-base tracking-tight hidden md:inline">Aptix</span>
             </div>
-            <div className="h-4 w-px bg-navy-700 hidden sm:block" />
-            <h1 className="text-sm font-semibold text-slate-200 tracking-wide truncate max-w-[200px] sm:max-w-md">
-              {session.exam.title}
-            </h1>
+            
+            <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+            
+            <div className="truncate min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
+                  {session.exam.title}
+                </h1>
+                {session.pin && (
+                  <span className="hidden lg:inline-flex text-[10px] font-mono font-bold bg-indigo-950/80 text-indigo-300 px-2 py-0.5 rounded-md border border-indigo-800/80 shrink-0">
+                    PIN: {session.pin}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
+          {/* Center: Candidate Info & Answered Progress (Visible on Medium+ screens) */}
+          <div className="hidden lg:flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 shadow-inner">
+              <div className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                {candidateName ? candidateName.charAt(0).toUpperCase() : "C"}
+              </div>
+              <span className="text-slate-400 text-[11px]">Candidate:</span>
+              <span className="text-white font-bold max-w-[120px] truncate">{candidateName}</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-bold text-indigo-300">
+              <span className="w-2 h-2 rounded-full bg-indigo-400" />
+              <span>{answeredCount + ansMarkedCount} of {questions.length} Answered</span>
+            </div>
+          </div>
+
+          {/* Right: Autosave, Timer, Fullscreen & Finish */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Real-time Cloud Autosave Status Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-navy-800/80 border border-slate-700 text-slate-300">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-300">
               {syncStatus === "saved" && (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -983,30 +1012,72 @@ export function ExamInterface({
               {syncStatus === "cached" && (
                 <>
                   <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                  <span className="text-cyan-300">Buffered Locally</span>
+                  <span className="text-cyan-300">Buffered</span>
                 </>
               )}
             </div>
 
-            {/* Pill-shaped Countdown Timer (matching reference design) */}
-            <div className={`flex items-center gap-2.5 px-4 py-1.5 rounded-full border text-xs font-bold tracking-wider ${
+            {/* Pill-shaped Countdown Timer */}
+            <div className={`flex items-center gap-2 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full border text-xs font-bold tracking-wider transition-all ${
               timeLeft < 300 
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse' 
-                : 'bg-navy-800 text-slate-200 border-slate-700'
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse shadow-lg shadow-rose-900/30' 
+                : 'bg-slate-900 text-slate-200 border-slate-700/80 shadow-inner'
             }`}>
-              <svg className="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-brand-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="font-mono text-sm text-white">{formatTime(timeLeft)}</span>
-              <span className="text-[11px] text-slate-400 font-normal hidden md:inline">remaining</span>
+              <span className="font-mono text-xs sm:text-sm font-black text-white">{formatTime(timeLeft)}</span>
+              <span className="text-[10px] text-slate-400 font-normal hidden xl:inline">remaining</span>
             </div>
 
+            {/* Fullscreen Toggle */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if (!document.fullscreenElement) {
+                    await document.documentElement.requestFullscreen();
+                    setIsFullscreen(true);
+                  } else {
+                    await document.exitFullscreen();
+                    setIsFullscreen(false);
+                  }
+                } catch (err) {
+                  console.warn(err);
+                }
+              }}
+              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-colors hidden sm:flex items-center justify-center"
+            >
+              {isFullscreen ? (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              )}
+            </button>
+
+            {/* Finish Button */}
             <button 
               onClick={() => handleFinishTest(false)}
-              className="text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3.5 py-1.5 rounded-lg transition-colors border border-slate-700 shadow-sm"
+              className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3 sm:px-4 py-1.5 sm:py-1.5 rounded-xl transition-all shadow-md hover:shadow-indigo-600/30 whitespace-nowrap flex items-center gap-1 cursor-pointer"
             >
-              Finish
+              <span>Submit</span>
+              <span>→</span>
             </button>
+          </div>
+
+          {/* Linear Progress Bar along bottom of Header */}
+          <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-slate-800/80 overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-brand-500 via-indigo-500 to-emerald-400 transition-all duration-300"
+              style={{
+                width: `${questions.length > 0 ? ((answeredCount + ansMarkedCount) / questions.length) * 100 : 0}%`
+              }}
+            />
           </div>
         </header>
 

@@ -8,9 +8,11 @@ export default function StaffLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
+    const formData = new FormData(e.currentTarget);
     const res = await staffLoginAction(formData);
     if (res?.error) {
       setError(res.error);
@@ -42,7 +44,7 @@ export default function StaffLoginPage() {
           </div>
         )}
 
-        <form action={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1">
               Staff Email Address

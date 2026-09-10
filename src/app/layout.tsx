@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Aptix Assessment &bull; Enterprise Examination Platform",
+  title: "Aptix Assessment • Enterprise Examination Platform",
   description: "High-integrity, secure online aptitude assessment and examination platform.",
 };
 
