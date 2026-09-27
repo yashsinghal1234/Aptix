@@ -130,7 +130,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
           </div>
           <div>
             <span className="font-black text-lg text-white tracking-tight leading-none block">Aptix</span>
-            <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">{isOwner ? "Owner Portal" : "Setter Portal"}</span>
+            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">Control Center</span>
           </div>
         </div>
         <button
@@ -172,6 +172,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
             </div>
             <div>
               <span className="font-black text-2xl tracking-tight text-white block leading-none">Aptix</span>
+              <span className="text-xs text-neutral-400 font-bold uppercase tracking-wider block mt-1">Control Center</span>
             </div>
           </div>
 
@@ -183,7 +184,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-xs tracking-wide transition-all ${
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-sm tracking-wide transition-all ${
                     active
                       ? "bg-white text-black shadow-md border border-white"
                       : "text-neutral-400 hover:bg-neutral-900/80 hover:text-white"
@@ -218,7 +219,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
       <main className="flex-1 flex flex-col h-[calc(100vh-53px)] md:h-screen overflow-hidden bg-[#000000]">
         <header className="bg-[#000000]/80 backdrop-blur-md border-b border-neutral-800/80 px-6 md:px-8 py-3.5 flex justify-between items-center shrink-0">
           <div className="flex items-center">
-            <h1 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-white">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-white">
               {isOwner ? "Executive Admin Portal" : "Authoring Setter Portal"}
             </h1>
           </div>
