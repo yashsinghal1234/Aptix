@@ -124,12 +124,8 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
               loop
               muted
               playsInline
-              preload="metadata"
-              disablePictureInPicture
-              disableRemotePlayback
-              controlsList="nodownload nofullscreen noremoteplayback"
               poster="/logo-preview-frame.jpg"
-              className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
+              className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
             />
           </div>
           <div>
@@ -170,12 +166,8 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
                 loop
                 muted
                 playsInline
-                preload="metadata"
-                disablePictureInPicture
-                disableRemotePlayback
-                controlsList="nodownload nofullscreen noremoteplayback"
                 poster="/logo-preview-frame.jpg"
-                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
+                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
               />
             </div>
             <div>

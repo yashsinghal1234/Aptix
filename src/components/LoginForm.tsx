@@ -194,8 +194,8 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         <div className="lg:col-span-5 xl:col-span-5 flex flex-col justify-center w-full max-w-[480px] mx-auto lg:mx-0 px-2 sm:px-0 py-6">
           
           {/* Brand header */}
-          <div className="flex items-center gap-3.5 sm:gap-5 mb-8">
-            <div className="relative w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center bg-transparent">
+          <div className="flex items-center gap-4 sm:gap-5 mb-8">
+            <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center bg-transparent">
               <video
                 src="/aptix-logo-anim.mp4"
                 poster="/logo-preview-frame.jpg"
@@ -203,15 +203,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 loop
                 muted
                 playsInline
-                preload="metadata"
-                disablePictureInPicture
-                disableRemotePlayback
-                controlsList="nodownload nofullscreen noremoteplayback"
-                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
+                preload="auto"
+                className="w-full h-full object-cover mix-blend-screen scale-125"
               />
             </div>
             <div>
-              <span className="font-extrabold text-2xl sm:text-3xl lg:text-[32px] tracking-tight text-white leading-none block">
+              <span className="font-extrabold text-3xl sm:text-[32px] tracking-tight text-white leading-none block">
                 Aptix
               </span>
               <span className="text-xs sm:text-[13px] text-neutral-400 font-medium tracking-wide mt-1.5 block">
@@ -652,12 +649,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
           </div>
         </div>
 
-        {/* Right Column: Visual Showcase Card (Desktop & large screens only) */}
-        <div className="hidden lg:flex lg:col-span-7 xl:col-span-7 items-center justify-center w-full">
+        {/* Right Column: Visual Showcase Card */}
+        <div className="lg:col-span-7 xl:col-span-7 flex items-center justify-center w-full">
           <div className="relative w-full h-[500px] sm:h-[550px] lg:h-[600px] xl:h-[620px] rounded-[32px] sm:rounded-[36px] overflow-hidden bg-[#07080c] border border-[#1e222d] shadow-[0_20px_60px_rgba(0,0,0,0.85)] flex flex-col justify-end p-8 sm:p-10 lg:p-11 group">
             
             {/* Background Videos with Smooth Crossfade */}
-            <div className="absolute inset-0 z-0 overflow-hidden bg-black pointer-events-none select-none">
+            <div className="absolute inset-0 z-0 overflow-hidden bg-black">
               {CAROUSEL_SLIDES.map((slide, idx) => (
                 <video
                   key={slide.video}
@@ -669,15 +666,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                   loop
                   muted
                   playsInline
-                  preload="metadata"
-                  disablePictureInPicture
-                  disableRemotePlayback
-                  controlsList="nodownload nofullscreen noremoteplayback"
+                  preload="auto"
                   poster="/login-ribbon.jpg"
-                  className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out pointer-events-none select-none ${
+                  className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out ${
                     activeSlide === idx
                       ? "opacity-100 scale-100"
-                      : "opacity-0 scale-105"
+                      : "opacity-0 scale-105 pointer-events-none"
                   }`}
                 />
               ))}

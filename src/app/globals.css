@@ -87,15 +87,4 @@ body {
   animation: error-shake 0.35s ease-in-out;
 }
 
-/* Disable native video controls, overlays, and Picture-in-Picture triggers */
-video::-webkit-media-controls {
-  display: none !important;
-}
-video::-webkit-media-controls-enclosure {
-  display: none !important;
-}
-video::-webkit-media-controls-panel {
-  display: none !important;
-}
-
 
