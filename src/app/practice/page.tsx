@@ -10,12 +10,16 @@ export const metadata = {
 };
 
 export default async function PracticePage() {
-  const token = cookies().get("token")?.value;
   let candidateName = "Candidate";
 
-  if (token) {
-    const payload = await verifyToken(token);
-    if (payload?.name) candidateName = payload.name as string;
+  try {
+    const token = cookies().get("token")?.value;
+    if (token) {
+      const payload = await verifyToken(token);
+      if (payload?.name) candidateName = payload.name as string;
+    }
+  } catch {
+    // Graceful fallback to default candidate name
   }
 
   return <PracticeInterface candidateName={candidateName} />;

@@ -2,23 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
-import { getPracticeQuestionsAction } from "@/app/actions/practice";
-
-const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
-
-interface PracticeQuestion {
-  id: string;
-  text: string;
-  type: string;
-  category: string;
-  difficultyLevel: string;
-  points: number;
-  negativePoints: number;
-  imageUrl?: string | null;
-  options: any[];
-  correctAnswer: any;
-  explanation?: string | null;
-}
+import { PRACTICE_QUESTIONS, PracticeQuestion } from "@/lib/practiceConstants";
 
 export function PracticeInterface({ candidateName }: { candidateName?: string }) {
   const [stage, setStage] = useState<"SETUP" | "DRILL" | "COMPLETE">("SETUP");
@@ -26,7 +10,7 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
 
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<PracticeQuestion[]>([]);
+  const [questions, setQuestions] = useState<PracticeQuestion[]>(PRACTICE_QUESTIONS);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
@@ -93,18 +77,9 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
     setLoading(true);
     setError(null);
 
+    // Instant local activation with 100% reliability and zero network latency
     try {
-      const res = await getPracticeQuestionsAction({
-        count: 10
-      });
-
-      if (!res.success || !res.questions || res.questions.length === 0) {
-        setError((res as any).error || "Failed to load practice questions. Please click to try again.");
-        setLoading(false);
-        return;
-      }
-
-      setQuestions(res.questions as PracticeQuestion[]);
+      setQuestions(PRACTICE_QUESTIONS);
       setCurrentIndex(0);
       setUserAnswers({});
       setRevealed({});
@@ -114,7 +89,7 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
       setIsGrid(false);
       setStage("DRILL");
     } catch (err: any) {
-      setError(err?.message || "Failed to launch practice mode. Please click to try again.");
+      setError(err?.message || "Failed to launch practice mode.");
     } finally {
       setLoading(false);
     }
@@ -170,7 +145,7 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
     }
   };
 
-  useIsomorphicLayoutEffect(() => {
+  useEffect(() => {
     evaluateLayout();
     const rafId = requestAnimationFrame(evaluateLayout);
     return () => cancelAnimationFrame(rafId);
@@ -379,25 +354,25 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
       <main
         className={`flex-1 flex items-center justify-center ${stage === "DRILL" ? "p-3 sm:p-5" : "p-4 sm:p-8"} transition-all duration-150`}
       >
-        {/* SETUP SCREEN - Spacious, prominent, and readable */}
+        {/* SETUP SCREEN - Clean, balanced, and perfectly proportioned */}
         {stage === "SETUP" && (
-          <div className="bg-[#0a0c10] p-6 sm:p-10 lg:p-12 rounded-[28px] sm:rounded-[36px] border border-neutral-800 shadow-[0_24px_70px_rgba(0,0,0,0.8)] max-w-xl sm:max-w-2xl lg:max-w-3xl w-full text-left space-y-6 sm:space-y-7">
+          <div className="bg-[#0a0c10] p-6 sm:p-8 md:p-9 rounded-[26px] sm:rounded-[32px] border border-neutral-800 shadow-[0_24px_60px_rgba(0,0,0,0.8)] max-w-lg sm:max-w-[620px] w-full text-left space-y-5 sm:space-y-6">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3">
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold uppercase tracking-wider mb-2.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>Instant Self-Study Engine</span>
               </div>
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
+              <h2 className="text-2xl sm:text-[28px] font-black text-white tracking-tight leading-tight">
                 Adaptive Practice Mode
               </h2>
-              <p className="text-sm sm:text-base text-neutral-400 mt-2 sm:mt-3 leading-relaxed font-normal">
+              <p className="text-xs sm:text-sm text-neutral-400 mt-1.5 leading-relaxed font-normal">
                 Sharpen your skills with a curated 10-question practice set drawn directly from the bank. Includes instant answer checking, step-by-step rationales, and full-screen immersion.
               </p>
             </div>
 
             {error && (
-              <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-xs sm:text-sm font-bold text-rose-300 flex items-center gap-3">
-                <svg className="w-5 h-5 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-3.5 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-xs sm:text-sm font-bold text-rose-300 flex items-center gap-2.5">
+                <svg className="w-4 h-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <span>{error}</span>
@@ -405,19 +380,19 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
             )}
 
             {/* Fixed 10-Question Specifications Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              <div className="p-4 sm:p-5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
-                <span className="text-[11px] sm:text-xs font-extrabold text-neutral-500 uppercase tracking-wider block mb-1">Set Size</span>
-                <span className="text-base sm:text-lg lg:text-xl font-black text-white">10 Questions</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+              <div className="p-3.5 sm:p-4 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
+                <span className="text-[10px] sm:text-[11px] font-extrabold text-neutral-500 uppercase tracking-wider block mb-0.5">Set Size</span>
+                <span className="text-sm sm:text-base md:text-lg font-black text-white">10 Questions</span>
               </div>
-              <div className="p-4 sm:p-5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
-                <span className="text-[11px] sm:text-xs font-extrabold text-neutral-500 uppercase tracking-wider block mb-1">Coverage</span>
-                <span className="text-base sm:text-lg lg:text-xl font-black text-emerald-400">All Topics</span>
+              <div className="p-3.5 sm:p-4 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
+                <span className="text-[10px] sm:text-[11px] font-extrabold text-neutral-500 uppercase tracking-wider block mb-0.5">Coverage</span>
+                <span className="text-sm sm:text-base md:text-lg font-black text-emerald-400">All Topics</span>
               </div>
-              <div className="p-4 sm:p-5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
-                <span className="text-[11px] sm:text-xs font-extrabold text-neutral-500 uppercase tracking-wider block mb-1">Environment</span>
-                <span className="text-base sm:text-lg lg:text-xl font-black text-white flex items-center justify-center gap-1.5">
-                  <svg className="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-3.5 sm:p-4 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
+                <span className="text-[10px] sm:text-[11px] font-extrabold text-neutral-500 uppercase tracking-wider block mb-0.5">Environment</span>
+                <span className="text-sm sm:text-base md:text-lg font-black text-white flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-sky-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                   </svg>
                   <span>Fullscreen</span>
@@ -425,13 +400,13 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
               </div>
             </div>
 
-            <div className="p-4 sm:p-4.5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl flex items-start sm:items-center gap-3.5">
-              <div className="w-9 h-9 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center shrink-0 text-emerald-400 mt-0.5 sm:mt-0">
+            <div className="p-3.5 sm:p-4 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl flex items-start sm:items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center shrink-0 text-emerald-400 mt-0.5 sm:mt-0">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed font-normal">
+              <p className="text-xs sm:text-[13px] text-neutral-300 leading-relaxed font-normal">
                 Step-by-step rationales and solutions are displayed immediately after checking each answer. Zero stakes with unlimited practice drills.
               </p>
             </div>
@@ -439,7 +414,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
             <button
               onClick={handleStartPractice}
               disabled={loading}
-              className="w-full py-4 sm:py-4.5 px-8 bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-black text-sm sm:text-base rounded-2xl shadow-[0_4px_24px_rgba(255,255,255,0.2)] transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
+              className="w-full py-3.5 sm:py-4 px-6 bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-black text-xs sm:text-sm rounded-2xl shadow-[0_4px_20px_rgba(255,255,255,0.18)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
             >
               {loading ? (
                 <>
@@ -448,7 +423,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                   </svg>
                   <span>Launch 10-Question Practice</span>
