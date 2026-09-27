@@ -116,8 +116,8 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
     <div className="min-h-screen bg-[#000000] text-neutral-100 flex flex-col md:flex-row font-sans selection:bg-white selection:text-black">
       {/* Mobile Top Navbar */}
       <div className="md:hidden bg-[#000000]/95 backdrop-blur-md text-white px-4 py-3 flex items-center justify-between border-b border-neutral-800/80 shadow-md z-40">
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="relative w-9 h-9 flex items-center justify-center overflow-hidden shrink-0">
             <video
               src="/aptix-logo-anim.mp4"
               autoPlay
@@ -129,7 +129,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
             />
           </div>
           <div>
-            <span className="font-black text-base text-white tracking-tight leading-none block">Aptix</span>
+            <span className="font-black text-lg text-white tracking-tight leading-none block">Aptix</span>
             <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">{isOwner ? "Owner Portal" : "Setter Portal"}</span>
           </div>
         </div>
@@ -158,8 +158,8 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
       >
         <div className="p-6 flex-1 overflow-y-auto">
           {/* Logo Header (Desktop) */}
-          <div className="hidden md:flex items-center gap-3 mb-8">
-            <div className="relative w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
+          <div className="hidden md:flex items-center gap-3.5 mb-8">
+            <div className="relative w-12 h-12 flex items-center justify-center overflow-hidden shrink-0">
               <video
                 src="/aptix-logo-anim.mp4"
                 autoPlay
@@ -171,7 +171,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
               />
             </div>
             <div>
-              <span className="font-black text-xl tracking-tight text-white block">Aptix</span>
+              <span className="font-black text-2xl tracking-tight text-white block leading-none">Aptix</span>
             </div>
           </div>
 
