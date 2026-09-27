@@ -38,10 +38,10 @@ export function ChangePasswordModal() {
           setError(null);
           setSuccessMsg(null);
         }}
-        className="px-3 py-1.5 text-xs font-semibold text-neutral-300 bg-neutral-900 hover:bg-neutral-800 hover:text-white rounded-xl transition-all border border-neutral-800 flex items-center gap-1.5"
+        className="px-4 py-2 sm:px-4.5 sm:py-2.5 text-xs sm:text-sm font-semibold text-neutral-200 bg-neutral-900 hover:bg-neutral-800 hover:text-white rounded-xl transition-all border border-neutral-800 flex items-center gap-2 cursor-pointer shadow-xs"
         title="Change your account password"
       >
-        <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
         </svg>
         <span>Change Password</span>
