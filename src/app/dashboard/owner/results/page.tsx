@@ -18,7 +18,7 @@ export default async function ResultsDashboard() {
     where: { status: "COMPLETED" },
     include: {
       exam: true,
-      questions: true,
+      questions: { select: { points: true } },
       sessionStats: true,
       _count: { select: { attempts: true } }
     },

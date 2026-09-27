@@ -1,11 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { adminResetUserPasswordAction } from "@/app/actions/owner";
 
 export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userId: string; userName: string; userEmail: string }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [customPassword, setCustomPassword] = useState("");
   const [result, setResult] = useState<{ email: string; temporaryPassword: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -58,8 +64,8 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
         <span>Reset Password</span>
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
           <div className="bg-[#0a0c10] rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-neutral-800 relative animate-in fade-in zoom-in-95 duration-150 text-neutral-100">
             <div className="flex justify-between items-center pb-3 border-b border-neutral-800 mb-4">
               <div>
@@ -172,7 +178,8 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
               </form>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

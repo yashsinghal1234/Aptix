@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { changePasswordAction } from "@/app/actions/owner";
 
 export function ChangePasswordModal() {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -47,8 +53,8 @@ export function ChangePasswordModal() {
         <span>Change Password</span>
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
           <div className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-2xl max-w-sm w-full p-6 sm:p-7 relative text-neutral-100">
             <div className="flex justify-between items-center mb-5 pb-3 border-b border-neutral-800">
               <div>
@@ -139,7 +145,8 @@ export function ChangePasswordModal() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

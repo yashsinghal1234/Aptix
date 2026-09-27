@@ -21,40 +21,43 @@ export default async function OwnerDashboard() {
   const payload = await verifyToken(token);
   if (!payload || payload.role !== "OWNER") redirect("/");
 
-  // Fetch all setters
-  const setters = await prisma.user.findMany({
-    where: { role: "SETTER" }
-  });
-
-  const allQuestions = await prisma.question.findMany({
-    orderBy: { createdAt: "desc" }
-  });
+  // Fetch all dashboard data concurrently
+  const [
+    setters,
+    allQuestions,
+    templates,
+    activeSessions,
+    totalUsersCount,
+    totalCandidatesCount
+  ] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: "SETTER" },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.question.findMany({
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.exam.findMany({
+      where: { isDeleted: false },
+      orderBy: { createdAt: "desc" },
+      include: {
+        _count: { select: { questions: true, rules: true, sessions: true } }
+      }
+    }),
+    prisma.examSession.findMany({
+      where: { status: { in: ["SCHEDULED", "LIVE"] } },
+      orderBy: { createdAt: "desc" },
+      include: {
+        exam: true,
+        _count: { select: { attempts: true } }
+      }
+    }),
+    prisma.user.count(),
+    prisma.user.count({ where: { role: "CANDIDATE" } })
+  ]);
 
   const pendingQuestions = allQuestions.filter(q => q.status === "SUBMITTED");
-
-  // Fetch Exam Templates
-  const templates = await prisma.exam.findMany({
-    where: { isDeleted: false },
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: { select: { questions: true, rules: true, sessions: true } }
-    }
-  });
-
-  // Fetch Active Sessions
-  const activeSessions = await prisma.examSession.findMany({
-    where: { status: { in: ["SCHEDULED", "LIVE"] } },
-    orderBy: { createdAt: "desc" },
-    include: {
-      exam: true,
-      _count: { select: { attempts: true } }
-    }
-  });
-
-  // Compute quick metrics
-  const totalUsersCount = await prisma.user.count();
-  const totalCandidatesCount = await prisma.user.count({ where: { role: "CANDIDATE" } });
-  const totalSettersCount = await prisma.user.count({ where: { role: "SETTER" } });
+  const totalSettersCount = setters.length;
   const liveSessionsCount = activeSessions.filter(s => s.status === "LIVE").length;
 
   return (

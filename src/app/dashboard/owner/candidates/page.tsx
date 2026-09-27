@@ -23,7 +23,9 @@ export default async function CandidateRecordsPage() {
           session: {
             include: { exam: true }
           },
-          responses: true
+          responses: {
+            select: { earnedPoints: true }
+          }
         },
         orderBy: { createdAt: "desc" }
       },
