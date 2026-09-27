@@ -159,14 +159,14 @@ export function AddQuestionForm() {
     <div className="space-y-6">
       {/* Session Progress Header */}
       {batchCount > 0 && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between animate-in fade-in">
+        <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl flex items-center justify-between animate-in fade-in">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            <span className="text-xs font-extrabold text-emerald-900">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+            <span className="text-xs font-extrabold text-emerald-400">
               Continuous Authoring Mode &bull; {batchCount} Question{batchCount > 1 ? 's' : ''} Created in this Session
             </span>
           </div>
-          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+          <span className="text-[11px] font-bold text-emerald-300 bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
             Ready for Question #{batchCount + 1}
           </span>
         </div>
@@ -174,19 +174,19 @@ export function AddQuestionForm() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Form Authoring Column */}
-        <div className={`${showPreview ? 'lg:col-span-7' : 'lg:col-span-12'} bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-soft relative transition-all`}>
+        <div className={`${showPreview ? 'lg:col-span-7' : 'lg:col-span-12'} bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-2xl relative transition-all`}>
           <form ref={formRef} action={handleSubmit} className="space-y-6">
-            <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+            <div className="flex justify-between items-center pb-4 border-b border-neutral-800">
               <div>
-                <h3 className="font-extrabold text-slate-900 text-base">Author New Question</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Define stem, options, category tags, and distractors</p>
+                <h3 className="font-extrabold text-white text-base">Author New Question</h3>
+                <p className="text-xs text-neutral-400 mt-0.5">Define stem, options, category tags, and distractors</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowPreview(!showPreview)}
-                className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-100 transition-colors flex items-center gap-1.5"
+                className="text-xs font-bold text-neutral-300 bg-neutral-900 hover:bg-neutral-800 px-3 py-1.5 rounded-xl border border-neutral-800 transition-colors flex items-center gap-1.5"
               >
-                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
@@ -195,26 +195,26 @@ export function AddQuestionForm() {
             </div>
 
             {error && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-700 flex items-center gap-2">
-                <svg className="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-3.5 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-xs font-bold text-rose-300 flex items-center gap-2">
+                <svg className="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <span>{error}</span>
               </div>
             )}
             {successMsg && (
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-800">
+              <div className="p-3.5 bg-emerald-950/40 border border-emerald-800/60 rounded-2xl text-xs font-bold text-emerald-300">
                 {successMsg}
               </div>
             )}
 
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Question Type</label>
+                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1.5">Question Type</label>
                 <select
                   value={qType}
                   onChange={(e) => setQType(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-slate-50 focus:bg-white text-xs font-bold"
+                  className="w-full px-3.5 py-2.5 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white bg-neutral-900 focus:bg-black text-xs font-bold"
                 >
                   <option value="MCQ_SINGLE">Multiple Choice (Single Answer)</option>
                   <option value="MCQ_MULTI">Multiple Choice (Multiple Correct Answers)</option>
@@ -225,9 +225,9 @@ export function AddQuestionForm() {
               </div>
 
               <div>
-                <label htmlFor="text" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex justify-between items-center">
-                  <span>Question Stem {imagePreview ? <span className="text-slate-400 font-normal normal-case">(Optional - image attached)</span> : <span className="text-slate-400 font-normal normal-case">(Or attach image below)</span>}</span>
-                  {qType === "FILL_BLANK" && <span className="text-indigo-600 font-normal ml-2 lowercase">Use [1], [2] to designate blanks.</span>}
+                <label htmlFor="text" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1.5 flex justify-between items-center">
+                  <span>Question Stem {imagePreview ? <span className="text-neutral-500 font-normal normal-case">(Optional - image attached)</span> : <span className="text-neutral-500 font-normal normal-case">(Or attach image below)</span>}</span>
+                  {qType === "FILL_BLANK" && <span className="text-emerald-400 font-normal ml-2 lowercase">Use [1], [2] to designate blanks.</span>}
                 </label>
                 <textarea
                   id="text"
@@ -235,27 +235,27 @@ export function AddQuestionForm() {
                   rows={3}
                   value={stemText}
                   onChange={(e) => setStemText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 text-xs leading-relaxed font-medium bg-slate-50 focus:bg-white"
+                  className="w-full px-3.5 py-2.5 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white text-xs leading-relaxed font-medium bg-neutral-900 focus:bg-black placeholder-neutral-600"
                   placeholder={qType === "FILL_BLANK" ? "e.g. The capital of France is [1] and its national symbol is [2]." : "e.g. A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train? (Optional if uploading diagram below)"}
                 />
               </div>
 
               <div>
-                <label htmlFor="image" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Diagram / Image Attachment (Optional)</label>
+                <label htmlFor="image" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1.5">Diagram / Image Attachment (Optional)</label>
                 <input
                   id="image"
                   name="image"
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs text-slate-600 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"
+                  className="w-full px-3 py-1.5 border border-neutral-800 rounded-xl text-xs text-neutral-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 transition-all"
                 />
                 {imagePreview && (
-                  <div className="mt-2.5 p-2 bg-slate-50 border border-slate-200 rounded-2xl relative inline-block">
+                  <div className="mt-2.5 p-2 bg-neutral-900 border border-neutral-800 rounded-2xl relative inline-block">
                     <img 
                       src={imagePreview} 
                       alt="Selected attachment preview" 
-                      className="max-h-40 rounded-xl object-contain border border-slate-200 shadow-sm"
+                      className="max-h-40 rounded-xl object-contain border border-neutral-800 shadow-sm"
                     />
                     <button
                       type="button"
@@ -277,11 +277,11 @@ export function AddQuestionForm() {
 
               {(qType === "MCQ_SINGLE" || qType === "MCQ_MULTI") && (
                 <div className="space-y-3">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Options & Distractors</label>
+                  <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider">Options & Distractors</label>
                   {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="p-3.5 border border-slate-200/80 rounded-2xl bg-slate-50/60 space-y-2.5">
+                    <div key={i} className="p-3.5 border border-neutral-800 rounded-2xl bg-[#0d0f14] space-y-2.5">
                       <div className="flex gap-2.5 items-center">
-                        <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-black text-xs shrink-0">
+                        <span className="w-6 h-6 rounded-lg bg-neutral-800 text-neutral-200 flex items-center justify-center font-black text-xs shrink-0 border border-neutral-700">
                           {String.fromCharCode(65 + i)}
                         </span>
                         {qType === "MCQ_MULTI" && (
@@ -289,7 +289,7 @@ export function AddQuestionForm() {
                             type="checkbox"
                             checked={multiCorrect.includes(i)}
                             onChange={() => toggleMultiCorrect(i)}
-                            className="w-4 h-4 text-indigo-600 rounded cursor-pointer shrink-0"
+                            className="w-4 h-4 text-emerald-500 rounded cursor-pointer shrink-0 accent-emerald-500"
                             title="Check if correct answer"
                           />
                         )}
@@ -300,7 +300,7 @@ export function AddQuestionForm() {
                           required={qType === "MCQ_SINGLE" || qType === "MCQ_MULTI"}
                           value={optionsList[i]}
                           onChange={(e) => updateOptionText(i, e.target.value)}
-                          className="flex-1 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-900"
+                          className="flex-1 px-3 py-1.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none font-medium text-white placeholder-neutral-600"
                           placeholder={`Option ${String.fromCharCode(65 + i)} text...`}
                         />
                       </div>
@@ -308,7 +308,7 @@ export function AddQuestionForm() {
                         id={`explanation${i}`}
                         name={`explanation${i}`}
                         type="text"
-                        className="w-full px-3 py-1 text-[11px] bg-white border border-slate-200/80 rounded-lg focus:ring-1 focus:ring-slate-400 outline-none text-slate-600"
+                        className="w-full px-3 py-1 text-[11px] bg-neutral-900/60 border border-neutral-800/80 rounded-lg focus:ring-1 focus:ring-neutral-700 outline-none text-neutral-300 placeholder-neutral-600"
                         placeholder="Optional feedback / why this option is correct or a distractor"
                       />
                     </div>
@@ -317,33 +317,33 @@ export function AddQuestionForm() {
               )}
 
               {qType === "TRUE_FALSE" && (
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 font-medium">
-                  Options will be automatically set to <strong>True</strong> and <strong>False</strong>.
+                <div className="p-3.5 bg-neutral-900 border border-neutral-800 rounded-2xl text-xs text-neutral-300 font-medium">
+                  Options will be automatically set to <strong className="text-white">True</strong> and <strong className="text-white">False</strong>.
                 </div>
               )}
 
               {qType === "NUMERIC" && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Exact Target Answer</label>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Exact Target Answer</label>
                     <input
                       name="numericExact"
                       type="number"
                       step="any"
                       required={qType === "NUMERIC"}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-mono font-bold"
+                      className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-xs font-mono font-bold text-white bg-neutral-900"
                       placeholder="e.g. 150"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Allowed Tolerance (±)</label>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Allowed Tolerance (±)</label>
                     <input
                       name="numericTolerance"
                       type="number"
                       step="any"
                       defaultValue="0"
                       required={qType === "NUMERIC"}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-mono font-bold"
+                      className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-xs font-mono font-bold text-white bg-neutral-900"
                       placeholder="e.g. 0.5"
                     />
                   </div>
@@ -353,15 +353,15 @@ export function AddQuestionForm() {
               {qType === "FILL_BLANK" && (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Blanks Answers</label>
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                      <input type="checkbox" checked={partialCredit} onChange={e => setPartialCredit(e.target.checked)} className="rounded text-indigo-600" />
+                    <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider">Blanks Answers</label>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-neutral-300 cursor-pointer">
+                      <input type="checkbox" checked={partialCredit} onChange={e => setPartialCredit(e.target.checked)} className="rounded text-emerald-500 accent-emerald-500" />
                       Allow Partial Credit
                     </label>
                   </div>
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                    <table className="w-full text-left text-xs bg-slate-50">
-                      <thead className="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                  <div className="border border-neutral-800 rounded-2xl overflow-hidden">
+                    <table className="w-full text-left text-xs bg-neutral-900">
+                      <thead className="bg-neutral-950 border-b border-neutral-800 font-bold text-neutral-400">
                         <tr>
                           <th className="px-3 py-2 w-16">Blank</th>
                           <th className="px-3 py-2">Accepted Answers (comma separated)</th>
@@ -370,16 +370,16 @@ export function AddQuestionForm() {
                           <th className="px-3 py-2 w-10"></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200">
+                      <tbody className="divide-y divide-neutral-800">
                         {blanks.map((b, idx) => (
-                          <tr key={idx} className="bg-white">
-                            <td className="px-3 py-2 font-bold text-indigo-600">[{b.id}]</td>
+                          <tr key={idx} className="bg-[#0d0f14]">
+                            <td className="px-3 py-2 font-bold text-neutral-200">[{b.id}]</td>
                             <td className="px-3 py-2">
                               <input 
                                 type="text" 
                                 value={b.accepted} 
                                 onChange={e => updateBlank(idx, "accepted", e.target.value)} 
-                                className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg"
+                                className="w-full px-2 py-1 text-xs border border-neutral-800 rounded-lg bg-neutral-900 text-white"
                                 placeholder="Paris, paris"
                               />
                             </td>
@@ -389,7 +389,7 @@ export function AddQuestionForm() {
                                 step="0.5" 
                                 value={b.points} 
                                 onChange={e => updateBlank(idx, "points", parseFloat(e.target.value))} 
-                                className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg font-mono font-bold"
+                                className="w-full px-2 py-1 text-xs border border-neutral-800 rounded-lg font-mono font-bold bg-neutral-900 text-white"
                               />
                             </td>
                             <td className="px-3 py-2 text-center">
@@ -397,31 +397,31 @@ export function AddQuestionForm() {
                                 type="checkbox" 
                                 checked={b.caseSensitive} 
                                 onChange={e => updateBlank(idx, "caseSensitive", e.target.checked)} 
-                                className="rounded text-indigo-600"
+                                className="rounded text-emerald-500 accent-emerald-500"
                               />
                             </td>
                             <td className="px-3 py-2 text-right">
-                              <button type="button" onClick={() => removeBlank(idx)} className="text-red-500 font-bold hover:text-red-700">✕</button>
+                              <button type="button" onClick={() => removeBlank(idx)} className="text-rose-400 font-bold hover:text-rose-300">✕</button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <button type="button" onClick={addBlank} className="text-xs text-indigo-600 font-bold hover:underline">+ Add Blank</button>
+                  <button type="button" onClick={addBlank} className="text-xs text-neutral-300 hover:text-white font-bold underline">+ Add Blank</button>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 border-t border-slate-100 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 border-t border-neutral-800 pt-4">
                 {qType === "MCQ_SINGLE" && (
                   <div>
-                    <label htmlFor="correctAnswer" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Correct Key</label>
+                    <label htmlFor="correctAnswer" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Correct Key</label>
                     <select
                       id="correctAnswer"
                       name="correctAnswer"
                       value={correctAnswer}
                       onChange={(e) => setCorrectAnswer(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-slate-50 focus:bg-white text-xs font-bold"
+                      className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white bg-neutral-900 focus:bg-black text-xs font-bold"
                     >
                       <option value="0">Option A</option>
                       <option value="1">Option B</option>
@@ -432,13 +432,13 @@ export function AddQuestionForm() {
                 )}
                 {qType === "TRUE_FALSE" && (
                   <div>
-                    <label htmlFor="correctAnswer" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Correct Key</label>
+                    <label htmlFor="correctAnswer" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Correct Key</label>
                     <select
                       id="correctAnswer"
                       name="correctAnswer"
                       value={correctAnswer}
                       onChange={(e) => setCorrectAnswer(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-slate-50 focus:bg-white text-xs font-bold"
+                      className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white bg-neutral-900 focus:bg-black text-xs font-bold"
                     >
                       <option value="0">True</option>
                       <option value="1">False</option>
@@ -446,13 +446,13 @@ export function AddQuestionForm() {
                   </div>
                 )}
                 <div>
-                  <label htmlFor="category" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Topic</label>
+                  <label htmlFor="category" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Topic</label>
                   <select
                     id="category"
                     name="category"
                     value={selectedTopic}
                     onChange={(e) => setSelectedTopic(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-slate-50 focus:bg-white text-xs font-bold"
+                    className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white bg-neutral-900 focus:bg-black text-xs font-bold"
                   >
                     {FIXED_TOPICS.map((topic) => (
                       <option key={topic} value={topic}>
@@ -462,13 +462,13 @@ export function AddQuestionForm() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="difficultyLevel" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Difficulty</label>
+                  <label htmlFor="difficultyLevel" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Difficulty</label>
                   <select
                     id="difficultyLevel"
                     name="difficultyLevel"
                     value={selectedDifficulty}
                     onChange={(e) => setSelectedDifficulty(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 bg-slate-50 focus:bg-white text-xs font-bold"
+                    className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white bg-neutral-900 focus:bg-black text-xs font-bold"
                   >
                     {FIXED_DIFFICULTIES.map((diff) => (
                       <option key={diff} value={diff}>
@@ -478,7 +478,7 @@ export function AddQuestionForm() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="points" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Points</label>
+                  <label htmlFor="points" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Points</label>
                   <input
                     id="points"
                     name="points"
@@ -486,11 +486,11 @@ export function AddQuestionForm() {
                     step="0.5"
                     value={pointsVal}
                     onChange={(e) => setPointsVal(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 text-xs font-mono font-bold"
+                    className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white bg-neutral-900 text-xs font-mono font-bold"
                   />
                 </div>
                 <div>
-                  <label htmlFor="negativePoints" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Negative Pts</label>
+                  <label htmlFor="negativePoints" className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Negative Pts</label>
                   <input
                     id="negativePoints"
                     name="negativePoints"
@@ -498,61 +498,61 @@ export function AddQuestionForm() {
                     step="0.1"
                     value={negPointsVal}
                     onChange={(e) => setNegPointsVal(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 text-xs font-mono font-bold"
+                    className="w-full px-3 py-2 border border-neutral-800 rounded-xl focus:ring-1 focus:ring-neutral-700 outline-none text-white bg-neutral-900 text-xs font-mono font-bold"
                   />
                 </div>
               </div>
 
               {/* AI Quality Audit Results Card (if triggered) */}
               {aiAnalysis && (
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 mt-4">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                <div className="bg-[#0d0f14] p-4 rounded-2xl border border-neutral-800 space-y-3 mt-4">
+                  <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-                      <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-xs font-extrabold text-white uppercase tracking-wide">
                         AI Quality & Distractor Audit Results
                       </span>
                     </div>
-                    <span className="text-xs font-bold text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
+                    <span className="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
                       Score: {aiAnalysis.qualityFeedback.overallScore}/10
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                    <div className="bg-white p-3 rounded-xl border border-slate-200">
-                      <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-neutral-900 p-3 rounded-xl border border-neutral-800">
+                      <span className="font-bold text-neutral-200 block mb-1 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                         Distractor Health:
                       </span>
-                      <ul className="text-slate-600 text-[11px] list-disc list-inside space-y-1">
+                      <ul className="text-neutral-400 text-[11px] list-disc list-inside space-y-1">
                         {aiAnalysis.qualityFeedback.distractorCritique.map((c, i) => (
                           <li key={i}>{c}</li>
                         ))}
                       </ul>
                     </div>
 
-                    <div className="bg-white p-3 rounded-xl border border-slate-200">
-                      <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-neutral-900 p-3 rounded-xl border border-neutral-800">
+                      <span className="font-bold text-neutral-200 block mb-1 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
                         </svg>
                         Ambiguity Check:
                       </span>
-                      <span className={`text-[11px] font-bold ${aiAnalysis.qualityFeedback.ambiguityStatus === "PASSED" ? "text-emerald-700" : "text-amber-700"}`}>
+                      <span className={`text-[11px] font-bold ${aiAnalysis.qualityFeedback.ambiguityStatus === "PASSED" ? "text-emerald-400" : "text-amber-400"}`}>
                         {aiAnalysis.qualityFeedback.ambiguityMessage}
                       </span>
                     </div>
 
-                    <div className="bg-white p-3 rounded-xl border border-slate-200">
-                      <span className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-neutral-900 p-3 rounded-xl border border-neutral-800">
+                      <span className="font-bold text-neutral-200 block mb-1 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
                         Question Bank:
                       </span>
-                      <span className="text-[11px] font-medium text-slate-600">
+                      <span className="text-[11px] font-medium text-neutral-400">
                         {aiAnalysis.qualityFeedback.duplicateMatch.found
                           ? `Similar question in bank (${aiAnalysis.qualityFeedback.duplicateMatch.similarityScore}% match)`
                           : "No duplicate found in question bank."}
@@ -563,7 +563,7 @@ export function AddQuestionForm() {
               )}
             </div>
 
-            <div className="pt-5 border-t border-slate-100 flex flex-wrap gap-3 justify-between items-center">
+            <div className="pt-5 border-t border-neutral-800 flex flex-wrap gap-3 justify-between items-center">
               <button
                 type="button"
                 disabled={analyzing}
@@ -588,9 +588,9 @@ export function AddQuestionForm() {
                     setSelectedDifficulty(res.analysis.difficultyLevel);
                   }
                 }}
-                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-xs font-bold rounded-xl border border-neutral-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
-                <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
                 <span>{analyzing ? "Auditing..." : "AI Quality Check"}</span>
@@ -601,7 +601,7 @@ export function AddQuestionForm() {
                   type="submit"
                   onClick={() => setActionType("draft")}
                   disabled={loading}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
+                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-bold rounded-xl border border-neutral-800 transition-colors disabled:opacity-50"
                 >
                   Save Draft
                 </button>
@@ -609,10 +609,10 @@ export function AddQuestionForm() {
                   type="submit"
                   onClick={() => setActionType("submit")}
                   disabled={loading}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 shadow-sm flex items-center gap-1.5"
+                  className="px-5 py-2 bg-white hover:bg-neutral-200 text-black text-xs font-bold rounded-xl transition-all disabled:opacity-50 shadow-md flex items-center gap-1.5"
                   title="Ctrl + Enter to Save and add next"
                 >
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                   </svg>
                   <span>{loading ? "Saving..." : "Save & Add Another (Ctrl+Enter)"}</span>
@@ -625,13 +625,13 @@ export function AddQuestionForm() {
         {/* Live Candidate Preview Column */}
         {showPreview && (
           <div className="lg:col-span-5 space-y-4">
-            <div className="bg-slate-900 text-white p-5 rounded-3xl shadow-soft sticky top-24">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+            <div className="bg-[#0a0c10] text-white p-5 rounded-3xl border border-neutral-800 shadow-2xl sticky top-24">
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-800 mb-4">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300">Live Candidate Preview</span>
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-neutral-300">Live Candidate Preview</span>
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-full">
                   What students see
                 </span>
               </div>
@@ -639,10 +639,10 @@ export function AddQuestionForm() {
               <div className="space-y-4 text-left">
                 {/* Meta Badge Bar */}
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-extrabold text-indigo-300 bg-indigo-950/80 border border-indigo-800 px-2 py-0.5 rounded-full uppercase">
+                  <span className="text-[10px] font-extrabold text-neutral-300 bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-full uppercase">
                     {selectedTopic}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-full">
                     {selectedDifficulty}
                   </span>
                   <span className="text-[10px] font-mono text-emerald-400 ml-auto">
@@ -651,12 +651,12 @@ export function AddQuestionForm() {
                 </div>
 
                 {/* Question Text & Diagram */}
-                <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/80 min-h-[70px] space-y-3">
-                  <p className="text-xs text-slate-100 font-medium leading-relaxed">
-                    {stemText || (imagePreview ? <span className="text-emerald-400 font-semibold italic">Refer to the attached diagram/figure below:</span> : <span className="text-slate-500 italic">Type your question stem or attach an image on the left to preview...</span>)}
+                <div className="p-4 bg-[#0d0f14] rounded-2xl border border-neutral-800 min-h-[70px] space-y-3">
+                  <p className="text-xs text-neutral-200 font-medium leading-relaxed">
+                    {stemText || (imagePreview ? <span className="text-emerald-400 font-semibold italic">Refer to the attached diagram/figure below:</span> : <span className="text-neutral-500 italic">Type your question stem or attach an image on the left to preview...</span>)}
                   </p>
                   {imagePreview && (
-                    <div className="mt-2 rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900/80 p-1 flex justify-center">
+                    <div className="mt-2 rounded-xl overflow-hidden border border-neutral-800 bg-black p-1 flex justify-center">
                       <img 
                         src={imagePreview} 
                         alt="Question diagram preview" 
@@ -679,20 +679,20 @@ export function AddQuestionForm() {
                           key={i}
                           className={`flex items-center gap-3 p-3 rounded-xl border text-xs transition-all ${
                             isCorrect
-                              ? "bg-emerald-950/50 border-emerald-500 text-emerald-100 font-semibold"
-                              : "bg-slate-800/60 border-slate-700 text-slate-300"
+                              ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-200 font-semibold"
+                              : "bg-neutral-900/60 border-neutral-800 text-neutral-300"
                           }`}
                         >
                           <span className={`w-5 h-5 rounded-lg flex items-center justify-center font-black text-[10px] ${
-                            isCorrect ? "bg-emerald-500 text-slate-900" : "bg-slate-700 text-slate-400"
+                            isCorrect ? "bg-emerald-500 text-black" : "bg-neutral-800 text-neutral-400"
                           }`}>
                             {String.fromCharCode(65 + i)}
                           </span>
                           <span className="flex-1 truncate">
-                            {optionsList[i] || <span className="text-slate-600 italic">Option {String.fromCharCode(65 + i)}...</span>}
+                            {optionsList[i] || <span className="text-neutral-500 italic">Option {String.fromCharCode(65 + i)}...</span>}
                           </span>
                           {isCorrect && (
-                            <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-900/60 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-1.5 py-0.5 rounded">
                               KEY ✓
                             </span>
                           )}
@@ -711,23 +711,23 @@ export function AddQuestionForm() {
                           key={i}
                           className={`flex items-center gap-3 p-3 rounded-xl border text-xs ${
                             isCorrect
-                              ? "bg-emerald-950/50 border-emerald-500 text-emerald-100 font-semibold"
-                              : "bg-slate-800/60 border-slate-700 text-slate-300"
+                              ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-200 font-semibold"
+                              : "bg-neutral-900/60 border-neutral-800 text-neutral-300"
                           }`}
                         >
                           <span className="flex-1">{opt}</span>
-                          {isCorrect && <span className="text-[10px] font-extrabold text-emerald-400">KEY ✓</span>}
+                          {isCorrect && <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-1.5 py-0.5 rounded">KEY ✓</span>}
                         </div>
                       );
                     })}
                   </div>
                 )}
 
-                <p className="text-[11px] text-slate-500 text-center pt-2 flex items-center justify-center gap-1.5">
-                  <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <p className="text-[11px] text-neutral-500 text-center pt-2 flex items-center justify-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                   </svg>
-                  <span>Fast keyboard shortcut: Press <strong className="text-slate-400 font-mono">Ctrl + Enter</strong> anywhere to submit and load the next question.</span>
+                  <span>Fast keyboard shortcut: Press <strong className="text-neutral-300 font-mono">Ctrl + Enter</strong> anywhere to submit and load the next question.</span>
                 </p>
               </div>
             </div>

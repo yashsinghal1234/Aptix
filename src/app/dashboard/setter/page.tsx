@@ -9,34 +9,34 @@ export default function SetterDashboard() {
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto pb-12">
-      <div className="flex justify-between items-end border-b pb-4">
+      <div className="flex justify-between items-end border-b border-neutral-800 pb-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800">Question Adder</h2>
-          <p className="text-slate-500 mt-2">Author new questions manually, parse text, or bulk upload CSV.</p>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">Question Adder</h2>
+          <p className="text-neutral-400 text-xs mt-1">Author new questions manually, parse text, or bulk upload CSV.</p>
         </div>
-        <a href="/dashboard/setter/bank" className="text-indigo-600 font-semibold hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+        <a href="/dashboard/setter/bank" className="text-neutral-200 font-bold hover:text-white bg-neutral-900 hover:bg-neutral-800 px-4 py-2 rounded-xl transition-all border border-neutral-800 flex items-center gap-2 text-xs">
           <span>Question Bank</span>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+          <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
         </a>
       </div>
       
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="flex border-b border-slate-200 bg-slate-50">
+      <div className="bg-[#0a0c10] rounded-3xl shadow-md border border-neutral-800 overflow-hidden">
+        <div className="flex border-b border-neutral-800 bg-[#07080c]">
           <button 
             onClick={() => setActiveTab("MANUAL")}
-            className={`flex-1 py-4 px-6 text-sm font-semibold transition-colors border-b-2 ${activeTab === "MANUAL" ? "border-indigo-600 text-indigo-600 bg-white" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100"}`}
+            className={`flex-1 py-4 px-6 text-xs sm:text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${activeTab === "MANUAL" ? "border-white text-white bg-neutral-900/60" : "border-transparent text-neutral-400 hover:text-white hover:bg-neutral-900/30"}`}
           >
             Manual Authoring
           </button>
           <button 
             onClick={() => setActiveTab("PASTE")}
-            className={`flex-1 py-4 px-6 text-sm font-semibold transition-colors border-b-2 ${activeTab === "PASTE" ? "border-indigo-600 text-indigo-600 bg-white" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100"}`}
+            className={`flex-1 py-4 px-6 text-xs sm:text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${activeTab === "PASTE" ? "border-white text-white bg-neutral-900/60" : "border-transparent text-neutral-400 hover:text-white hover:bg-neutral-900/30"}`}
           >
             Paste & Parse
           </button>
           <button 
             onClick={() => setActiveTab("CSV")}
-            className={`flex-1 py-4 px-6 text-sm font-semibold transition-colors border-b-2 ${activeTab === "CSV" ? "border-indigo-600 text-indigo-600 bg-white" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100"}`}
+            className={`flex-1 py-4 px-6 text-xs sm:text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${activeTab === "CSV" ? "border-white text-white bg-neutral-900/60" : "border-transparent text-neutral-400 hover:text-white hover:bg-neutral-900/30"}`}
           >
             CSV Upload
           </button>

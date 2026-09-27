@@ -19,30 +19,44 @@ export async function candidateLoginAction(formData: FormData) {
     const email = formData.get("email") as string;
 
     if (!pin || !pin.trim()) {
-      return { error: "Please enter a valid Exam PIN." };
+      return { field: "examPin", error: "Please enter your Exam PIN." };
     }
     if (!name || !name.trim()) {
-      return { error: "Please enter your full name." };
+      return { field: "name", error: "Please enter your full candidate name." };
     }
     if (!email || !email.trim()) {
-      return { error: "Please enter your email address." };
+      return { field: "email", error: "Please enter your email address." };
     }
 
     const normalizedPin = pin.trim().toUpperCase();
     const normalizedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
 
-    // 1. Verify that active session exists with this PIN
+    // 1. Verify that session exists with this PIN
     const session = await prisma.examSession.findFirst({
-      where: {
-        pin: normalizedPin,
-        status: { in: ["SCHEDULED", "LIVE"] }
-      },
+      where: { pin: normalizedPin },
       include: { exam: true }
     });
 
     if (!session) {
-      return { error: "Invalid or expired Exam PIN. Please check the code with your instructor." };
+      return { 
+        field: "examPin",
+        error: "Exam PIN not found. Please double-check the code provided by your instructor or proctor." 
+      };
+    }
+
+    if (session.status === "COMPLETED") {
+      return { 
+        field: "examPin",
+        error: "This examination session has already concluded and is no longer accepting submissions." 
+      };
+    }
+
+    if (session.status === "CANCELLED") {
+      return { 
+        field: "examPin",
+        error: "This examination session has been cancelled by the proctor." 
+      };
     }
 
     // 2. Validate institutional domain requirements if configured for this assessment
@@ -53,7 +67,8 @@ export async function candidateLoginAction(formData: FormData) {
       
       if (!emailDomain || (emailDomain !== cleanDomain && !emailDomain.endsWith(`.${cleanDomain}`))) {
         return { 
-          error: `Institutional access restricted. Your email must end with @${cleanDomain} (e.g. yourname@${cleanDomain}).` 
+          field: "email",
+          error: `Restricted Access: Candidates must use their official @${cleanDomain} institutional email address.` 
         };
       }
     }
@@ -110,11 +125,14 @@ export async function candidateLoginAction(formData: FormData) {
       name: candidate.name
     });
 
+    const rememberMe = formData.get("rememberMe") === "on" || formData.get("rememberMe") === "true";
+
     cookies().set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      path: "/"
+      path: "/",
+      ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {})
     });
 
     redirect("/?started=true");
@@ -134,12 +152,13 @@ export async function staffLoginAction(formData: FormData) {
   try {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const rememberMe = formData.get("rememberMe") === "on" || formData.get("rememberMe") === "true";
 
     if (!email || !email.trim()) {
-      return { error: "Email address is required." };
+      return { field: "email", error: "Please enter your staff email address." };
     }
     if (!password) {
-      return { error: "Password is required." };
+      return { field: "password", error: "Please enter your account password." };
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -158,7 +177,7 @@ export async function staffLoginAction(formData: FormData) {
       }
 
       if (!isValid) {
-        return { error: "Invalid staff credentials." };
+        return { field: "password", error: "Incorrect password. Please verify your credentials and try again." };
       }
 
       // Auto-seed/update password hash and role
@@ -189,20 +208,40 @@ export async function staffLoginAction(formData: FormData) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        path: "/"
+        path: "/",
+        ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {})
       });
 
       redirect("/dashboard/owner");
     }
 
-    // 2. Check Authorized Setters
-    const setter = await prisma.user.findFirst({
-      where: { email: normalizedEmail, role: "SETTER" }
+    // 2. Check Other Registered Accounts
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail }
     });
 
-    if (!setter) {
-      return { error: "No staff account found with this email. Please contact the administrator." };
+    if (!existingUser) {
+      return { 
+        field: "email", 
+        error: "No staff account registered with this email address. Please contact your administrator." 
+      };
     }
+
+    if (existingUser.role === "CANDIDATE") {
+      return { 
+        field: "email", 
+        error: "This email belongs to a candidate account. Please switch to the Candidate PIN portal to enter an exam." 
+      };
+    }
+
+    if (existingUser.role !== "SETTER" && existingUser.role !== "OWNER") {
+      return { 
+        field: "email", 
+        error: "Access denied. Only authorized examiners and staff can access this portal." 
+      };
+    }
+
+    const setter = existingUser;
 
     let isSetterValid = false;
     if (setter.passwordHash) {
@@ -212,7 +251,7 @@ export async function staffLoginAction(formData: FormData) {
     }
 
     if (!isSetterValid) {
-      return { error: "Invalid staff credentials." };
+      return { field: "password", error: "Incorrect password. Please verify your credentials and try again." };
     }
 
     if (!setter.passwordHash) {
@@ -234,7 +273,8 @@ export async function staffLoginAction(formData: FormData) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      path: "/"
+      path: "/",
+      ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {})
     });
 
     if (setter.mustChangePassword) {

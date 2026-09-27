@@ -69,11 +69,13 @@ export function BulkUploadCSV() {
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl border shadow-sm">
-      <h3 className="font-semibold text-slate-800 text-lg mb-2">Bulk Upload (CSV)</h3>
-      <p className="text-sm text-slate-500 mb-4">
+    <div className="bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-2xl">
+      <h3 className="font-extrabold text-white text-lg mb-2">Bulk Upload (CSV)</h3>
+      <p className="text-xs text-neutral-400 mb-4">
         Upload a CSV file with columns: <br/>
-        <code className="text-xs bg-slate-100 p-1 rounded">Question, Opt 1, Opt 2, Opt 3, Opt 4, Correct (0-3), Category</code>
+        <code className="text-xs bg-neutral-900 border border-neutral-800 text-neutral-300 px-2 py-0.5 rounded-lg inline-block mt-1 font-mono">
+          Question, Opt 1, Opt 2, Opt 3, Opt 4, Correct (0-3), Category
+        </code>
       </p>
       
       <div className="relative">
@@ -82,11 +84,11 @@ export function BulkUploadCSV() {
           accept=".csv"
           onChange={handleFileUpload}
           disabled={loading}
-          className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 disabled:opacity-50 cursor-pointer"
+          className="w-full text-xs text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-white file:text-black hover:file:bg-neutral-200 disabled:opacity-50 cursor-pointer"
         />
         {loading && (
           <div className="absolute inset-y-0 right-0 flex items-center pr-4">
-            <svg className="animate-spin h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -95,7 +97,7 @@ export function BulkUploadCSV() {
       </div>
       
       {result && (
-        <div className={`mt-3 text-sm font-medium ${result.includes("Success") ? "text-green-600" : "text-red-600"}`}>
+        <div className={`mt-4 text-xs font-bold p-3 rounded-xl border ${result.includes("Success") ? "text-emerald-300 bg-emerald-950/40 border-emerald-800/60" : "text-rose-300 bg-rose-950/40 border-rose-800/60"}`}>
           {result}
         </div>
       )}

@@ -60,65 +60,89 @@ export default async function Home() {
 
   if (!activeSession) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <header className="bg-navy-900 border-b border-navy-800 px-8 py-3.5 flex justify-between items-center shadow-md">
+      <div className="min-h-screen bg-[#070c18] text-white flex flex-col font-sans select-none relative overflow-hidden">
+        {/* Subtle celestial background ambient glows */}
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <header className="bg-[#0b1428]/90 border-b border-sky-400/20 px-6 sm:px-8 py-3.5 flex justify-between items-center shadow-lg backdrop-blur-md relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shadow-sm shrink-0">
-              <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
+            <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center p-0.5 shadow-sm border border-neutral-800 shrink-0 overflow-hidden">
+              <video
+                src="/aptix-logo-anim.mp4"
+                poster="/logo-preview-frame.jpg"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover mix-blend-screen scale-125"
+              />
             </div>
-            <h1 className="text-lg font-bold text-white tracking-tight">Aptix Assessment</h1>
+            <div>
+              <h1 className="text-base font-extrabold text-white tracking-tight leading-none">Aptix Assessment</h1>
+              <span className="text-[10px] text-sky-300 font-semibold tracking-wider uppercase">Candidate Waiting Hall</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-semibold text-slate-300 bg-navy-800 px-3 py-1.5 rounded-full border border-slate-700">
-              Candidate: <span className="text-white font-bold">{name}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-sky-200 bg-[#0e1c38] px-3 py-1.5 rounded-full border border-sky-400/25 flex items-center gap-1.5 shadow-inner">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>Candidate: <strong className="text-white">{name}</strong></span>
             </span>
             <form action={logoutAction}>
-              <button className="text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3.5 py-1.5 rounded-lg transition-colors border border-slate-700">
+              <button className="text-xs font-semibold text-slate-300 hover:text-white bg-[#111e3b] hover:bg-[#1a2d58] px-3.5 py-1.5 rounded-xl transition-all border border-slate-700/80 shadow-sm cursor-pointer">
                 Log Out
               </button>
             </form>
           </div>
         </header>
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="bg-white p-10 rounded-3xl border border-slate-100 text-center shadow-soft-xl max-w-lg w-full space-y-6">
-            <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-brand-100">
+
+        <div className="flex-1 flex items-center justify-center p-6 relative z-10">
+          <div className="celestial-glass p-8 sm:p-10 rounded-3xl border border-sky-400/25 text-center shadow-[0_25px_60px_-15px_rgba(2,6,18,0.9)] max-w-lg w-full space-y-6 relative overflow-hidden">
+            {/* Top celestial starlight accent */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-sky-400/60 to-transparent" />
+
+            <div className="w-16 h-16 bg-blue-950/80 text-sky-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-sky-400/30">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             
             <div>
-              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-2">No Active Exam Right Now</h2>
-              <p className="text-slate-500 text-xs font-medium leading-relaxed">
-                There is currently no live assessment scheduled for your account. This screen is continuously listening and will automatically start when an exam goes live.
+              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-sky-950/80 border border-sky-400/30 text-[10px] font-bold tracking-widest text-sky-200 uppercase mb-2">
+                <span className="text-amber-300">✦</span>
+                <span>Session Waiting Hall</span>
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight mb-2">No Active Exam Right Now</h2>
+              <p className="text-sky-200/70 text-xs font-medium leading-relaxed max-w-md mx-auto">
+                Your credentials are authenticated. Please remain on this screen — as soon as your invigilator launches the session, your assessment will begin automatically.
               </p>
             </div>
 
-            <div className="p-5 bg-slate-50 border border-slate-200/80 rounded-2xl text-left space-y-3">
+            <div className="p-5 bg-[#0a1428]/80 border border-sky-400/20 rounded-2xl text-left space-y-3 shadow-inner">
               <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <span className="text-xs font-extrabold text-slate-900">Want to warm up while you wait?</span>
+                <span className="text-xs font-bold text-white">Want to warm up while you wait?</span>
               </div>
-              <p className="text-xs text-slate-600 font-medium">
-                Try out our zero-stakes <strong>Practice Arena</strong> with instant answer feedback and step-by-step explanations.
+              <p className="text-xs text-sky-200/80 font-normal leading-relaxed">
+                Take a self-study drill in our zero-stakes <strong>Practice Arena</strong> with instant answer feedback and step-by-step explanations.
               </p>
               <a
                 href="/practice"
-                className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs rounded-xl shadow-brand transition-all"
+                className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-500 hover:to-sky-500 text-white font-extrabold text-xs rounded-xl shadow-[0_4px_16px_rgba(37,99,235,0.35)] transition-all border border-sky-400/30"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>Launch Practice Mode</span>
+                <span>Launch Practice Arena</span>
               </a>
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-brand-600 bg-brand-50 py-2 px-4 rounded-full w-fit mx-auto border border-brand-100">
-              <span className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
-              <span>Listening for scheduled exams...</span>
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-sky-300 bg-[#09152e]/80 py-2 px-4 rounded-full w-fit mx-auto border border-sky-400/25 shadow-inner">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Listening for scheduled exams in real-time...</span>
             </div>
             <NoExamPoller />
           </div>

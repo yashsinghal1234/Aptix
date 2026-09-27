@@ -113,21 +113,30 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen bg-[#000000] text-neutral-100 flex flex-col md:flex-row font-sans selection:bg-white selection:text-black">
       {/* Mobile Top Navbar */}
-      <div className="md:hidden bg-[#090d16] text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 shadow-md">
+      <div className="md:hidden bg-[#000000]/95 backdrop-blur-md text-white px-4 py-3 flex items-center justify-between border-b border-neutral-800/80 shadow-md z-40">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0">
-            <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
+          <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden shrink-0">
+            <video
+              src="/aptix-logo-anim.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              poster="/logo-preview-frame.jpg"
+              className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+            />
           </div>
           <div>
             <span className="font-black text-base text-white tracking-tight leading-none block">Aptix</span>
-            <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider block">{isOwner ? "Owner Portal" : "Setter Portal"}</span>
+            <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">{isOwner ? "Owner Portal" : "Setter Portal"}</span>
           </div>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-xl bg-slate-800 text-slate-200 hover:text-white focus:outline-none"
+          className="p-2 rounded-xl bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 focus:outline-none transition-colors"
+          aria-label="Toggle Navigation Menu"
         >
           {mobileMenuOpen ? (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,17 +154,28 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
       <aside
         className={`${
           mobileMenuOpen ? "flex" : "hidden"
-        } md:flex w-full md:w-64 bg-[#090d16] text-white shrink-0 flex-col border-r border-slate-800 shadow-2xl z-40 fixed md:static inset-0 md:inset-auto top-[53px] md:top-0 h-[calc(100vh-53px)] md:h-screen`}
+        } md:flex w-full md:w-64 bg-[#07080c] text-white shrink-0 flex-col border-r border-neutral-800/80 z-40 fixed md:static inset-0 md:inset-auto top-[53px] md:top-0 h-[calc(100vh-53px)] md:h-screen transition-all`}
       >
         <div className="p-6 flex-1 overflow-y-auto">
           {/* Logo Header (Desktop) */}
           <div className="hidden md:flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center p-1.5 shadow-md border border-slate-700/50 shrink-0">
-              <img src="/kts-logo.png" alt="Logo" className="h-full w-full object-contain" />
+            <div className="relative w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
+              <video
+                src="/aptix-logo-anim.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                poster="/logo-preview-frame.jpg"
+                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+              />
             </div>
             <div>
-              <span className="font-black text-xl tracking-tight text-white block">Aptix</span>
-              <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block -mt-0.5">Control Center</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-xl tracking-tight text-white block">Aptix</span>
+                <span className="text-[10px] text-neutral-500">✦</span>
+              </div>
+              <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest block -mt-0.5">Control Center</span>
             </div>
           </div>
 
@@ -169,11 +189,11 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-xs tracking-wide transition-all ${
                     active
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                      : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                      ? "bg-white text-black shadow-md border border-white"
+                      : "text-neutral-400 hover:bg-neutral-900/80 hover:text-white"
                   }`}
                 >
-                  <span className={active ? "text-white" : "text-slate-400"}>{item.icon}</span>
+                  <span className={active ? "text-black" : "text-neutral-400"}>{item.icon}</span>
                   <span>{item.label}</span>
                 </Link>
               );
@@ -182,25 +202,29 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
         </div>
 
         {/* User profile footer */}
-        <div className="p-6 border-t border-slate-800/80 mt-auto">
-          <div className="flex items-center gap-3 text-xs bg-slate-900 p-3 rounded-2xl border border-slate-800">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center shadow-sm shrink-0">
+        <div className="p-5 border-t border-neutral-800/80 mt-auto">
+          <div className="flex items-center gap-3 text-xs bg-[#0d0f14] p-3 rounded-2xl border border-neutral-800">
+            <div className="w-9 h-9 rounded-xl bg-neutral-800 text-white font-black flex items-center justify-center shrink-0 border border-neutral-700 text-xs">
               {isOwner ? "OW" : "ST"}
             </div>
             <div className="truncate">
-              <p className="font-bold text-white text-xs">{isOwner ? "Administrator" : "Question Setter"}</p>
-              <p className="text-slate-400 text-[11px] truncate font-medium">{isOwner ? "Full Permissions" : "Content Author"}</p>
+              <p className="font-bold text-white text-xs flex items-center gap-1.5">
+                <span>{isOwner ? "Administrator" : "Question Setter"}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              </p>
+              <p className="text-neutral-400 text-[11px] truncate font-medium">{isOwner ? "Full Permissions" : "Content Author"}</p>
             </div>
           </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-[calc(100vh-53px)] md:h-screen overflow-hidden">
-        <header className="bg-white border-b border-slate-200/80 px-6 md:px-8 py-4 flex justify-between items-center shrink-0 shadow-soft-sm">
+      <main className="flex-1 flex flex-col h-[calc(100vh-53px)] md:h-screen overflow-hidden bg-[#000000]">
+        <header className="bg-[#000000]/80 backdrop-blur-md border-b border-neutral-800/80 px-6 md:px-8 py-3.5 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-widest text-brand-600 bg-brand-50 px-2.5 py-1 rounded-full border border-brand-100">
-              {isOwner ? "Admin Portal" : "Setter Portal"}
+            <span className="text-xs font-bold uppercase tracking-widest text-neutral-300 bg-neutral-900/90 px-3 py-1 rounded-full border border-neutral-800 flex items-center gap-1.5">
+              <span className="text-neutral-400 text-[10px]">✦</span>
+              <span>{isOwner ? "Executive Admin Portal" : "Authoring Setter Portal"}</span>
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -208,7 +232,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
             <form action={logoutAction}>
               <button
                 type="submit"
-                className="px-3.5 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 rounded-xl transition-all border border-slate-200 flex items-center gap-1.5"
+                className="px-3.5 py-1.5 text-xs font-bold text-neutral-300 bg-neutral-900 hover:bg-rose-950/40 hover:text-rose-400 hover:border-rose-900/50 rounded-xl transition-all border border-neutral-800 flex items-center gap-1.5 cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -218,7 +242,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
             </form>
           </div>
         </header>
-        <div className="flex-1 overflow-auto bg-slate-50/60 p-4 sm:p-6 md:p-8">
+        <div className="flex-1 overflow-auto bg-[#000000] p-4 sm:p-6 md:p-8 text-neutral-100">
           {children}
         </div>
       </main>
