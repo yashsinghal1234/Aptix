@@ -91,23 +91,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         if (savedStaffEmail) setStaffEmail(savedStaffEmail);
         if (savedStaffPassword) setStaffPassword(savedStaffPassword);
 
-        const savedPin = localStorage.getItem("aptix_saved_candidate_pin");
-        const savedName = localStorage.getItem("aptix_saved_candidate_name");
-        const savedCandidateEmail = localStorage.getItem("aptix_saved_candidate_email");
-        const savedCandidateRemember = localStorage.getItem("aptix_remember_candidate");
-
-        if (savedPin) setExamPin(savedPin);
-        if (savedName) setCandidateName(savedName);
-        if (savedCandidateEmail) setCandidateEmail(savedCandidateEmail);
-
         if (mode === "staff") {
           if (savedStaffRemember !== null) {
             setRememberMe(savedStaffRemember === "true");
           }
         } else {
-          if (savedCandidateRemember !== null) {
-            setRememberMe(savedCandidateRemember === "true");
-          }
+          setRememberMe(false);
         }
       } catch (err) {
         console.warn("Could not restore remembered credentials:", err);
@@ -144,8 +133,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
           const savedStaffRemember = localStorage.getItem("aptix_remember_staff");
           if (savedStaffRemember !== null) setRememberMe(savedStaffRemember === "true");
         } else {
-          const savedCandidateRemember = localStorage.getItem("aptix_remember_candidate");
-          if (savedCandidateRemember !== null) setRememberMe(savedCandidateRemember === "true");
+          setRememberMe(false);
         }
       } catch {}
 
@@ -183,20 +171,13 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       return;
     }
 
-    // Persist or clear remembered candidate credentials
+    // Clean up any legacy remembered candidate keys
     if (typeof window !== "undefined") {
       try {
-        if (rememberMe) {
-          localStorage.setItem("aptix_saved_candidate_pin", pin);
-          localStorage.setItem("aptix_saved_candidate_name", name);
-          localStorage.setItem("aptix_saved_candidate_email", email);
-          localStorage.setItem("aptix_remember_candidate", "true");
-        } else {
-          localStorage.removeItem("aptix_saved_candidate_pin");
-          localStorage.removeItem("aptix_saved_candidate_name");
-          localStorage.removeItem("aptix_saved_candidate_email");
-          localStorage.setItem("aptix_remember_candidate", "false");
-        }
+        localStorage.removeItem("aptix_saved_candidate_pin");
+        localStorage.removeItem("aptix_saved_candidate_name");
+        localStorage.removeItem("aptix_saved_candidate_email");
+        localStorage.removeItem("aptix_remember_candidate");
       } catch {}
     }
 
@@ -484,18 +465,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 </div>
 
                 {/* Auxiliary links row */}
-                <div className="flex items-center justify-between text-xs sm:text-sm pt-1 px-1">
-                  <label htmlFor="remember-candidate" className="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-300">
-                    <input
-                      id="remember-candidate"
-                      type="checkbox"
-                      name="rememberMe"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 rounded-md border border-neutral-700 bg-[#0d0f14] text-white accent-white focus:ring-0 cursor-pointer"
-                    />
-                    <span>Remember session</span>
-                  </label>
+                <div className="flex items-center justify-end text-xs sm:text-sm pt-1 px-1">
                   <Link
                     href="/practice"
                     prefetch={true}

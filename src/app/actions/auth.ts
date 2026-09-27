@@ -125,14 +125,11 @@ export async function candidateLoginAction(formData: FormData) {
       name: candidate.name
     });
 
-    const rememberMe = formData.get("rememberMe") === "on" || formData.get("rememberMe") === "true";
-
     cookies().set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      path: "/",
-      ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {})
+      path: "/"
     });
 
     redirect("/?started=true");

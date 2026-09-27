@@ -4,6 +4,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Aptix Assessment • Enterprise Examination Platform",
   description: "High-integrity, secure online aptitude assessment and examination platform.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.png", type: "image/png" }
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
