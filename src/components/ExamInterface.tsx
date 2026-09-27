@@ -659,8 +659,12 @@ export function ExamInterface({
                     loop
                     muted
                     playsInline
+                    preload="metadata"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    controlsList="nodownload nofullscreen noremoteplayback"
                     poster="/logo-preview-frame.jpg"
-                    className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+                    className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
                   />
                 </div>
                 <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold text-neutral-400">
@@ -995,8 +999,12 @@ export function ExamInterface({
                   loop
                   muted
                   playsInline
+                  preload="metadata"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  controlsList="nodownload nofullscreen noremoteplayback"
                   poster="/logo-preview-frame.jpg"
-                  className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+                  className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
                 />
               </div>
               <div className="hidden md:flex items-center gap-1">

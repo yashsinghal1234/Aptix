@@ -87,23 +87,15 @@ body {
   animation: error-shake 0.35s ease-in-out;
 }
 
-/* Viewport-height responsive auto-scaling for laptop screens (eliminates need for manual 90% browser zoom) */
-@media (max-height: 840px) {
-  html {
-    font-size: 14.5px; /* ~90.6% scale - matches ideal 90% laptop zoom */
-  }
+/* Disable native video controls, overlays, and Picture-in-Picture triggers */
+video::-webkit-media-controls {
+  display: none !important;
 }
-
-@media (max-height: 740px) {
-  html {
-    font-size: 13.5px; /* ~84% scale - for 1366x768 and scaled laptop screens */
-  }
+video::-webkit-media-controls-enclosure {
+  display: none !important;
 }
-
-@media (max-height: 640px) {
-  html {
-    font-size: 12.5px; /* ~78% scale - for compact viewports */
-  }
+video::-webkit-media-controls-panel {
+  display: none !important;
 }
 
 

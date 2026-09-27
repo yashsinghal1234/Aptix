@@ -75,7 +75,11 @@ export default async function Home() {
                 loop
                 muted
                 playsInline
-                className="w-full h-full object-cover mix-blend-screen scale-125"
+                preload="metadata"
+                disablePictureInPicture
+                disableRemotePlayback
+                controlsList="nodownload nofullscreen noremoteplayback"
+                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
               />
             </div>
             <div>

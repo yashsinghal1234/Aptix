@@ -40,28 +40,6 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
   // Actual DOM measurement for overflowing screen
   const cardRef = useRef<HTMLDivElement>(null);
   const [isGrid, setIsGrid] = useState<boolean>(false);
-  const [zoomScale, setZoomScale] = useState<number>(1);
-
-  // Automatically adapt viewport scale for laptop screens (eliminates need for manual 90% browser zoom)
-  useEffect(() => {
-    const handleViewportResize = () => {
-      if (typeof window === "undefined") return;
-      const vh = window.innerHeight;
-      if (vh >= 880) {
-        setZoomScale(1);
-      } else if (vh >= 750) {
-        setZoomScale(0.92); // Matches 90% view on standard 1080p laptops
-      } else if (vh >= 660) {
-        setZoomScale(0.86); // For 1366x768 and scaled laptop displays
-      } else {
-        setZoomScale(0.80); // Compact laptop viewports
-      }
-    };
-
-    handleViewportResize();
-    window.addEventListener("resize", handleViewportResize);
-    return () => window.removeEventListener("resize", handleViewportResize);
-  }, []);
 
   // Synchronize fullscreen state with browser changes (F11, Escape, etc.)
   useEffect(() => {
@@ -100,37 +78,46 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
   };
 
   async function handleStartPractice() {
-    // Immediately enter fullscreen upon user click gesture
+    // Attempt fullscreen safely without blocking if not supported or refused on mobile
     if (typeof document !== "undefined" && !document.fullscreenElement) {
-      try {
-        await document.documentElement.requestFullscreen();
-        setIsFullscreen(true);
-      } catch (err) {
-        console.warn("Fullscreen request error:", err);
+      if (document.documentElement && typeof document.documentElement.requestFullscreen === "function") {
+        try {
+          await document.documentElement.requestFullscreen().catch(() => {});
+          setIsFullscreen(true);
+        } catch {
+          // ignore fullscreen refusal on restricted devices
+        }
       }
     }
 
     setLoading(true);
     setError(null);
-    const res = await getPracticeQuestionsAction({
-      count: 10
-    });
-    setLoading(false);
 
-    if (!res.success || !res.questions || res.questions.length === 0) {
-      setError(res.error || "No practice questions found in the question bank. Please try again later.");
-      return;
+    try {
+      const res = await getPracticeQuestionsAction({
+        count: 10
+      });
+
+      if (!res.success || !res.questions || res.questions.length === 0) {
+        setError((res as any).error || "Failed to load practice questions. Please click to try again.");
+        setLoading(false);
+        return;
+      }
+
+      setQuestions(res.questions as PracticeQuestion[]);
+      setCurrentIndex(0);
+      setUserAnswers({});
+      setRevealed({});
+      setScore(0);
+      setCurrentStreak(0);
+      setMaxStreak(0);
+      setIsGrid(false);
+      setStage("DRILL");
+    } catch (err: any) {
+      setError(err?.message || "Failed to launch practice mode. Please click to try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setQuestions(res.questions as PracticeQuestion[]);
-    setCurrentIndex(0);
-    setUserAnswers({});
-    setRevealed({});
-    setScore(0);
-    setCurrentStreak(0);
-    setMaxStreak(0);
-    setIsGrid(false);
-    setStage("DRILL");
   }
 
   const currentQ = questions[currentIndex];
@@ -171,8 +158,8 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
     // Budget this space so questions that are "just on the edge" don't overflow when revealed!
     const futureExplanationOffset = !isRevealed ? 95 : 0;
 
-    const availableHeight = (window.innerHeight - 80) / zoomScale;
-    const totalExpectedBottom = rect.bottom + (pendingImageOffset + futureExplanationOffset) * zoomScale;
+    const availableHeight = window.innerHeight - 80;
+    const totalExpectedBottom = rect.bottom + (pendingImageOffset + futureExplanationOffset);
     const totalExpectedHeight = cardHeight + pendingImageOffset + futureExplanationOffset;
 
     // Switch to grid if the card currently overflows or will overflow when revealed/loaded
@@ -324,8 +311,12 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
                 loop
                 muted
                 playsInline
+                preload="metadata"
+                disablePictureInPicture
+                disableRemotePlayback
+                controlsList="nodownload nofullscreen noremoteplayback"
                 poster="/logo-preview-frame.jpg"
-                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
               />
             </div>
             <span className="text-base sm:text-lg font-black text-white tracking-tight group-hover:text-neutral-300 transition-colors">
@@ -386,22 +377,27 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
 
       {/* Main Content Area */}
       <main
-        style={{ zoom: zoomScale }}
-        className={`flex-1 flex items-center justify-center ${stage === "DRILL" ? "p-2.5 sm:p-4" : "p-4 sm:p-6"} transition-all duration-150`}
+        className={`flex-1 flex items-center justify-center ${stage === "DRILL" ? "p-3 sm:p-5" : "p-4 sm:p-8"} transition-all duration-150`}
       >
-        {/* SETUP SCREEN */}
+        {/* SETUP SCREEN - Spacious, prominent, and readable */}
         {stage === "SETUP" && (
-          <div className="bg-[#0a0c10] p-6 sm:p-8 rounded-3xl border border-neutral-800 shadow-2xl max-w-lg w-full text-left space-y-4 sm:space-y-5">
+          <div className="bg-[#0a0c10] p-6 sm:p-10 lg:p-12 rounded-[28px] sm:rounded-[36px] border border-neutral-800 shadow-[0_24px_70px_rgba(0,0,0,0.8)] max-w-xl sm:max-w-2xl lg:max-w-3xl w-full text-left space-y-6 sm:space-y-7">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Adaptive Practice Mode</h2>
-              <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Instant Self-Study Engine</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
+                Adaptive Practice Mode
+              </h2>
+              <p className="text-sm sm:text-base text-neutral-400 mt-2 sm:mt-3 leading-relaxed font-normal">
                 Sharpen your skills with a curated 10-question practice set drawn directly from the bank. Includes instant answer checking, step-by-step rationales, and full-screen immersion.
               </p>
             </div>
 
             {error && (
-              <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-xs font-bold text-rose-300 flex items-center gap-2">
-                <svg className="w-4 h-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-xs sm:text-sm font-bold text-rose-300 flex items-center gap-3">
+                <svg className="w-5 h-5 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <span>{error}</span>
@@ -409,19 +405,19 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
             )}
 
             {/* Fixed 10-Question Specifications Overview */}
-            <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-              <div className="p-3 bg-[#0d0f14] border border-neutral-800 rounded-2xl text-center">
-                <span className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-wider block mb-0.5">Set Size</span>
-                <span className="text-sm sm:text-base font-black text-white">10 Questions</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="p-4 sm:p-5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
+                <span className="text-[11px] sm:text-xs font-extrabold text-neutral-500 uppercase tracking-wider block mb-1">Set Size</span>
+                <span className="text-base sm:text-lg lg:text-xl font-black text-white">10 Questions</span>
               </div>
-              <div className="p-3 bg-[#0d0f14] border border-neutral-800 rounded-2xl text-center">
-                <span className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-wider block mb-0.5">Coverage</span>
-                <span className="text-sm sm:text-base font-black text-emerald-400">All Topics</span>
+              <div className="p-4 sm:p-5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
+                <span className="text-[11px] sm:text-xs font-extrabold text-neutral-500 uppercase tracking-wider block mb-1">Coverage</span>
+                <span className="text-base sm:text-lg lg:text-xl font-black text-emerald-400">All Topics</span>
               </div>
-              <div className="p-3 bg-[#0d0f14] border border-neutral-800 rounded-2xl text-center">
-                <span className="text-[10px] font-extrabold text-neutral-500 uppercase tracking-wider block mb-0.5">Environment</span>
-                <span className="text-sm sm:text-base font-black text-white flex items-center justify-center gap-1">
-                  <svg className="w-3.5 h-3.5 text-sky-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-4 sm:p-5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl text-center">
+                <span className="text-[11px] sm:text-xs font-extrabold text-neutral-500 uppercase tracking-wider block mb-1">Environment</span>
+                <span className="text-base sm:text-lg lg:text-xl font-black text-white flex items-center justify-center gap-1.5">
+                  <svg className="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                   </svg>
                   <span>Fullscreen</span>
@@ -429,13 +425,13 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
               </div>
             </div>
 
-            <div className="p-3 bg-[#0d0f14] border border-neutral-800 rounded-2xl flex items-center gap-3">
-              <div className="w-7 h-7 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center shrink-0 text-emerald-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="p-4 sm:p-4.5 bg-[#0d0f14] border border-neutral-800/90 rounded-2xl flex items-start sm:items-center gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center shrink-0 text-emerald-400 mt-0.5 sm:mt-0">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-xs text-neutral-400 leading-relaxed font-medium">
+              <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed font-normal">
                 Step-by-step rationales and solutions are displayed immediately after checking each answer. Zero stakes with unlimited practice drills.
               </p>
             </div>
@@ -443,19 +439,19 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
             <button
               onClick={handleStartPractice}
               disabled={loading}
-              className="w-full py-3 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
+              className="w-full py-4 sm:py-4.5 px-8 bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-black text-sm sm:text-base rounded-2xl shadow-[0_4px_24px_rgba(255,255,255,0.2)] transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer active:scale-[0.99]"
             >
               {loading ? (
                 <>
                   <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                  <span>Preparing Fullscreen Practice...</span>
+                  <span>Preparing Practice Arena...</span>
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                   </svg>
-                  <span>Launch 10-Question Practice in Fullscreen</span>
+                  <span>Launch 10-Question Practice</span>
                 </>
               )}
             </button>
@@ -466,7 +462,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
         {stage === "DRILL" && currentQ && (
           <div
             ref={cardRef}
-            className={`bg-[#0a0c10] ${isGrid ? 'p-3.5 sm:p-5 space-y-3 sm:space-y-3.5' : 'p-4 sm:p-6 space-y-3.5 sm:space-y-4'} rounded-3xl border border-neutral-800 shadow-2xl max-w-3xl w-full text-left transition-all duration-200`}
+            className={`bg-[#0a0c10] ${isGrid ? 'p-4 sm:p-6 space-y-3.5 sm:space-y-4' : 'p-5 sm:p-7 space-y-4 sm:space-y-5'} rounded-[28px] sm:rounded-[32px] border border-neutral-800 shadow-2xl max-w-3xl lg:max-w-4xl w-full text-left transition-all duration-200`}
           >
             {/* Question Progress Header */}
             <div className="flex flex-wrap justify-between items-center gap-2 pb-3 border-b border-neutral-800">
@@ -488,7 +484,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
             </div>
 
             {/* Question Stem */}
-            <h2 className="text-base sm:text-lg font-bold text-white leading-snug">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white leading-snug">
               {currentQ.text}
             </h2>
 
@@ -504,7 +500,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
             )}
 
             {/* Options List / Grid */}
-            <div className={isGrid ? "grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5" : "space-y-2.5"}>
+            <div className={isGrid ? "grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3" : "space-y-3"}>
               {(() => {
                 const isRevealed = revealed[currentQ.id];
                 const selectedOpt = userAnswers[currentQ.id];
@@ -534,19 +530,19 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
                     <div
                       key={idx}
                       onClick={() => handleSelectOption(optText)}
-                      className={`flex items-center gap-3 ${isGrid ? 'p-2.5 sm:p-3' : 'p-3 sm:p-3.5'} rounded-2xl border transition-all cursor-pointer select-none ${cardStyle}`}
+                      className={`flex items-center gap-3.5 ${isGrid ? 'p-3 sm:p-3.5' : 'p-3.5 sm:p-4'} rounded-2xl border transition-all cursor-pointer select-none ${cardStyle}`}
                     >
-                      <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-xl border flex items-center justify-center font-bold text-xs shrink-0 ${badgeStyle}`}>
+                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl border flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 ${badgeStyle}`}>
                         {String.fromCharCode(65 + idx)}
                       </div>
-                      <span className="text-xs sm:text-sm font-medium flex-1 leading-snug">{optText}</span>
+                      <span className="text-sm sm:text-base font-medium flex-1 leading-snug">{optText}</span>
                       {isThisCorrect && (
-                        <span className="text-[10px] sm:text-[11px] font-extrabold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-500/30 shrink-0">
+                        <span className="text-xs font-extrabold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-md border border-emerald-500/30 shrink-0">
                           CORRECT ✓
                         </span>
                       )}
                       {isThisWrong && (
-                        <span className="text-[10px] sm:text-[11px] font-extrabold text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded-md border border-rose-500/30 shrink-0">
+                        <span className="text-xs font-extrabold text-rose-400 bg-rose-950/80 px-2.5 py-1 rounded-md border border-rose-500/30 shrink-0">
                           INCORRECT ✕
                         </span>
                       )}

@@ -29,7 +29,11 @@ export default function SetupPasswordPage() {
               loop
               muted
               playsInline
-              className="w-full h-full object-cover mix-blend-screen scale-125"
+              preload="metadata"
+              disablePictureInPicture
+              disableRemotePlayback
+              controlsList="nodownload nofullscreen noremoteplayback"
+              className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none select-none"
             />
           </div>
           <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-500/30 mb-2">
