@@ -132,7 +132,7 @@ export async function candidateLoginAction(formData: FormData) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {})
+      ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {})
     });
 
     redirect("/?started=true");
@@ -209,7 +209,7 @@ export async function staffLoginAction(formData: FormData) {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {})
+        ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {})
       });
 
       redirect("/dashboard/owner");
@@ -274,7 +274,7 @@ export async function staffLoginAction(formData: FormData) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {})
+      ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {})
     });
 
     if (setter.mustChangePassword) {

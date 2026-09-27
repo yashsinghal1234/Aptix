@@ -35,6 +35,10 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [showForgotNotice, setShowForgotNotice] = useState(false);
   const [loading, setLoading] = useState(false);
   const [examPin, setExamPin] = useState("");
+  const [candidateName, setCandidateName] = useState("");
+  const [candidateEmail, setCandidateEmail] = useState("");
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffPassword, setStaffPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [activeSlide, setActiveSlide] = useState(0);
@@ -76,8 +80,39 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     });
   }, [activeSlide]);
 
+  // Restore saved credentials from localStorage on mount & mode changes
   useEffect(() => {
     if (typeof window !== "undefined") {
+      try {
+        const savedStaffEmail = localStorage.getItem("aptix_saved_staff_email");
+        const savedStaffPassword = localStorage.getItem("aptix_saved_staff_password");
+        const savedStaffRemember = localStorage.getItem("aptix_remember_staff");
+
+        if (savedStaffEmail) setStaffEmail(savedStaffEmail);
+        if (savedStaffPassword) setStaffPassword(savedStaffPassword);
+
+        const savedPin = localStorage.getItem("aptix_saved_candidate_pin");
+        const savedName = localStorage.getItem("aptix_saved_candidate_name");
+        const savedCandidateEmail = localStorage.getItem("aptix_saved_candidate_email");
+        const savedCandidateRemember = localStorage.getItem("aptix_remember_candidate");
+
+        if (savedPin) setExamPin(savedPin);
+        if (savedName) setCandidateName(savedName);
+        if (savedCandidateEmail) setCandidateEmail(savedCandidateEmail);
+
+        if (mode === "staff") {
+          if (savedStaffRemember !== null) {
+            setRememberMe(savedStaffRemember === "true");
+          }
+        } else {
+          if (savedCandidateRemember !== null) {
+            setRememberMe(savedCandidateRemember === "true");
+          }
+        }
+      } catch (err) {
+        console.warn("Could not restore remembered credentials:", err);
+      }
+
       const isStaffPath = window.location.pathname.startsWith("/admin/login");
       if (isStaffPath && mode !== "staff") {
         setMode("staff");
@@ -104,6 +139,16 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     setShowForgotNotice(false);
     setLoading(false);
     if (typeof window !== "undefined") {
+      try {
+        if (newMode === "staff") {
+          const savedStaffRemember = localStorage.getItem("aptix_remember_staff");
+          if (savedStaffRemember !== null) setRememberMe(savedStaffRemember === "true");
+        } else {
+          const savedCandidateRemember = localStorage.getItem("aptix_remember_candidate");
+          if (savedCandidateRemember !== null) setRememberMe(savedCandidateRemember === "true");
+        }
+      } catch {}
+
       const targetUrl = newMode === "staff" ? "/admin/login" : "/";
       if (window.location.pathname !== targetUrl) {
         window.history.pushState({ mode: newMode }, "", targetUrl);
@@ -136,6 +181,23 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       triggerCandidateError("Please enter a valid email address with a domain name.", "email");
       return;
+    }
+
+    // Persist or clear remembered candidate credentials
+    if (typeof window !== "undefined") {
+      try {
+        if (rememberMe) {
+          localStorage.setItem("aptix_saved_candidate_pin", pin);
+          localStorage.setItem("aptix_saved_candidate_name", name);
+          localStorage.setItem("aptix_saved_candidate_email", email);
+          localStorage.setItem("aptix_remember_candidate", "true");
+        } else {
+          localStorage.removeItem("aptix_saved_candidate_pin");
+          localStorage.removeItem("aptix_saved_candidate_name");
+          localStorage.removeItem("aptix_saved_candidate_email");
+          localStorage.setItem("aptix_remember_candidate", "false");
+        }
+      } catch {}
     }
 
     setLoading(true);
@@ -171,6 +233,21 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     if (!password) {
       triggerStaffError("Please enter your account password.", "staffPassword");
       return;
+    }
+
+    // Persist or clear remembered staff credentials
+    if (typeof window !== "undefined") {
+      try {
+        if (rememberMe) {
+          localStorage.setItem("aptix_saved_staff_email", email);
+          if (password) localStorage.setItem("aptix_saved_staff_password", password);
+          localStorage.setItem("aptix_remember_staff", "true");
+        } else {
+          localStorage.removeItem("aptix_saved_staff_email");
+          localStorage.removeItem("aptix_saved_staff_password");
+          localStorage.setItem("aptix_remember_staff", "false");
+        }
+      } catch {}
     }
 
     setLoading(true);
@@ -360,9 +437,11 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="candidate-full-name"
                     type="text"
                     name="name"
+                    value={candidateName}
                     autoComplete="name"
                     aria-invalid={errorField === "name"}
-                    onChange={() => {
+                    onChange={(e) => {
+                      setCandidateName(e.target.value);
                       if (candidateError) {
                         setCandidateError(null);
                         setErrorField(null);
@@ -385,9 +464,11 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="candidate-email"
                     type="email"
                     name="email"
+                    value={candidateEmail}
                     autoComplete="email"
                     aria-invalid={errorField === "email"}
-                    onChange={() => {
+                    onChange={(e) => {
+                      setCandidateEmail(e.target.value);
                       if (candidateError) {
                         setCandidateError(null);
                         setErrorField(null);
@@ -516,10 +597,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="staff-email"
                     type="email"
                     name="email"
+                    value={staffEmail}
                     autoComplete="username"
                     aria-invalid={errorField === "staffEmail"}
                     aria-describedby={staffError ? "staff-error-msg" : undefined}
-                    onChange={() => {
+                    onChange={(e) => {
+                      setStaffEmail(e.target.value);
                       if (staffError) {
                         setStaffError(null);
                         setErrorField(null);
@@ -543,9 +626,11 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="staff-password"
                     type={showPassword ? "text" : "password"}
                     name="password"
+                    value={staffPassword}
                     autoComplete="current-password"
                     aria-invalid={errorField === "staffPassword"}
-                    onChange={() => {
+                    onChange={(e) => {
+                      setStaffPassword(e.target.value);
                       if (staffError) {
                         setStaffError(null);
                         setErrorField(null);
