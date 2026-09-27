@@ -40,7 +40,8 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [staffEmail, setStaffEmail] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberStaff, setRememberStaff] = useState(true);
+  const [rememberCandidate, setRememberCandidate] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
   const videoRefs = React.useRef<(HTMLVideoElement | null)[]>([]);
 
@@ -90,14 +91,22 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
 
         if (savedStaffEmail) setStaffEmail(savedStaffEmail);
         if (savedStaffPassword) setStaffPassword(savedStaffPassword);
-
-        if (mode === "staff") {
-          if (savedStaffRemember !== null) {
-            setRememberMe(savedStaffRemember === "true");
-          }
-        } else {
-          setRememberMe(false);
+        if (savedStaffRemember !== null) {
+          setRememberStaff(savedStaffRemember === "true");
         }
+
+        const savedCandidateName = localStorage.getItem("aptix_saved_candidate_name");
+        const savedCandidateEmail = localStorage.getItem("aptix_saved_candidate_email");
+
+        if (savedCandidateName) setCandidateName(savedCandidateName);
+        if (savedCandidateEmail) setCandidateEmail(savedCandidateEmail);
+
+        // Explicitly ensure exam pin is NEVER saved or restored
+        localStorage.removeItem("aptix_saved_candidate_pin");
+        setExamPin("");
+
+        // Checkbox remains unchecked by default
+        setRememberCandidate(false);
       } catch (err) {
         console.warn("Could not restore remembered credentials:", err);
       }
@@ -128,15 +137,6 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     setShowForgotNotice(false);
     setLoading(false);
     if (typeof window !== "undefined") {
-      try {
-        if (newMode === "staff") {
-          const savedStaffRemember = localStorage.getItem("aptix_remember_staff");
-          if (savedStaffRemember !== null) setRememberMe(savedStaffRemember === "true");
-        } else {
-          setRememberMe(false);
-        }
-      } catch {}
-
       const targetUrl = newMode === "staff" ? "/admin/login" : "/";
       if (window.location.pathname !== targetUrl) {
         window.history.pushState({ mode: newMode }, "", targetUrl);
@@ -171,13 +171,20 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       return;
     }
 
-    // Clean up any legacy remembered candidate keys
+    // Persist or clear candidate name & email (NEVER exam PIN)
     if (typeof window !== "undefined") {
       try {
+        if (rememberCandidate) {
+          localStorage.setItem("aptix_saved_candidate_name", name);
+          localStorage.setItem("aptix_saved_candidate_email", email);
+          localStorage.setItem("aptix_remember_candidate", "true");
+        } else {
+          localStorage.removeItem("aptix_saved_candidate_name");
+          localStorage.removeItem("aptix_saved_candidate_email");
+          localStorage.setItem("aptix_remember_candidate", "false");
+        }
+        // Always ensure pin is NEVER saved in storage
         localStorage.removeItem("aptix_saved_candidate_pin");
-        localStorage.removeItem("aptix_saved_candidate_name");
-        localStorage.removeItem("aptix_saved_candidate_email");
-        localStorage.removeItem("aptix_remember_candidate");
       } catch {}
     }
 
@@ -219,7 +226,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     // Persist or clear remembered staff credentials
     if (typeof window !== "undefined") {
       try {
-        if (rememberMe) {
+        if (rememberStaff) {
           localStorage.setItem("aptix_saved_staff_email", email);
           if (password) localStorage.setItem("aptix_saved_staff_password", password);
           localStorage.setItem("aptix_remember_staff", "true");
@@ -465,7 +472,18 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 </div>
 
                 {/* Auxiliary links row */}
-                <div className="flex items-center justify-end text-xs sm:text-sm pt-1 px-1">
+                <div className="flex items-center justify-between text-xs sm:text-sm pt-1 px-1">
+                  <label htmlFor="remember-candidate" className="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-300">
+                    <input
+                      id="remember-candidate"
+                      type="checkbox"
+                      name="rememberCandidate"
+                      checked={rememberCandidate}
+                      onChange={(e) => setRememberCandidate(e.target.checked)}
+                      className="w-4 h-4 rounded-md border border-neutral-700 bg-[#0d0f14] text-white accent-white focus:ring-0 cursor-pointer"
+                    />
+                    <span>Remember details</span>
+                  </label>
                   <Link
                     href="/practice"
                     prefetch={true}
@@ -641,9 +659,9 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     <input
                       id="remember-staff"
                       type="checkbox"
-                      name="rememberMe"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
+                      name="rememberStaff"
+                      checked={rememberStaff}
+                      onChange={(e) => setRememberStaff(e.target.checked)}
                       className="w-4 h-4 rounded-md border border-neutral-700 bg-[#0d0f14] text-white accent-white focus:ring-0 cursor-pointer"
                     />
                     <span>Remember credentials</span>
