@@ -21,9 +21,7 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
   const [currentStreak, setCurrentStreak] = useState<number>(0);
   const [maxStreak, setMaxStreak] = useState<number>(0);
 
-  // Actual DOM measurement for overflowing screen
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [isGrid, setIsGrid] = useState<boolean>(false);
+
 
   // Synchronize fullscreen state with browser changes (F11, Escape, etc.)
   useEffect(() => {
@@ -86,7 +84,6 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
       setScore(0);
       setCurrentStreak(0);
       setMaxStreak(0);
-      setIsGrid(false);
       setStage("DRILL");
     } catch (err: any) {
       setError(err?.message || "Failed to launch practice mode.");
@@ -97,67 +94,6 @@ export function PracticeInterface({ candidateName }: { candidateName?: string })
 
   const currentQ = questions[currentIndex];
 
-  // Determine if question layout needs 2x2 grid to prevent overflowing screen
-  const evaluateLayout = () => {
-    if (stage !== "DRILL" || !currentQ || !cardRef.current || typeof window === "undefined") {
-      return;
-    }
-
-    const optionsCount = (currentQ.options || []).length;
-    const maxOptionLength = Math.max(
-      0,
-      ...(currentQ.options || []).map((o: any) => (typeof o === "string" ? o : o?.text || "").length)
-    );
-    const canFitInGrid = optionsCount >= 4 && maxOptionLength <= 80;
-
-    if (!canFitInGrid) {
-      if (isGrid) setIsGrid(false);
-      return;
-    }
-
-    const card = cardRef.current;
-    const rect = card.getBoundingClientRect();
-    const cardHeight = card.offsetHeight;
-    const isRevealed = !!revealed[currentQ.id];
-
-    // If an image is present but still loading (height 0), estimate 150px for it
-    let pendingImageOffset = 0;
-    if (currentQ.imageUrl) {
-      const imgEl = card.querySelector("img");
-      if (!imgEl || imgEl.naturalHeight === 0) {
-        pendingImageOffset = 150;
-      }
-    }
-
-    // Checking answer reveals the solution/explanation box (~95px)
-    // Budget this space so questions that are "just on the edge" don't overflow when revealed!
-    const futureExplanationOffset = !isRevealed ? 95 : 0;
-
-    const availableHeight = window.innerHeight - 80;
-    const totalExpectedBottom = rect.bottom + (pendingImageOffset + futureExplanationOffset);
-    const totalExpectedHeight = cardHeight + pendingImageOffset + futureExplanationOffset;
-
-    // Switch to grid if the card currently overflows or will overflow when revealed/loaded
-    const shouldBeGrid = totalExpectedBottom > window.innerHeight - 16 || totalExpectedHeight > availableHeight;
-
-    if (shouldBeGrid && !isGrid) {
-      setIsGrid(true);
-    }
-  };
-
-  useEffect(() => {
-    evaluateLayout();
-    const rafId = requestAnimationFrame(evaluateLayout);
-    return () => cancelAnimationFrame(rafId);
-  }, [currentIndex, stage, revealed[currentQ?.id]]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      evaluateLayout();
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isGrid, stage, currentIndex, revealed[currentQ?.id]]);
 
   const handleSelectOption = (optText: string) => {
     if (revealed[currentQ.id]) return; // locked once checked
@@ -239,7 +175,6 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
   };
 
   const handleNext = () => {
-    setIsGrid(false);
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "instant" });
     }
@@ -436,8 +371,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
         {/* DRILL SCREEN */}
         {stage === "DRILL" && currentQ && (
           <div
-            ref={cardRef}
-            className={`bg-[#0a0c10] ${isGrid ? 'p-4 sm:p-6 space-y-3.5 sm:space-y-4' : 'p-5 sm:p-7 space-y-4 sm:space-y-5'} rounded-[28px] sm:rounded-[32px] border border-neutral-800 shadow-2xl max-w-3xl lg:max-w-4xl w-full text-left transition-all duration-200`}
+            className="bg-[#0a0c10] p-5 sm:p-7 md:p-8 space-y-4 sm:space-y-5 rounded-[26px] sm:rounded-[32px] border border-neutral-800 shadow-2xl max-w-2xl sm:max-w-3xl w-full text-left transition-all duration-200"
           >
             {/* Question Progress Header */}
             <div className="flex flex-wrap justify-between items-center gap-2 pb-3 border-b border-neutral-800">
@@ -459,7 +393,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
             </div>
 
             {/* Question Stem */}
-            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white leading-snug">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white leading-snug whitespace-pre-wrap">
               {currentQ.text}
             </h2>
 
@@ -468,14 +402,13 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
                 <img
                   src={currentQ.imageUrl}
                   alt="Illustration"
-                  onLoad={() => evaluateLayout()}
                   className="max-h-28 sm:max-h-36 rounded-2xl border border-neutral-800 shadow-sm object-contain"
                 />
               </div>
             )}
 
-            {/* Options List / Grid */}
-            <div className={isGrid ? "grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3" : "space-y-3"}>
+            {/* Vertical Options List (Always Clean Full-Width Rows) */}
+            <div className="space-y-2.5 sm:space-y-3">
               {(() => {
                 const isRevealed = revealed[currentQ.id];
                 const selectedOpt = userAnswers[currentQ.id];
@@ -505,7 +438,7 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
                     <div
                       key={idx}
                       onClick={() => handleSelectOption(optText)}
-                      className={`flex items-center gap-3.5 ${isGrid ? 'p-3 sm:p-3.5' : 'p-3.5 sm:p-4'} rounded-2xl border transition-all cursor-pointer select-none ${cardStyle}`}
+                      className={`flex items-center gap-3.5 p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer select-none ${cardStyle}`}
                     >
                       <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl border flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 ${badgeStyle}`}>
                         {String.fromCharCode(65 + idx)}
