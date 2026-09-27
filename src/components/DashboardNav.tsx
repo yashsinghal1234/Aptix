@@ -117,7 +117,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
       {/* Mobile Top Navbar */}
       <div className="md:hidden bg-[#000000]/95 backdrop-blur-md text-white px-4 py-3 flex items-center justify-between border-b border-neutral-800/80 shadow-md z-40">
         <div className="flex items-center gap-3">
-          <div className="relative w-9 h-9 flex items-center justify-center overflow-hidden shrink-0">
+          <div className="relative w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
             <video
               src="/aptix-logo-anim.mp4"
               autoPlay
@@ -125,7 +125,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
               muted
               playsInline
               poster="/logo-preview-frame.jpg"
-              className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+              className="w-full h-full object-cover mix-blend-screen scale-130 pointer-events-none"
             />
           </div>
           <div>
@@ -159,7 +159,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
         <div className="p-6 flex-1 overflow-y-auto">
           {/* Logo Header (Desktop) */}
           <div className="hidden md:flex items-center gap-3.5 mb-8">
-            <div className="relative w-12 h-12 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="relative w-14 h-14 flex items-center justify-center overflow-hidden shrink-0">
               <video
                 src="/aptix-logo-anim.mp4"
                 autoPlay
@@ -167,7 +167,7 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
                 muted
                 playsInline
                 poster="/logo-preview-frame.jpg"
-                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+                className="w-full h-full object-cover mix-blend-screen scale-135 pointer-events-none"
               />
             </div>
             <div>
