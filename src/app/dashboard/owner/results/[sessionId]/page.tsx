@@ -83,7 +83,7 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
           <Link href="/dashboard/owner/results" className="text-xs font-bold text-neutral-400 hover:text-white mb-2 inline-flex items-center gap-1 transition-colors">
             &larr; Back to Results Directory
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">{session.exam.title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight capitalize">{session.exam.title}</h1>
           <p className="text-neutral-400 text-xs mt-0.5">Cohort Analytics & Item Psychometrics Report</p>
         </div>
         <a 

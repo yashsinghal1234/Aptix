@@ -22,7 +22,10 @@ export default async function ResultsDashboard() {
       sessionStats: true,
       _count: { select: { attempts: true } }
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: [
+      { attempts: { _count: "desc" } },
+      { createdAt: "desc" }
+    ]
   });
 
   return (
@@ -65,7 +68,7 @@ export default async function ResultsDashboard() {
                   return (
                     <tr key={session.id} className="hover:bg-neutral-900/40 transition-colors">
                       <td className="px-6 py-4">
-                        <p className="font-bold text-white text-sm">{session.exam.title}</p>
+                        <p className="font-bold text-white text-sm capitalize">{session.exam.title}</p>
                         <p className="text-[11px] text-neutral-500 mt-0.5 max-w-[280px] truncate">{session.exam.instructions || "Standard Assessment"}</p>
                       </td>
                       <td className="px-6 py-4 text-neutral-400 font-medium">
@@ -75,18 +78,39 @@ export default async function ResultsDashboard() {
                         {session._count.attempts} users
                       </td>
                       <td className="px-6 py-4">
-                        {session.sessionStats ? (
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${
-                            session.sessionStats.passRate >= 50 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                          }`}>
-                            {session.sessionStats.passRate.toFixed(1)}% Pass
-                          </span>
+                        {session._count.attempts === 0 ? (
+                          <span className="text-neutral-500 text-xs font-medium">No Attempts</span>
+                        ) : session.sessionStats ? (
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-white text-xs tabular-nums">
+                              {session.sessionStats.passRate.toFixed(1)}%
+                            </span>
+                            <div className="w-16 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  session.sessionStats.passRate >= 50
+                                    ? "bg-emerald-400"
+                                    : session.sessionStats.passRate > 0
+                                    ? "bg-neutral-300"
+                                    : "bg-neutral-700"
+                                }`}
+                                style={{ width: `${Math.max(session.sessionStats.passRate, session.sessionStats.passRate > 0 ? 8 : 0)}%` }}
+                              />
+                            </div>
+                          </div>
                         ) : (
-                          <span className="text-neutral-500 text-xs italic">Pending</span>
+                          <span className="text-neutral-500 text-xs italic">Evaluating</span>
                         )}
                       </td>
                       <td className="px-6 py-4 font-bold text-white text-xs">
-                        {session.sessionStats ? session.sessionStats.meanScore.toFixed(1) : "—"} <span className="text-neutral-500 font-normal">/ {totalMarks}</span>
+                        {session._count.attempts === 0 ? (
+                          <span className="text-neutral-500 font-normal">—</span>
+                        ) : (
+                          <>
+                            {session.sessionStats ? session.sessionStats.meanScore.toFixed(1) : "—"}{" "}
+                            <span className="text-neutral-500 font-normal">/ {totalMarks}</span>
+                          </>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <Link 

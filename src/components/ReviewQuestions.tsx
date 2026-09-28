@@ -61,66 +61,66 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
   return (
     <div className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-md overflow-hidden">
       {/* Header & Tabs */}
-      <div className="p-6 border-b border-neutral-800 bg-[#07080c] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="p-6 border-b border-neutral-800 bg-[#07080c] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-            <h3 className="font-extrabold text-white text-base tracking-tight">Question Bank & Review Quality Queue</h3>
-          </div>
-          <p className="text-xs text-neutral-400 mt-1">Author submissions, quality validation, and bank catalog management.</p>
+          <h3 className="font-extrabold text-white text-lg tracking-tight">Question Bank & Review Quality Queue</h3>
+          <p className="text-sm text-neutral-400 mt-0.5">Author submissions, quality validation, and bank management</p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Status Tabs */}
-          <div className="flex items-center gap-1 sm:gap-2 text-xs font-bold text-neutral-400">
+          <div className="flex bg-neutral-900 border border-neutral-800 p-1 rounded-xl text-sm font-bold">
             <button
               onClick={() => setActiveTab("PENDING")}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === "PENDING"
-                  ? "text-white font-extrabold bg-neutral-900 border border-neutral-700"
-                  : "hover:text-neutral-200"
+                  ? "bg-white text-black shadow-sm font-bold"
+                  : "text-neutral-400 hover:text-white"
               }`}
             >
               <span>Pending Review</span>
-              <span className="opacity-75">({pendingList.length})</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs ${pendingList.length > 0 ? (activeTab === "PENDING" ? 'bg-amber-100 text-amber-900 font-black' : 'bg-amber-500/20 text-amber-300 font-black') : (activeTab === "PENDING" ? 'bg-neutral-200 text-black' : 'bg-neutral-800 text-neutral-400')}`}>
+                {pendingList.length}
+              </span>
             </button>
 
             <button
               onClick={() => setActiveTab("APPROVED")}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === "APPROVED"
-                  ? "text-white font-extrabold bg-neutral-900 border border-neutral-700"
-                  : "hover:text-neutral-200"
+                  ? "bg-white text-black shadow-sm font-bold"
+                  : "text-neutral-400 hover:text-white"
               }`}
             >
               <span>Approved</span>
-              <span className="opacity-75">({approvedList.length})</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === "APPROVED" ? 'bg-neutral-200 text-black' : 'bg-neutral-800 text-neutral-400'}`}>
+                {approvedList.length}
+              </span>
             </button>
 
             <button
               onClick={() => setActiveTab("DRAFT")}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === "DRAFT"
-                  ? "text-white font-extrabold bg-neutral-900 border border-neutral-700"
-                  : "hover:text-neutral-200"
+                  ? "bg-white text-black shadow-sm font-bold"
+                  : "text-neutral-400 hover:text-white"
               }`}
             >
               <span>Drafts</span>
-              <span className="opacity-75">({draftList.length})</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === "DRAFT" ? 'bg-neutral-200 text-black' : 'bg-neutral-800 text-neutral-400'}`}>
+                {draftList.length}
+              </span>
             </button>
 
             <button
               onClick={() => setActiveTab("ALL")}
-              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 activeTab === "ALL"
-                  ? "text-white font-extrabold bg-neutral-900 border border-neutral-700"
-                  : "hover:text-neutral-200"
+                  ? "bg-white text-black shadow-sm font-bold"
+                  : "text-neutral-400 hover:text-white"
               }`}
             >
-              <span>All</span>
-              <span className="opacity-75">({questions.length})</span>
+              All ({questions.length})
             </button>
           </div>
 
@@ -129,7 +129,7 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
             <button
               onClick={handleApproveAll}
               disabled={batchLoading}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               <span>✓ Approve All ({pendingList.length})</span>
             </button>
@@ -137,7 +137,7 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
 
           <a
             href="/dashboard/setter"
-            className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1"
+            className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 text-sm font-bold rounded-xl transition-colors flex items-center gap-1.5"
           >
             <span>+ Add Qs</span>
           </a>
@@ -147,46 +147,12 @@ export function ReviewQuestions({ questions }: { questions: any[] }) {
       {/* List Container */}
       <div className="divide-y divide-neutral-800/80 max-h-[600px] overflow-y-auto">
         {displayList.length === 0 ? (
-          activeTab === "PENDING" ? (
-            <div className="py-14 px-6 text-center flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-full border border-dashed border-neutral-600 flex items-center justify-center mb-3">
-                <svg className="w-5 h-5 text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h4 className="font-bold text-white text-sm">Queue Cleared</h4>
-              <p className="text-xs text-neutral-400 mt-1 max-w-md">
-                No questions currently awaiting review. All submissions are processed and ready for production deployment!
-              </p>
-              <div className="flex items-center gap-3 mt-5 flex-wrap justify-center">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("APPROVED")}
-                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>View Approved Bank ({approvedList.length})</span>
-                </button>
-                <a
-                  href="/dashboard/setter"
-                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  <span>Import Questions via CSV</span>
-                </a>
-              </div>
-            </div>
-          ) : (
-            <div className="p-12 text-center text-neutral-500 text-xs">
-              {activeTab === "APPROVED" && "No questions have been approved yet."}
-              {activeTab === "DRAFT" && "No draft questions found."}
-              {activeTab === "ALL" && "No questions found."}
-            </div>
-          )
+          <div className="p-12 text-center text-neutral-500 text-xs">
+            {activeTab === "PENDING" && "No questions currently awaiting review. All submissions are processed!"}
+            {activeTab === "APPROVED" && "No questions have been approved yet."}
+            {activeTab === "DRAFT" && "No draft questions found."}
+            {activeTab === "ALL" && "No questions found."}
+          </div>
         ) : (
           displayList.map(q => {
             let parsedOptions: any[] = [];

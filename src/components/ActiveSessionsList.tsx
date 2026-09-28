@@ -15,25 +15,16 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
 
   if (initialSessions.length === 0) {
     return (
-      <div className="py-12 px-6 text-center flex flex-col items-center justify-center">
-        <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-400 mb-3 shadow-inner">
-          <svg className="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      <div className="py-12 px-6 flex flex-col items-center justify-center text-center rounded-2xl bg-neutral-900/20 border border-dashed border-neutral-800/80">
+        <div className="w-11 h-11 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-3 text-neutral-500">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h4 className="font-bold text-white text-sm">No Live Sessions Active</h4>
-        <p className="text-xs text-neutral-400 mt-1 max-w-xs">
-          No active or live exam sessions currently running across candidate clusters.
+        <h4 className="text-sm font-bold text-white mb-1">No Active Sessions</h4>
+        <p className="text-xs text-neutral-400 max-w-xs leading-relaxed">
+          Assessments launched from your templates will appear here with live candidate counts and proctoring controls.
         </p>
-        <Link
-          href="/dashboard/owner/schedule"
-          className="mt-4 px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-2 cursor-pointer shadow-xs"
-        >
-          <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>Schedule Live Exam</span>
-        </Link>
       </div>
     );
   }
@@ -81,7 +72,7 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
                 <span className="text-xs text-neutral-600 font-medium">|</span>
                 <span className="text-xs text-neutral-400 font-bold">{session._count?.attempts || 0} Candidates</span>
               </div>
-              <h3 className="font-bold text-white text-sm">{session.exam.title}</h3>
+              <h3 className="font-bold text-white text-sm capitalize">{session.exam.title}</h3>
               {startTime && (
                 <p className="text-[11px] text-neutral-400 mt-0.5">
                   Scheduled: {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({startTime.toLocaleDateString()})

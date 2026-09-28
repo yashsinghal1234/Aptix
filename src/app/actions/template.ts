@@ -49,8 +49,11 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
   const payload = await verifyToken(token);
   if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
 
+  const rawTitle = (formData.get("title") as string)?.trim() || "";
+  const title = rawTitle ? rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1) : "";
+
   const parsed = templateSchema.safeParse({
-    title: formData.get("title"),
+    title,
     description: formData.get("description") || undefined,
     instructions: formData.get("instructions") || undefined,
     subject: formData.get("subject") || undefined,
