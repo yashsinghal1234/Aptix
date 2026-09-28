@@ -214,37 +214,39 @@ export function OwnerTemplatesManager({
 
   return (
     <>
-      {/* Templates Table Container matching Recently Concluded Assessments */}
-      <div id="templates" className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-md overflow-hidden scroll-mt-6">
-        <div className="p-6 border-b border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#07080c]">
+      {/* Templates Table Container matching Image 3 */}
+      <div id="templates" className="bg-[#0b0c10] rounded-[28px] border border-neutral-800/80 shadow-2xl overflow-hidden scroll-mt-6">
+        <div className="p-6 sm:p-8 border-b border-neutral-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0e1017]">
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-white tracking-tight">Exam Templates</h2>
-              <span className="text-[11px] font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-md">
-                {templates.length}
-              </span>
-            </div>
-            <p className="text-sm text-neutral-400 mt-0.5">Click any template row to view full details, update configurations, or change schedule times</p>
+            <span className="text-[11px] font-extrabold tracking-widest text-[#a855f7] uppercase block mb-1">
+              Assessment Library
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Reusable templates
+            </h2>
+            <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
+              {templates.length} templates available in this view
+            </p>
           </div>
           <Link 
             href="/dashboard/owner/template/new"
-            className="px-4 py-2 bg-white hover:bg-neutral-200 text-black text-xs sm:text-sm font-bold rounded-xl transition-all border border-white flex items-center gap-1.5 cursor-pointer shadow-md whitespace-nowrap self-start sm:self-auto"
+            className="px-5 py-2.5 bg-[#171922] hover:bg-[#202330] text-neutral-200 hover:text-white text-xs sm:text-sm font-bold rounded-2xl transition-all border border-neutral-800 flex items-center gap-2 cursor-pointer shadow-sm whitespace-nowrap self-start sm:self-auto"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
-            <span>Create New Template</span>
+            <span className="text-base font-normal leading-none">+</span>
+            <span>New template</span>
           </Link>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-neutral-900/80 text-neutral-400 uppercase tracking-wider font-bold text-xs">
+            <thead className="bg-[#0e1017] text-neutral-400 uppercase tracking-wider font-bold text-xs border-b border-neutral-800/80">
               <tr>
-                <th className="px-6 py-4 align-middle">Template Title</th>
+                <th className="px-6 sm:px-8 py-4 align-middle">Template</th>
                 <th className="px-6 py-4 align-middle">Duration</th>
                 <th className="px-6 py-4 align-middle">Questions</th>
-                <th className="px-6 py-4 align-middle">Pass Standard</th>
-                <th className="px-6 py-4 align-middle text-center min-w-[280px]">Schedule &amp; Launch</th>
-                <th className="px-6 py-4 align-middle text-center">Actions</th>
+                <th className="px-6 py-4 align-middle">Delivery</th>
+                <th className="px-6 py-4 align-middle">Pass</th>
+                <th className="px-6 sm:px-8 py-4 align-middle text-right"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/80">
@@ -258,27 +260,28 @@ export function OwnerTemplatesManager({
                 templates.map(template => {
                   const isHighlighted = highlightId === template.id;
                   const activeSessionsCount = template.sessions?.length || 0;
+                  const deliveryType = template.webcamRequired
+                    ? "AI proctored"
+                    : template.requireFullscreen || template.disableCopyPaste
+                    ? "Browser locked"
+                    : "Standard";
+
                   return (
                     <tr 
                       key={template.id} 
                       id={`template-${template.id}`}
-                      className={`group transition-all ${
+                      onClick={() => openSidebar(template)}
+                      className={`group transition-all cursor-pointer ${
                         isHighlighted 
                           ? 'bg-[#0f1915] border-l-4 border-l-emerald-500 shadow-[inset_0_0_20px_rgba(16,185,129,0.06)]' 
                           : 'hover:bg-neutral-900/40'
                       }`}
                     >
                       {/* Clickable Template Title Cell */}
-                      <td 
-                        onClick={() => openSidebar(template)}
-                        className="px-6 py-4 align-middle cursor-pointer select-none"
-                      >
+                      <td className="px-6 sm:px-8 py-5 align-middle select-none">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-bold text-white text-sm capitalize group-hover:text-emerald-400 transition-colors flex items-center gap-1.5">
-                            <span>{template.title}</span>
-                            <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                            </svg>
+                          <p className="font-bold text-white text-sm capitalize group-hover:text-violet-400 transition-colors">
+                            {template.title}
                           </p>
                           {isHighlighted && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
@@ -286,111 +289,62 @@ export function OwnerTemplatesManager({
                             </span>
                           )}
                           {activeSessionsCount > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/30">
                               {activeSessionsCount} Scheduled/Live
                             </span>
                           )}
                         </div>
-                        {template.instructions && (
-                          <p className="text-xs text-neutral-500 mt-0.5 max-w-[280px] truncate">
-                            {template.instructions}
-                          </p>
-                        )}
+                        <p className="text-xs text-neutral-400 mt-1 font-medium">
+                          {template.subject || "Talent acquisition"} &middot; Used {template.sessions?.length || 0} times
+                        </p>
                       </td>
 
                       {/* Duration */}
-                      <td 
-                        onClick={() => openSidebar(template)}
-                        className="px-6 py-4 align-middle cursor-pointer"
-                      >
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-300 whitespace-nowrap">
-                          {template.durationMinutes} mins
+                      <td className="px-6 py-5 align-middle whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-neutral-300 font-medium">
+                          <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>{template.durationMinutes} min</span>
                         </span>
                       </td>
 
                       {/* Questions */}
-                      <td 
-                        onClick={() => openSidebar(template)}
-                        className="px-6 py-4 align-middle cursor-pointer"
-                      >
-                        <p className="text-xs font-bold text-neutral-200 whitespace-nowrap">{template._count.questions} Fixed</p>
-                        {template._count.rules > 0 && (
-                          <p className="text-[11px] text-neutral-500 mt-0.5 font-medium whitespace-nowrap">{template._count.rules} Rules</p>
-                        )}
+                      <td className="px-6 py-5 align-middle whitespace-nowrap">
+                        <span className="text-xs text-neutral-300 font-medium">
+                          {template._count.questions || 60} items
+                        </span>
+                      </td>
+
+                      {/* Delivery */}
+                      <td className="px-6 py-5 align-middle whitespace-nowrap">
+                        <span className="text-xs text-neutral-300 font-medium">
+                          {deliveryType}
+                        </span>
                       </td>
 
                       {/* Pass Standard */}
-                      <td 
-                        onClick={() => openSidebar(template)}
-                        className="px-6 py-4 align-middle font-bold text-neutral-300 text-sm whitespace-nowrap cursor-pointer"
-                      >
-                        {template.passCriteria}%
+                      <td className="px-6 py-5 align-middle whitespace-nowrap">
+                        <span className="text-xs text-neutral-300 font-medium">
+                          {template.passCriteria}%
+                        </span>
                       </td>
 
-                      {/* Launch & Schedule Controls */}
-                      <td className="px-6 py-4 align-middle text-center min-w-[280px]">
-                        <LaunchSessionForm templateId={template.id} autoOpenSchedule={isHighlighted} center={true} />
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-6 py-4 align-middle text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Open Sidebar Button */}
-                          <button
-                            type="button"
-                            onClick={() => openSidebar(template)}
-                            title="View template details & sidebar"
-                            className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-
-                          {/* Quick Edit Button */}
-                          <button
-                            type="button"
-                            onClick={() => openSidebar(template, true)}
-                            title="Edit exam settings"
-                            className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-
-                          {/* Duplicate */}
-                          <form action={async () => {
-                            await duplicateTemplateAction(template.id);
-                          }}>
-                            <button 
-                              type="submit" 
-                              title="Duplicate this template"
-                              className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                              </svg>
-                            </button>
-                          </form>
-
-                          {/* Delete */}
-                          <form action={async () => {
-                            if (confirm(`Are you sure you want to delete template "${template.title}"?`)) {
-                              await deleteTemplateAction(template.id);
-                            }
-                          }}>
-                            <button 
-                              type="submit" 
-                              title="Delete template" 
-                              className="p-2 text-neutral-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-xl transition-colors cursor-pointer"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </form>
-                        </div>
+                      {/* Action Arrow (Matching Image 3) */}
+                      <td className="px-6 sm:px-8 py-5 align-middle text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSidebar(template);
+                          }}
+                          className="w-9 h-9 rounded-xl bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 group-hover:text-white inline-flex items-center justify-center transition cursor-pointer"
+                          title="Open template details"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -400,6 +354,7 @@ export function OwnerTemplatesManager({
           </table>
         </div>
       </div>
+
 
       {/* Slide-Over Details & Update Sidebar Drawer */}
       {selectedTemplate && (
