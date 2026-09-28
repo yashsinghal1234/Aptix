@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   description: "High-integrity, secure online aptitude assessment and examination platform.",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=3" },
-      { url: "/icon.png?v=3", type: "image/png" }
+      { url: "/favicon.ico?v=5" },
+      { url: "/icon.png?v=5", type: "image/png" }
     ],
-    apple: "/apple-icon.png?v=3",
+    apple: "/apple-icon.png?v=5",
   },
 };
 

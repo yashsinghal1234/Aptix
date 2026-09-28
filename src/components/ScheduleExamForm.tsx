@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createScheduledExamAction } from "@/app/actions/schedule";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { FIXED_TOPICS } from "@/lib/ai-question-analyzer";
 
 export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
@@ -91,7 +92,19 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
 
       {/* Basic Settings */}
       <div className="bg-[#0a0c10] p-8 rounded-3xl border border-neutral-800 shadow-md">
-        <h3 className="text-xl font-bold text-white mb-6">Exam Configuration</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-neutral-800">
+          <div>
+            <h3 className="text-xl font-bold text-white">Custom One-Off Exam Settings</h3>
+            <p className="text-xs text-neutral-400 mt-0.5">Quickly schedule an exam session by manually picking questions</p>
+          </div>
+          <Link
+            href="/dashboard/owner/template/new"
+            className="text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 px-3.5 py-1.5 rounded-xl transition-colors inline-flex items-center gap-1 self-start sm:self-auto"
+          >
+            <span>Need full blueprint? Create Template</span>
+            <span>&rarr;</span>
+          </Link>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>

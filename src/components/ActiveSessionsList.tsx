@@ -2,10 +2,20 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { setSessionStatusAction } from "@/app/actions/session";
 
 export function ActiveSessionsList({ initialSessions }: { initialSessions: any[] }) {
+  const router = useRouter();
+  const [sessions, setSessions] = useState(initialSessions);
   const [now, setNow] = useState(new Date());
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [actionType, setActionType] = useState<"END" | "GO_LIVE" | null>(null);
+
+  // Keep sessions synced with server props
+  useEffect(() => {
+    setSessions(initialSessions);
+  }, [initialSessions]);
 
   // Update time every second to dynamically switch SCHEDULED to LIVE
   useEffect(() => {
@@ -13,7 +23,61 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
     return () => clearInterval(timer);
   }, []);
 
-  if (initialSessions.length === 0) {
+  const handleEndSession = async (sessionId: string) => {
+    if (!confirm("Are you sure you want to conclude this assessment session? Active candidate submissions will be finalized.")) {
+      return;
+    }
+
+    setLoadingId(sessionId);
+    setActionType("END");
+    try {
+      const formData = new FormData();
+      formData.append("sessionId", sessionId);
+      formData.append("status", "COMPLETED");
+
+      const res = await setSessionStatusAction(formData);
+      if (res?.success) {
+        // Optimistically remove from active list
+        setSessions(prev => prev.filter(s => s.id !== sessionId));
+        router.refresh();
+      } else {
+        alert(res?.error || "Failed to end session. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error ending session:", err);
+      alert("An unexpected error occurred while ending the session.");
+    } finally {
+      setLoadingId(null);
+      setActionType(null);
+    }
+  };
+
+  const handleGoLive = async (sessionId: string) => {
+    setLoadingId(sessionId);
+    setActionType("GO_LIVE");
+    try {
+      const formData = new FormData();
+      formData.append("sessionId", sessionId);
+      formData.append("status", "LIVE");
+
+      const res = await setSessionStatusAction(formData);
+      if (res?.success) {
+        // Optimistically mark as live
+        setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: "LIVE", startTime: new Date().toISOString() } : s));
+        router.refresh();
+      } else {
+        alert(res?.error || "Failed to start session. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error starting session:", err);
+      alert("An unexpected error occurred while starting the session.");
+    } finally {
+      setLoadingId(null);
+      setActionType(null);
+    }
+  };
+
+  if (sessions.length === 0) {
     return (
       <div className="py-12 px-6 flex flex-col items-center justify-center text-center rounded-2xl bg-neutral-900/20 border border-dashed border-neutral-800/80">
         <div className="w-11 h-11 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-3 text-neutral-500">
@@ -31,7 +95,7 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
 
   return (
     <div className="space-y-3">
-      {initialSessions.map(session => {
+      {sessions.map(session => {
         let effectiveStatus = session.status;
         const startTime = session.startTime ? new Date(session.startTime) : null;
         
@@ -40,6 +104,7 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
         }
 
         const isLive = effectiveStatus === "LIVE";
+        const isSessionLoading = loadingId === session.id;
 
         return (
           <div key={session.id} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-2xl border transition-all ${
@@ -56,7 +121,7 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
                   <span 
                     onClick={() => navigator.clipboard.writeText(session.pin)}
                     title="Click to copy PIN"
-                    className="cursor-pointer text-[10px] font-mono font-extrabold bg-neutral-900 text-neutral-200 px-2 py-0.5 rounded-md border border-neutral-700 hover:border-neutral-500 transition-colors flex items-center gap-1"
+                    className="cursor-pointer text-[10px] font-mono font-extrabold bg-neutral-900 text-neutral-200 px-2 py-0.5 rounded-md border border-neutral-700 hover:border-neutral-500 transition-colors flex items-center gap-1 select-none"
                   >
                     <span>PIN: {session.pin}</span>
                     <svg className="w-3 h-3 opacity-70 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -83,31 +148,53 @@ export function ActiveSessionsList({ initialSessions }: { initialSessions: any[]
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Link 
                 href={`/dashboard/owner/session/${session.id}`}
-                className="flex-1 sm:flex-initial text-center text-xs px-3.5 py-2 bg-white border border-white text-black rounded-xl font-bold hover:bg-neutral-200 transition-all shadow-md"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-center text-xs px-4 py-2 bg-white border border-white text-black rounded-xl font-bold hover:bg-neutral-200 transition-all shadow-md cursor-pointer select-none"
               >
-                Live Monitor
+                {isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                <span>Live Monitor</span>
+                <span className="text-[11px]">&rarr;</span>
               </Link>
+
               {effectiveStatus === "SCHEDULED" && (
-                <form action={async (formData) => {
-                  await setSessionStatusAction(formData);
-                }} className="flex-1 sm:flex-initial">
-                  <input type="hidden" name="sessionId" value={session.id} />
-                  <input type="hidden" name="status" value="LIVE" />
-                  <button className="w-full text-xs px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-sm">
-                    Go Live
-                  </button>
-                </form>
+                <button 
+                  type="button"
+                  disabled={isSessionLoading}
+                  onClick={() => handleGoLive(session.id)}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-sm disabled:opacity-50 cursor-pointer select-none"
+                >
+                  {isSessionLoading && actionType === "GO_LIVE" ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      <span>Starting...</span>
+                    </>
+                  ) : (
+                    <span>Go Live</span>
+                  )}
+                </button>
               )}
+
               {effectiveStatus === "LIVE" && (
-                <form action={async (formData) => {
-                  await setSessionStatusAction(formData);
-                }} className="flex-1 sm:flex-initial">
-                  <input type="hidden" name="sessionId" value={session.id} />
-                  <input type="hidden" name="status" value="COMPLETED" />
-                  <button className="w-full text-xs px-3.5 py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 rounded-xl font-bold transition-all shadow-sm">
-                    End Session
-                  </button>
-                </form>
+                <button 
+                  type="button"
+                  disabled={isSessionLoading}
+                  onClick={() => handleEndSession(session.id)}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs px-4 py-2 bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50 rounded-xl font-bold transition-all shadow-sm disabled:opacity-50 cursor-pointer select-none"
+                >
+                  {isSessionLoading && actionType === "END" ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin text-rose-300" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      <span>Ending...</span>
+                    </>
+                  ) : (
+                    <span>End Session</span>
+                  )}
+                </button>
               )}
             </div>
           </div>

@@ -132,7 +132,7 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
   });
 
   revalidatePath("/dashboard/owner");
-  return { success: true };
+  return { success: true, templateId: template.id };
 }
 
 export async function deleteTemplateAction(id: string) {
@@ -238,6 +238,79 @@ export async function duplicateTemplateAction(id: string) {
   } catch (error: any) {
     console.error("Failed to duplicate template:", error);
     return { error: error.message || "Failed to clone template" };
+  }
+}
+
+export async function updateTemplateAction(formData: FormData) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  const id = formData.get("id") as string;
+  if (!id) return { error: "Template ID is required" };
+
+  try {
+    const rawTitle = (formData.get("title") as string)?.trim();
+    const title = rawTitle ? rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1) : undefined;
+    const instructions = formData.get("instructions") !== null ? (formData.get("instructions") as string) : undefined;
+    const description = formData.get("description") !== null ? (formData.get("description") as string) : undefined;
+    const durationMinutes = formData.get("durationMinutes") ? parseInt(formData.get("durationMinutes") as string, 10) : undefined;
+    const passCriteria = formData.get("passCriteria") ? parseFloat(formData.get("passCriteria") as string) : undefined;
+    const totalMarks = formData.get("totalMarks") ? parseFloat(formData.get("totalMarks") as string) : undefined;
+    const allowedEmailDomain = formData.get("allowedEmailDomain") !== null 
+      ? ((formData.get("allowedEmailDomain") as string)?.trim() || null) 
+      : undefined;
+
+    const negativeMarkingEnabled = formData.get("negativeMarkingEnabled") !== null 
+      ? formData.get("negativeMarkingEnabled") === "true" || formData.get("negativeMarkingEnabled") === "on"
+      : undefined;
+    const negativeMarksValue = formData.get("negativeMarksValue") ? parseFloat(formData.get("negativeMarksValue") as string) : undefined;
+    const requireFullscreen = formData.get("requireFullscreen") !== null
+      ? formData.get("requireFullscreen") === "true" || formData.get("requireFullscreen") === "on"
+      : undefined;
+    const disableCopyPaste = formData.get("disableCopyPaste") !== null
+      ? formData.get("disableCopyPaste") === "true" || formData.get("disableCopyPaste") === "on"
+      : undefined;
+    const webcamRequired = formData.get("webcamRequired") !== null
+      ? formData.get("webcamRequired") === "true" || formData.get("webcamRequired") === "on"
+      : undefined;
+    const tabSwitchLimit = formData.get("tabSwitchLimit") !== null
+      ? (formData.get("tabSwitchLimit") ? parseInt(formData.get("tabSwitchLimit") as string, 10) : null)
+      : undefined;
+
+    const updated = await prisma.exam.update({
+      where: { id },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(instructions !== undefined && { instructions }),
+        ...(description !== undefined && { description }),
+        ...(durationMinutes !== undefined && !isNaN(durationMinutes) && { durationMinutes }),
+        ...(passCriteria !== undefined && !isNaN(passCriteria) && { passCriteria }),
+        ...(totalMarks !== undefined && !isNaN(totalMarks) && { totalMarks }),
+        ...(allowedEmailDomain !== undefined && { allowedEmailDomain }),
+        ...(negativeMarkingEnabled !== undefined && { negativeMarkingEnabled }),
+        ...(negativeMarksValue !== undefined && !isNaN(negativeMarksValue) && { negativeMarksValue }),
+        ...(requireFullscreen !== undefined && { requireFullscreen }),
+        ...(disableCopyPaste !== undefined && { disableCopyPaste }),
+        ...(webcamRequired !== undefined && { webcamRequired }),
+        ...(tabSwitchLimit !== undefined && { tabSwitchLimit })
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId as string,
+        action: "UPDATE_TEMPLATE",
+        details: `Updated exam template "${updated.title}" (ID: ${id})`,
+      }
+    });
+
+    revalidatePath("/dashboard/owner");
+    return { success: true, template: updated };
+  } catch (error: any) {
+    console.error("Failed to update template:", error);
+    return { error: error.message || "Failed to update template" };
   }
 }
 

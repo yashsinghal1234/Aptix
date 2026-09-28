@@ -52,7 +52,10 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
       setLoading(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      router.push("/dashboard/owner");
+      const target = res.templateId 
+        ? `/dashboard/owner?highlight=${res.templateId}#templates` 
+        : `/dashboard/owner#templates`;
+      router.push(target);
     }
   };
 

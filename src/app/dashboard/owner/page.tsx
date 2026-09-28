@@ -8,11 +8,15 @@ import Link from "next/link";
 import { createSessionAction, setSessionStatusAction } from "@/app/actions/session";
 import { deleteTemplateAction, duplicateTemplateAction } from "@/app/actions/template";
 import { ActiveSessionsList } from "@/components/ActiveSessionsList";
-import { LaunchSessionForm } from "@/components/LaunchSessionForm";
+import { OwnerTemplatesManager } from "@/components/OwnerTemplatesManager";
 
 export const dynamic = "force-dynamic";
 
-export default async function OwnerDashboard() {
+export default async function OwnerDashboard({
+  searchParams,
+}: {
+  searchParams?: { highlight?: string };
+}) {
   const token = cookies().get("token")?.value;
   if (!token) redirect("/");
   
@@ -38,7 +42,25 @@ export default async function OwnerDashboard() {
       where: { isDeleted: false },
       orderBy: { createdAt: "desc" },
       include: {
-        _count: { select: { questions: true, rules: true, sessions: true } }
+        _count: { select: { questions: true, rules: true, sessions: true } },
+        rules: true,
+        questions: {
+          select: { id: true, text: true, category: true, points: true, difficultyLevel: true },
+          take: 10
+        },
+        sessions: {
+          where: { status: { in: ["SCHEDULED", "LIVE"] } },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            pin: true,
+            status: true,
+            startTime: true,
+            durationMinutes: true,
+            allowedEmailDomain: true,
+            _count: { select: { attempts: true } }
+          }
+        }
       }
     }),
     prisma.examSession.findMany({
@@ -84,13 +106,6 @@ export default async function OwnerDashboard() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <Link 
-            href="/dashboard/owner/schedule"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-sm sm:text-base font-bold rounded-xl border border-neutral-800 transition-all cursor-pointer shadow-xs whitespace-nowrap"
-          >
-            <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-            <span>Schedule Exam</span>
-          </Link>
-          <Link 
             href="/dashboard/owner/candidates"
             className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-sm sm:text-base font-bold rounded-xl border border-neutral-800 transition-all cursor-pointer shadow-xs whitespace-nowrap"
           >
@@ -99,10 +114,10 @@ export default async function OwnerDashboard() {
           </Link>
           <Link 
             href="/dashboard/owner/template/new"
-            className="inline-flex items-center justify-center gap-2.5 px-7 py-3 bg-white hover:bg-neutral-200 text-black text-sm sm:text-base font-bold rounded-xl shadow-md border border-white transition-all whitespace-nowrap min-w-[175px] cursor-pointer"
+            className="inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-white hover:bg-neutral-200 text-black text-sm sm:text-base font-bold rounded-xl shadow-md border border-white transition-all whitespace-nowrap cursor-pointer"
           >
-            <svg className="w-4 h-4 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
-            <span>Create Template</span>
+            <svg className="w-4 h-4 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            <span>Schedule Exam</span>
           </Link>
         </div>
       </div>
@@ -154,129 +169,39 @@ export default async function OwnerDashboard() {
         </a>
       </div>
 
-      {/* Primary Operations: Exam Blueprints & Active Sessions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Templates */}
-        <div className="bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-md flex flex-col justify-between">
-          <div>
+      {/* Primary Operations: Active Sessions (Conditionally Shown) & Exam Templates (Full Width Table) */}
+      <div className="space-y-8">
+        {/* Live & Scheduled Sessions (Only displayed when there is at least one active or scheduled exam) */}
+        {activeSessions.length > 0 && (
+          <div className="bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-md">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-neutral-800">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white tracking-tight">Exam Templates</h2>
-                  <span className="text-[11px] font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-md">
-                    {templates.length}
-                  </span>
+                  <h2 className="text-lg font-bold text-white tracking-tight">Active Sessions</h2>
+                  {liveSessionsCount > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      {liveSessionsCount} Live
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+                      {activeSessions.length} Scheduled
+                    </span>
+                  )}
                 </div>
-                <p className="text-sm text-neutral-400 mt-0.5">Pre-configured test structures and question rules</p>
-              </div>
-              <Link 
-                href="/dashboard/owner/template/new"
-                className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-xs sm:text-sm font-bold rounded-xl transition-all border border-neutral-800 flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
-                <span>New Template</span>
-              </Link>
-            </div>
-            {templates.length === 0 ? (
-              <div className="text-center py-12 px-6 bg-neutral-900/20 rounded-2xl border border-dashed border-neutral-800/80">
-                <p className="text-neutral-400 text-sm font-semibold">No exam templates created yet.</p>
-                <p className="text-neutral-500 text-xs mt-1">Create your first template to schedule and conduct assessments.</p>
-                <Link
-                  href="/dashboard/owner/template/new"
-                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold px-4 py-2 bg-white text-black rounded-xl hover:bg-neutral-200 transition-colors"
-                >
-                  Create Template
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3.5">
-                {templates.map(template => (
-                  <div key={template.id} className="p-4 rounded-2xl border border-neutral-800/80 bg-[#0d0f14] hover:border-neutral-700 transition-all">
-                    <div className="flex justify-between items-start mb-2 gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-white text-base capitalize tracking-tight truncate">{template.title}</h3>
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          <span className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-300">
-                            {template.durationMinutes} mins
-                          </span>
-                          <span className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-300">
-                            {template._count.questions} Fixed Questions
-                          </span>
-                          {template._count.rules > 0 && (
-                            <span className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-300">
-                              {template._count.rules} Rules
-                            </span>
-                          )}
-                          <span className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-400">
-                            Pass: {template.passCriteria}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <form action={async () => {
-                          "use server";
-                          await duplicateTemplateAction(template.id);
-                        }}>
-                          <button 
-                            type="submit" 
-                            title="Duplicate this template"
-                            className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                            </svg>
-                          </button>
-                        </form>
-                        <form action={async () => {
-                          "use server";
-                          await deleteTemplateAction(template.id);
-                        }}>
-                          <button 
-                            type="submit"
-                            title="Delete template" 
-                            className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-
-                    <LaunchSessionForm templateId={template.id} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Live & Scheduled Sessions */}
-        <div className="bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-md flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-neutral-800">
-              <div>
-                <h2 className="text-lg font-bold text-white tracking-tight">Active Sessions</h2>
                 <p className="text-sm text-neutral-400 mt-0.5">Scheduled and live assessments requiring proctoring</p>
-              </div>
-              <div>
-                {liveSessionsCount > 0 ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    {liveSessionsCount} Live
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
-                    {activeSessions.length} Running
-                  </span>
-                )}
               </div>
             </div>
             <ActiveSessionsList initialSessions={activeSessions} />
           </div>
-        </div>
+        )}
+
+        {/* Templates (Full Width Table with Interactive Slide-Over Sidebar Drawer) */}
+        <OwnerTemplatesManager 
+          templates={templates as any} 
+          highlightId={searchParams?.highlight} 
+        />
       </div>
 
       {/* Concluded Assessments Performance Snapshot */}

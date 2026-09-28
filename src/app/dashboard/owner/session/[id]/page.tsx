@@ -102,7 +102,22 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
           </div>
         </div>
 
-        <div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {session.status === "SCHEDULED" && (
+            <form action={async (formData) => {
+              "use server";
+              const { setSessionStatusAction } = await import("@/app/actions/session");
+              await setSessionStatusAction(formData);
+            }}>
+              <input type="hidden" name="sessionId" value={session.id} />
+              <input type="hidden" name="status" value="LIVE" />
+              <button className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-xs cursor-pointer">
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span>Go Live Now</span>
+              </button>
+            </form>
+          )}
+
           {session.status !== "COMPLETED" && (
             <form id="auto-end-session-form" action={async (formData) => {
               "use server";
@@ -115,8 +130,39 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
               </button>
             </form>
           )}
+
+          {session.status === "COMPLETED" && (
+            <Link
+              href={`/dashboard/owner/results/${session.id}`}
+              className="bg-white hover:bg-neutral-200 text-black font-bold py-2.5 px-5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-xs cursor-pointer"
+            >
+              <span>View Full Report</span>
+              <span>&rarr;</span>
+            </Link>
+          )}
         </div>
       </div>
+
+      {session.status === "COMPLETED" && (
+        <div className="p-4 bg-neutral-900/80 border border-neutral-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">This assessment session has concluded.</p>
+              <p className="text-xs text-neutral-400">All submissions are finalized and performance analytics have been calculated.</p>
+            </div>
+          </div>
+          <Link
+            href={`/dashboard/owner/results/${session.id}`}
+            className="text-xs font-bold text-white bg-neutral-800 hover:bg-neutral-700 px-4 py-2 rounded-xl border border-neutral-700 transition-colors inline-flex items-center gap-1.5 self-start sm:self-center"
+          >
+            <span>Cohort Results &amp; Analytics</span>
+            <span>&rarr;</span>
+          </Link>
+        </div>
+      )}
 
       {/* Top 4 Stat Widgets */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

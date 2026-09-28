@@ -120,14 +120,18 @@ export async function createSessionAction(formData: FormData) {
     pin = generateSessionPin();
   }
 
+  const isScheduled = !!startTimeStr && startTime && startTime.getTime() > Date.now();
+  const initialStatus = isScheduled ? "SCHEDULED" : "LIVE";
+  const sessionStartTime = isScheduled ? startTime : (startTime || new Date());
+
   const session = await prisma.examSession.create({
     data: {
       pin,
       examId,
       allowedEmailDomain: template.allowedEmailDomain,
       durationMinutes: template.durationMinutes,
-      status: "SCHEDULED",
-      startTime,
+      status: initialStatus,
+      startTime: sessionStartTime,
       totalMarks: template.totalMarks,
       passCriteria: template.passCriteria,
       negativeMarkingEnabled: template.negativeMarkingEnabled,
@@ -161,7 +165,6 @@ export async function createSessionAction(formData: FormData) {
 
 import { computeSessionAnalytics } from "./analytics";
 
-
 export async function setSessionStatusAction(formData: FormData) {
   const token = cookies().get("token")?.value;
   if (!token) return { error: "Unauthorized" };
@@ -182,11 +185,17 @@ export async function setSessionStatusAction(formData: FormData) {
       data: { status }
     });
     if (status === "COMPLETED") {
+      // Auto-submit any attempts that are still in progress
+      await prisma.candidateAttempt.updateMany({
+        where: { examSessionId: sessionId, status: "IN_PROGRESS" },
+        data: { status: "SUBMITTED", submittedAt: new Date() }
+      });
       await computeSessionAnalytics(sessionId).catch(e => console.error("Analytics error:", e));
     }
   }
 
   revalidatePath("/dashboard/owner");
+  revalidatePath(`/dashboard/owner/session/${sessionId}`);
   return { success: true };
 }
 
@@ -261,6 +270,12 @@ export async function endSessionAction(formData: FormData) {
   await prisma.examSession.update({
     where: { id: sessionId },
     data: { status: "COMPLETED" }
+  });
+
+  // Auto-submit any attempts that are still in progress
+  await prisma.candidateAttempt.updateMany({
+    where: { examSessionId: sessionId, status: "IN_PROGRESS" },
+    data: { status: "SUBMITTED", submittedAt: new Date() }
   });
 
   // Calculate analytics immediately
@@ -356,4 +371,56 @@ export async function resetCandidateAttemptAction(formData: FormData) {
   revalidatePath(`/dashboard/owner/session/${attempt.examSessionId}`);
   revalidatePath("/dashboard/owner/candidates");
   return { success: true };
+}
+
+export async function rescheduleSessionAction(formData: FormData) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  const sessionId = formData.get("sessionId") as string;
+  const startTimeStr = formData.get("startTime") as string;
+  const tzOffsetStr = formData.get("timezoneOffset") as string;
+
+  if (!sessionId) return { error: "Session ID is required" };
+  if (!startTimeStr) return { error: "New start time is required" };
+
+  const newStartTime = parseStartTime(startTimeStr, tzOffsetStr);
+  if (!newStartTime || isNaN(newStartTime.getTime())) {
+    return { error: "Invalid date & time format" };
+  }
+
+  const session = await prisma.examSession.findUnique({
+    where: { id: sessionId },
+    include: { exam: true }
+  });
+
+  if (!session) return { error: "Session not found" };
+  if (session.status === "COMPLETED") {
+    return { error: "Cannot reschedule a completed session" };
+  }
+
+  const now = new Date();
+  const nextStatus = newStartTime <= now ? "LIVE" : "SCHEDULED";
+
+  const updatedSession = await prisma.examSession.update({
+    where: { id: sessionId },
+    data: {
+      startTime: newStartTime,
+      status: nextStatus
+    }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: payload.userId as string,
+      action: "RESCHEDULE_SESSION",
+      details: `Rescheduled session "${session.exam.title}" (${session.pin || session.id}) to ${newStartTime.toISOString()}`,
+    }
+  });
+
+  revalidatePath("/dashboard/owner");
+  revalidatePath(`/dashboard/owner/session/${sessionId}`);
+  return { success: true, session: updatedSession };
 }

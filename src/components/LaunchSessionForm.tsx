@@ -3,10 +3,20 @@
 import { useState } from "react";
 import { createSessionAction } from "@/app/actions/session";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-export function LaunchSessionForm({ templateId }: { templateId: string }) {
+export function LaunchSessionForm({ 
+  templateId, 
+  autoOpenSchedule = false,
+  center = false
+}: { 
+  templateId: string; 
+  autoOpenSchedule?: boolean;
+  center?: boolean;
+}) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [showSchedule, setShowSchedule] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(autoOpenSchedule);
   const [startTimeLocal, setStartTimeLocal] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{ pin: string; sessionId?: string } | null>(null);
@@ -37,6 +47,7 @@ export function LaunchSessionForm({ templateId }: { templateId: string }) {
       setSuccessData({ pin: res.pin || "Created", sessionId: res.sessionId });
       setStartTimeLocal("");
       setShowSchedule(false);
+      router.refresh();
     }
   };
 
@@ -47,9 +58,9 @@ export function LaunchSessionForm({ templateId }: { templateId: string }) {
   };
 
   return (
-    <div className="pt-2.5 mt-2.5 border-t border-neutral-800/60 space-y-2.5">
+    <div className="space-y-2.5">
       {/* Action Bar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className={`flex items-center gap-2 flex-wrap ${center ? "justify-center" : ""}`}>
         <button
           type="button"
           disabled={loading}
