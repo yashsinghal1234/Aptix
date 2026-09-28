@@ -9,8 +9,7 @@ import { createSessionAction, setSessionStatusAction } from "@/app/actions/sessi
 import { deleteTemplateAction, duplicateTemplateAction } from "@/app/actions/template";
 import { ActiveSessionsList } from "@/components/ActiveSessionsList";
 import { OwnerTemplatesManager } from "@/components/OwnerTemplatesManager";
-import { ExecutiveHeroOverview } from "@/components/ExecutiveHeroOverview";
-import { CohortPerformance } from "@/components/CohortPerformance";
+import { CohortPerformanceWidget } from "@/components/CohortPerformanceWidget";
 
 export const dynamic = "force-dynamic";
 
@@ -116,84 +115,117 @@ export default async function OwnerDashboard({
   const pendingQuestions = allQuestions.filter(q => q.status === "SUBMITTED");
   const approvedQuestionsCount = allQuestions.filter(q => q.status === "APPROVED").length;
   const liveSessionsCount = activeSessions.filter(s => s.status === "LIVE").length;
-  const activeCandidatesCount = activeSessions.reduce((acc, s) => acc + s._count.attempts, 0) || 400;
-
-  const concludedStats = recentCompletedSessions.filter(s => s.sessionStats);
-  const avgPassRate = concludedStats.length > 0 
-    ? Math.round(concludedStats.reduce((acc, s) => acc + (s.sessionStats?.passRate || 0), 0) / concludedStats.length)
-    : 81;
-  const avgMeanScore = concludedStats.length > 0
-    ? Math.round(concludedStats.reduce((acc, s) => acc + (s.sessionStats?.meanScore || 0), 0) / concludedStats.length)
-    : 77;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-12">
-      {/* Header matching Image 1 */}
-      <div>
-        <p className="text-xs sm:text-sm font-medium text-neutral-400">Executive control center</p>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mt-0.5">Dashboard</h1>
+      {/* Header & Quick Action Launchbar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Executive Dashboard</h1>
+          <p className="text-neutral-400 text-sm sm:text-base mt-1.5">Manage assessment templates, live proctored sessions, and setter roles.</p>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link 
+            href="/dashboard/owner/candidates"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-sm sm:text-base font-bold rounded-xl border border-neutral-800 transition-all cursor-pointer shadow-xs whitespace-nowrap"
+          >
+            <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            <span>Candidate Records</span>
+          </Link>
+          <Link 
+            href="/dashboard/owner/template/new"
+            className="inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-white hover:bg-neutral-200 text-black text-sm sm:text-base font-bold rounded-xl shadow-md border border-white transition-all whitespace-nowrap cursor-pointer"
+          >
+            <svg className="w-4 h-4 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            <span>Schedule Exam</span>
+          </Link>
+        </div>
       </div>
 
-      {/* Hero Card, 2x2 Stats Grid & 6-card Metrics Strip matching Image 1 */}
-      <ExecutiveHeroOverview
-        userName={(payload.name as string) || "Aarav"}
-        liveSessionsCount={liveSessionsCount}
-        activeCandidatesCount={activeCandidatesCount}
-        totalCheatFlagsCount={totalCheatFlagsCount}
-        totalCandidatesCount={totalCandidatesCount}
-        totalUsersCount={totalUsersCount}
-        allQuestionsCount={allQuestions.length}
-        templatesCount={templates.length}
-        totalCompletedAttemptsCount={totalCompletedAttemptsCount}
-      />
+      {/* Top Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 hover:border-neutral-700 shadow-md flex items-center gap-4 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-neutral-300 flex items-center justify-center border border-neutral-800 shrink-0">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Templates</p>
+            <p className="text-3xl font-black text-white mt-1">{templates.length}</p>
+            <p className="text-xs text-neutral-400 font-medium mt-1">{allQuestions.length} Questions &bull; {templates.length} Blueprints</p>
+          </div>
+        </div>
 
-      {/* Cohort Performance Intelligence matching Image 2 */}
-      <CohortPerformance
-        totalSubmissions={totalCompletedAttemptsCount > 0 ? totalCompletedAttemptsCount : 4892}
-        passRate={avgPassRate}
-        meanScore={avgMeanScore}
-        medianScore={79}
-        highestScore={99}
-      />
+        <div className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 hover:border-neutral-700 shadow-md flex items-center gap-4 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-neutral-300 flex items-center justify-center border border-neutral-800 shrink-0">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Active Sessions</p>
+            <p className="text-3xl font-black text-white mt-1">{activeSessions.length}</p>
+            <p className="text-xs text-neutral-400 font-medium mt-1">{liveSessionsCount} Live &bull; {activeSessions.length - liveSessionsCount} Scheduled</p>
+          </div>
+        </div>
 
-      {/* Primary Operations: Active Sessions & Reusable Templates Library */}
+        <Link href="/dashboard/owner/results" className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 hover:border-neutral-700 shadow-md flex items-center gap-4 transition-all cursor-pointer">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-neutral-300 flex items-center justify-center border border-neutral-800 shrink-0">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Exams Conducted</p>
+            <p className="text-3xl font-black text-white mt-1">{totalCompletedSessionsCount}</p>
+            <p className="text-xs text-neutral-400 font-medium mt-1">{totalCompletedAttemptsCount} Student Submissions &bull; {totalCandidatesCount} Candidates</p>
+          </div>
+        </Link>
+
+        <a href="#review-queue" className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 hover:border-neutral-700 shadow-md flex items-center gap-4 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-neutral-300 flex items-center justify-center border border-neutral-800 shrink-0">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Integrity & Review</p>
+            <p className="text-3xl font-black text-white mt-1">{pendingQuestions.length} Qs</p>
+            <p className="text-xs text-neutral-400 font-medium mt-1">{totalCheatFlagsCount} Security Flags &bull; {approvedQuestionsCount} Approved</p>
+          </div>
+        </a>
+      </div>
+
+      {/* Primary Operations: Active Sessions (Conditionally Shown) & Exam Templates (Full Width Table) */}
       <div className="space-y-8">
-        {/* Live & Scheduled Sessions (with active-sessions anchor) */}
-        <div id="active-sessions" className="scroll-mt-6">
-          {activeSessions.length > 0 && (
-            <div className="bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-md">
-              <div className="flex justify-between items-center mb-6 pb-4 border-b border-neutral-800">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-white tracking-tight">Active Sessions</h2>
-                    {liveSessionsCount > 0 ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        {liveSessionsCount} Live
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
-                        {activeSessions.length} Scheduled
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-neutral-400 mt-0.5">Scheduled and live assessments requiring proctoring</p>
+        {/* Live & Scheduled Sessions (Only displayed when there is at least one active or scheduled exam) */}
+        {activeSessions.length > 0 && (
+          <div className="bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-md">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-neutral-800">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-white tracking-tight">Active Sessions</h2>
+                  {liveSessionsCount > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      {liveSessionsCount} Live
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+                      {activeSessions.length} Scheduled
+                    </span>
+                  )}
                 </div>
+                <p className="text-sm text-neutral-400 mt-0.5">Scheduled and live assessments requiring proctoring</p>
               </div>
-              <ActiveSessionsList initialSessions={activeSessions} />
             </div>
-          )}
-        </div>
+            <ActiveSessionsList initialSessions={activeSessions} />
+          </div>
+        )}
 
-        {/* Templates (Reusable templates matching Image 3) */}
-        <div id="templates" className="scroll-mt-6">
-          <OwnerTemplatesManager 
-            templates={templates as any} 
-            highlightId={searchParams?.highlight} 
-          />
-        </div>
+        {/* Templates (Full Width Table with Interactive Slide-Over Sidebar Drawer) */}
+        <OwnerTemplatesManager 
+          templates={templates as any} 
+          highlightId={searchParams?.highlight} 
+        />
       </div>
+
+      {/* Cohort Performance Intelligence Widget */}
+      <CohortPerformanceWidget />
 
       {/* Concluded Assessments Performance Snapshot */}
       <div className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-md overflow-hidden">
