@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma" alt="Prisma" />
     <img src="https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css" alt="TailwindCSS" />
     <img src="https://img.shields.io/badge/PostgreSQL-Neon_Serverless-4169E1?style=for-the-badge&logo=postgresql" alt="PostgreSQL" />
-    <img src="https://img.shields.io/badge/Proctoring-Anti--Cheat-emerald?style=for-the-badge&logo=shield" alt="Anti-Cheat" />
+    <img src="https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge" alt="Proprietary License" />
   </p>
 
 </div>
@@ -228,6 +228,11 @@ Contributions, feedback, and issue reports are welcome!
 
 ---
 
-## 📄 License
+## 📄 Copyright & Legal Notice
 
-This project is licensed under the **MIT License** — feel free to customize and deploy it for your organization.
+Copyright © 2024–2026 **Yash Singhal**. All Rights Reserved.
+
+This software, along with all associated source code, user interface designs, algorithms, branding, and documentation, is **strictly proprietary**. 
+
+* **No Unauthorized Copying or Use**: No individual or organization is permitted to duplicate, modify, distribute, publish, reverse-engineer, or commercially deploy any part of this repository without prior explicit written authorization from **Yash Singhal**.
+* For licensing inquiries or formal authorization, contact: [singhalyash307@gmail.com](mailto:singhalyash307@gmail.com).
