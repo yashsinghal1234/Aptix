@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="public/logo.png" alt="Aptix Logo" width="100" style="border-radius: 20%;" />
+  <img src="./public/logo.png" alt="Aptix Logo" width="100" style="border-radius: 20%;" />
 
   # ⚡ Aptix Assessment Platform
 
