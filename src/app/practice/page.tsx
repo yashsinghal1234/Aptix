@@ -4,11 +4,6 @@ import { PracticeInterface } from "@/components/PracticeInterface";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Practice Arena",
-  description: "Self-study practice drill for aptitude, logical reasoning, and quantitative problem solving."
-};
-
 export default async function PracticePage() {
   const token = cookies().get("token")?.value;
   let candidateName = "Candidate";

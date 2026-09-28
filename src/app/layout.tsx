@@ -2,10 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: {
-    default: "Aptix | Examination Portal",
-    template: "%s | Aptix Examination Portal"
-  },
+  title: "Aptix | Examination Portal",
   description: "High-integrity, secure online aptitude assessment and examination portal.",
   icons: {
     icon: [
@@ -24,6 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
+        <title>Aptix | Examination Portal</title>
         <link rel="icon" href="/favicon.ico?v=7" sizes="any" />
         <link rel="icon" href="/icon.png?v=7" type="image/png" />
         <link rel="apple-touch-icon" href="/apple-icon.png?v=7" />
