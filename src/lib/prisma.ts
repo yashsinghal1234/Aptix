@@ -40,10 +40,19 @@ const createPrismaClient = () => {
 
 type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>
 
+const PRISMA_INSTANCE_VERSION = "v2-resilient"
+
 const globalForPrisma = globalThis as unknown as {
   prisma: ExtendedPrismaClient | undefined
+  prismaVersion: string | undefined
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient()
+export const prisma =
+  globalForPrisma.prisma && globalForPrisma.prismaVersion === PRISMA_INSTANCE_VERSION
+    ? globalForPrisma.prisma
+    : createPrismaClient()
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+  globalForPrisma.prismaVersion = PRISMA_INSTANCE_VERSION
+}
