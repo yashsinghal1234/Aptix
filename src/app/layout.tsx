@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Aptix Assessment • Enterprise Examination Platform",
-  description: "High-integrity, secure online aptitude assessment and examination platform.",
+  title: {
+    default: "Aptix | Examination Portal",
+    template: "%s | Aptix Examination Portal"
+  },
+  description: "High-integrity, secure online aptitude assessment and examination portal.",
   icons: {
     icon: [
       { url: "/favicon.ico?v=5" },
