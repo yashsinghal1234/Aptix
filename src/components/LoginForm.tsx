@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { candidateLoginAction, staffLoginAction } from "@/app/actions/auth";
 import Link from "next/link";
 import { ChunkedVideo } from "@/components/ChunkedVideo";
-import { useNetworkQuality } from "@/hooks/useNetworkQuality";
 
 interface LoginFormProps {
   initialMode?: "candidate" | "staff";
@@ -48,7 +47,6 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [rememberStaff, setRememberStaff] = useState(true);
   const [rememberCandidate, setRememberCandidate] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
-  const { isLowNetwork } = useNetworkQuality();
 
   // Trigger smooth error animation and set active error field
   const triggerCandidateError = (msg: string, field: string | null = null) => {
@@ -725,9 +723,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                   key={slide.hls}
                   hlsSrc={slide.hls}
                   fallbackSrc={slide.video}
-                  poster="/login-ribbon.jpg"
                   isActive={activeSlide === idx}
-                  isLowNetwork={isLowNetwork}
                   className={
                     activeSlide === idx
                       ? "opacity-100 scale-100"
@@ -742,12 +738,6 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
 
             {/* Showcase Overlay Content */}
             <div className="relative z-10 space-y-4 max-w-xl">
-              {isLowNetwork && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold backdrop-blur-md">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                  Lite Mode • Low Network Detected
-                </div>
-              )}
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight drop-shadow-md">
                 {CAROUSEL_SLIDES[activeSlide].title}
               </h2>
