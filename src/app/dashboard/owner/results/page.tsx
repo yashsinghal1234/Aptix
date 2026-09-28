@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
-import { CohortPerformanceWidget } from "@/components/CohortPerformanceWidget";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +34,6 @@ export default async function ResultsDashboard() {
         <h1 className="text-3xl font-extrabold text-white tracking-tight">Assessment History & Reports</h1>
         <p className="text-neutral-400 text-xs mt-1">Review psychometric analytics, cohort metrics, and item analysis for completed exam sessions.</p>
       </div>
-
-      {/* Cohort Performance Intelligence Widget */}
-      <CohortPerformanceWidget />
 
       <div className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-md overflow-hidden">
         <div className="p-6 border-b border-neutral-800 flex justify-between items-center bg-[#07080c]">
