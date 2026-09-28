@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { candidateLoginAction, staffLoginAction } from "@/app/actions/auth";
+import { useNetworkQuality } from "@/hooks/useNetworkQuality";
 import Link from "next/link";
 
 interface LoginFormProps {
@@ -43,7 +44,16 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [rememberStaff, setRememberStaff] = useState(true);
   const [rememberCandidate, setRememberCandidate] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [loadedSlides, setLoadedSlides] = useState<number[]>([0]);
   const videoRefs = React.useRef<(HTMLVideoElement | null)[]>([]);
+  const { isLowNetwork, toggleLiteMode } = useNetworkQuality();
+
+  // Track slides that have been viewed so we only load video on demand
+  useEffect(() => {
+    if (!isLowNetwork) {
+      setLoadedSlides((prev) => (prev.includes(activeSlide) ? prev : [...prev, activeSlide]));
+    }
+  }, [activeSlide, isLowNetwork]);
 
   // Trigger smooth error animation and set active error field
   const triggerCandidateError = (msg: string, field: string | null = null) => {
@@ -70,6 +80,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
 
   // Ensure the active video plays from start on slide change and pause non-active videos to conserve GPU/CPU
   useEffect(() => {
+    if (isLowNetwork) return;
     videoRefs.current.forEach((vid, idx) => {
       if (!vid) return;
       if (idx === activeSlide) {
@@ -79,7 +90,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         vid.pause();
       }
     });
-  }, [activeSlide]);
+  }, [activeSlide, isLowNetwork]);
 
   // Restore saved credentials from localStorage on mount & mode changes
   useEffect(() => {
@@ -261,16 +272,24 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
           {/* Brand header */}
           <div className="flex items-center gap-4 sm:gap-5 mb-8">
             <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center bg-transparent">
-              <video
-                src="/aptix-logo-anim.mp4"
-                poster="/logo-preview-frame.jpg"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="auto"
-                className="w-full h-full object-cover mix-blend-screen scale-125"
-              />
+              {isLowNetwork ? (
+                <img
+                  src="/logo-preview-frame.jpg"
+                  alt="Aptix"
+                  className="w-full h-full object-cover mix-blend-screen scale-125"
+                />
+              ) : (
+                <video
+                  src="/aptix-logo-anim.mp4"
+                  poster="/logo-preview-frame.jpg"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="none"
+                  className="w-full h-full object-cover mix-blend-screen scale-125"
+                />
+              )}
             </div>
             <div>
               <span className="font-extrabold text-3xl sm:text-[32px] tracking-tight text-white leading-none block">
@@ -726,28 +745,59 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         <div className="lg:col-span-7 xl:col-span-7 flex items-center justify-center w-full">
           <div className="relative w-full h-[500px] sm:h-[550px] lg:h-[600px] xl:h-[620px] rounded-[32px] sm:rounded-[36px] overflow-hidden bg-[#07080c] border border-[#1e222d] shadow-[0_20px_60px_rgba(0,0,0,0.85)] flex flex-col justify-end p-8 sm:p-10 lg:p-11 group">
             
-            {/* Background Videos with Smooth Crossfade */}
+            {/* Network Adaptivity & Lite Mode Toggle */}
+            <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleLiteMode}
+                title={isLowNetwork ? "Click to switch to High-Definition stream" : "Click to enable Data-Saver Lite Mode"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md border transition-all cursor-pointer select-none ${
+                  isLowNetwork
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25"
+                    : "bg-black/40 text-neutral-300 border-white/10 hover:bg-black/60 hover:text-white"
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isLowNetwork ? "bg-emerald-400 animate-pulse" : "bg-neutral-400"}`} />
+                {isLowNetwork ? "Lite Mode (Data-Saver)" : "HD Video"}
+              </button>
+            </div>
+
+            {/* Background: Video or Optimized Low-Network Poster */}
             <div className="absolute inset-0 z-0 overflow-hidden bg-black">
-              {CAROUSEL_SLIDES.map((slide, idx) => (
-                <video
-                  key={slide.video}
-                  ref={(el) => {
-                    videoRefs.current[idx] = el;
+              {isLowNetwork ? (
+                // Low-Network / 2G: Zero-bandwidth animated poster with cinematic pan
+                <div
+                  className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-1000 transform scale-105"
+                  style={{
+                    backgroundImage: "url('/login-ribbon.jpg')",
                   }}
-                  src={slide.video}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  preload="auto"
-                  poster="/login-ribbon.jpg"
-                  className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out ${
-                    activeSlide === idx
-                      ? "opacity-100 scale-100"
-                      : "opacity-0 scale-105 pointer-events-none"
-                  }`}
                 />
-              ))}
+              ) : (
+                // Standard / High-Speed: On-demand lazy-loaded video slides
+                CAROUSEL_SLIDES.map((slide, idx) => {
+                  const shouldLoad = loadedSlides.includes(idx);
+                  return (
+                    <video
+                      key={slide.video}
+                      ref={(el) => {
+                        videoRefs.current[idx] = el;
+                      }}
+                      src={shouldLoad ? slide.video : undefined}
+                      autoPlay={activeSlide === idx}
+                      loop
+                      muted
+                      playsInline
+                      preload={activeSlide === idx ? "auto" : "none"}
+                      poster="/login-ribbon.jpg"
+                      className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out ${
+                        activeSlide === idx
+                          ? "opacity-100 scale-100"
+                          : "opacity-0 scale-105 pointer-events-none"
+                      }`}
+                    />
+                  );
+                })
+              )}
               {/* Vignette gradients to enhance contrast */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/20 pointer-events-none" />
               <div className="absolute inset-0 bg-radial-at-c from-transparent via-black/10 to-black/60 pointer-events-none" />
