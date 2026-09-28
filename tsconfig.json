@@ -40,6 +40,7 @@
     "node_modules",
     "tests",
     "loadtests",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "public"
   ]
 }
