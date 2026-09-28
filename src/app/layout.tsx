@@ -9,10 +9,10 @@ export const metadata: Metadata = {
   description: "High-integrity, secure online aptitude assessment and examination portal.",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=5" },
-      { url: "/icon.png?v=5", type: "image/png" }
+      { url: "/favicon.ico?v=7" },
+      { url: "/icon.png?v=7", type: "image/png" }
     ],
-    apple: "/apple-icon.png?v=5",
+    apple: "/apple-icon.png?v=7",
   },
 };
 
@@ -24,6 +24,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
+        <link rel="icon" href="/favicon.ico?v=7" sizes="any" />
+        <link rel="icon" href="/icon.png?v=7" type="image/png" />
+        <link rel="apple-touch-icon" href="/apple-icon.png?v=7" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
