@@ -457,9 +457,17 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
                 </span>
               </div>
 
-              <span className="text-xs font-bold text-neutral-400">
-                Progress: {Math.round(((currentIndex) / questions.length) * 100)}%
-              </span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-20 sm:w-28 h-2 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80">
+                  <div
+                    className="h-full bg-striped-emerald rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round(((currentIndex) / questions.length) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs font-bold text-neutral-400 tabular-nums">
+                  {Math.round(((currentIndex) / questions.length) * 100)}%
+                </span>
+              </div>
             </div>
 
             {/* Question Stem */}
@@ -627,9 +635,9 @@ function isOptionCorrect(optText: string, expectedText: string): boolean {
                         {t.pct}% ({t.correct}/{t.total})
                       </span>
                     </div>
-                    <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
+                    <div className="w-full h-2.5 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80">
                       <div
-                        className={`h-full rounded-full ${t.pct >= 75 ? "bg-emerald-400" : "bg-white"}`}
+                        className={`h-full rounded-full transition-all duration-500 ${t.pct >= 75 ? "bg-striped-emerald" : "bg-striped-blue"}`}
                         style={{ width: `${t.pct}%` }}
                       />
                     </div>

@@ -343,8 +343,16 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex-1 h-2 bg-neutral-800 rounded-full overflow-hidden w-28">
-                            <div className="h-full bg-white rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                          <div className="flex-1 h-2.5 bg-neutral-900 rounded-full overflow-hidden w-28 border border-neutral-800/80">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${isSubmitted ? 'bg-striped-emerald' : 'bg-striped-blue'}`} 
+                              style={{
+                                width: `${progressPct}%`,
+                                background: isSubmitted
+                                  ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #10b981"
+                                  : "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #3b82f6",
+                              }} 
+                            />
                           </div>
                           <span className="text-xs font-bold text-neutral-300 w-12">{attempt.responses.length}/{totalQuestions}</span>
                         </div>

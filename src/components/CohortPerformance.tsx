@@ -102,10 +102,13 @@ export function CohortPerformance({
                 {passRate}%
               </span>
               {/* Progress Bar */}
-              <div className="w-full h-2 bg-neutral-800 rounded-full mt-4 overflow-hidden">
+              <div className="w-full h-3 bg-neutral-900 rounded-full mt-4 overflow-hidden border border-neutral-800/80">
                 <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
-                  style={{ width: `${passRate}%` }}
+                  className="h-full bg-striped-emerald rounded-full transition-all duration-1000"
+                  style={{
+                    width: `${passRate}%`,
+                    background: "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #10b981",
+                  }}
                 />
               </div>
             </div>

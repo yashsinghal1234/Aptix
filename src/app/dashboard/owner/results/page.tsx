@@ -82,19 +82,26 @@ export default async function ResultsDashboard() {
                           <span className="text-neutral-500 text-xs font-medium">No Attempts</span>
                         ) : session.sessionStats ? (
                           <div className="flex items-center gap-3">
-                            <span className="font-bold text-white text-xs tabular-nums">
+                            <span className="font-bold text-white text-xs tabular-nums w-14 shrink-0">
                               {session.sessionStats.passRate.toFixed(1)}%
                             </span>
-                            <div className="w-16 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                            <div className="w-28 sm:w-32 h-2.5 sm:h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80 shrink-0">
                               <div
-                                className={`h-full rounded-full transition-all ${
-                                  session.sessionStats.passRate >= 50
-                                    ? "bg-emerald-400"
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  session.sessionStats.passRate >= 40
+                                    ? "bg-striped-emerald"
                                     : session.sessionStats.passRate > 0
-                                    ? "bg-neutral-300"
-                                    : "bg-neutral-700"
+                                    ? "bg-striped-amber"
+                                    : "bg-neutral-800"
                                 }`}
-                                style={{ width: `${Math.max(session.sessionStats.passRate, session.sessionStats.passRate > 0 ? 8 : 0)}%` }}
+                                style={{
+                                  width: `${Math.max(session.sessionStats.passRate, session.sessionStats.passRate > 0 ? 8 : 0)}%`,
+                                  background: session.sessionStats.passRate >= 40
+                                    ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #10b981"
+                                    : session.sessionStats.passRate > 0
+                                    ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #f59e0b"
+                                    : undefined,
+                                }}
                               />
                             </div>
                           </div>

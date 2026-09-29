@@ -1,3 +1,5 @@
+"use server";
+
 import { prisma } from "@/lib/prisma";
 
 export async function computeSessionAnalytics(sessionId: string) {
@@ -118,3 +120,49 @@ export async function computeSessionAnalytics(sessionId: string) {
     });
   }
 }
+
+export async function getLiveTelemetryData() {
+  try {
+    const [
+      liveSessionsCount,
+      inProgressAttemptsCount,
+      liveCheatFlagsCount,
+      totalCheatFlagsCount,
+      cheatFlagsByType,
+      completedAttemptsCount,
+    ] = await Promise.all([
+      prisma.examSession.count({ where: { status: "LIVE" } }),
+      prisma.candidateAttempt.count({
+        where: {
+          status: "IN_PROGRESS",
+          session: { status: "LIVE" }
+        }
+      }),
+      prisma.cheatFlag.count({
+        where: {
+          session: { status: "LIVE" }
+        }
+      }),
+      prisma.cheatFlag.count(),
+      prisma.cheatFlag.groupBy({
+        by: ['type'],
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } }
+      }),
+      prisma.candidateAttempt.count({ where: { status: "SUBMITTED" } }),
+    ]);
+
+    return {
+      liveSessionsCount,
+      inProgressAttemptsCount,
+      liveCheatFlagsCount,
+      totalCheatFlagsCount,
+      cheatFlagsByType: cheatFlagsByType.map(f => ({ type: f.type, count: f._count.id })),
+      completedAttemptsCount,
+    };
+  } catch (err) {
+    console.error("[getLiveTelemetryData] Error fetching live telemetry:", err);
+    return null;
+  }
+}
+

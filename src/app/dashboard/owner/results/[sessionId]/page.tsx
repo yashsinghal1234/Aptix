@@ -162,10 +162,23 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
                   <span className="font-bold text-neutral-200">{cat.name} <span className="text-neutral-500 font-normal">({cat.count} Questions)</span></span>
                   <span className="font-extrabold text-neutral-100 bg-neutral-900 px-2 py-0.5 rounded-md border border-neutral-700">{cat.pct}%</span>
                 </div>
-                <div className="h-3 bg-neutral-900 rounded-full overflow-hidden p-0.5 border border-neutral-800">
+                <div className="h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80">
                   <div 
-                    className="h-full bg-white rounded-full transition-all duration-500"
-                    style={{ width: `${Math.max(5, cat.pct)}%` }}
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      cat.pct >= 75
+                        ? "bg-striped-emerald"
+                        : cat.pct >= 50
+                        ? "bg-striped-blue"
+                        : "bg-striped-pink"
+                    }`}
+                    style={{
+                      width: `${Math.max(5, cat.pct)}%`,
+                      background: cat.pct >= 75
+                        ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #10b981"
+                        : cat.pct >= 50
+                        ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #3b82f6"
+                        : "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #ec4899",
+                    }}
                   />
                 </div>
               </div>

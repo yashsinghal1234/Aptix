@@ -814,9 +814,9 @@ export function ExamInterface({
                             {t.pct}% ({t.earned.toFixed(1)}/{t.totalPossible} pts)
                           </span>
                         </div>
-                        <div className="w-full h-2.5 bg-neutral-800 rounded-full overflow-hidden">
+                        <div className="w-full h-2.5 bg-neutral-950 rounded-full overflow-hidden border border-neutral-800/80">
                           <div 
-                            className={`h-full rounded-full transition-all ${t.pct >= 75 ? 'bg-emerald-400' : t.pct >= 50 ? 'bg-white' : 'bg-amber-400'}`}
+                            className={`h-full rounded-full transition-all ${t.pct >= 75 ? 'bg-striped-emerald' : t.pct >= 50 ? 'bg-striped-blue' : 'bg-striped-pink'}`}
                             style={{ width: `${t.pct}%` }}
                           />
                         </div>
@@ -1115,9 +1115,9 @@ export function ExamInterface({
           </div>
 
           {/* Linear Progress Bar along bottom of Header */}
-          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-neutral-900 overflow-hidden">
+          <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-neutral-900 overflow-hidden">
             <div 
-              className="h-full bg-white transition-all duration-300"
+              className="h-full bg-striped-emerald transition-all duration-300"
               style={{
                 width: `${questions.length > 0 ? ((answeredCount + ansMarkedCount) / questions.length) * 100 : 0}%`
               }}

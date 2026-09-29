@@ -1,5 +1,3 @@
-import { prisma } from "@/lib/prisma";
-
 export const FIXED_TOPICS = [
   "Quantitative Aptitude",
   "Logical Reasoning",
@@ -274,6 +272,7 @@ export async function analyzeQuestionWithAI(
   };
 
   try {
+    const { prisma } = await import("@/lib/prisma");
     const existingQuestions = await prisma.question.findMany({
       select: { id: true, text: true, category: true },
       take: 100

@@ -87,4 +87,65 @@ body {
   animation: error-shake 0.35s ease-in-out;
 }
 
+/* Candy-Striped Diagonal Hatched Progress Bar Fills */
+.bg-striped-emerald {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 0px,
+    rgba(255, 255, 255, 0.35) 4px,
+    transparent 4px,
+    transparent 8px
+  ), #10b981 !important;
+}
+
+.bg-striped-blue {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 0px,
+    rgba(255, 255, 255, 0.35) 4px,
+    transparent 4px,
+    transparent 8px
+  ), #3b82f6 !important;
+}
+
+.bg-striped-pink {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 0px,
+    rgba(255, 255, 255, 0.35) 4px,
+    transparent 4px,
+    transparent 8px
+  ), #ec4899 !important;
+}
+
+.bg-striped-amber {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 0px,
+    rgba(255, 255, 255, 0.35) 4px,
+    transparent 4px,
+    transparent 8px
+  ), #f59e0b !important;
+}
+
+.bg-striped-cyan {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 0px,
+    rgba(255, 255, 255, 0.35) 4px,
+    transparent 4px,
+    transparent 8px
+  ), #06b6d4 !important;
+}
+
+.bg-striped-white {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 0px,
+    rgba(255, 255, 255, 0.35) 3.5px,
+    rgba(255, 255, 255, 0.65) 3.5px,
+    rgba(255, 255, 255, 0.65) 7.5px
+  );
+}
+
 
