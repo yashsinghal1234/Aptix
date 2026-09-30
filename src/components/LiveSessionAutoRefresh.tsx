@@ -12,10 +12,11 @@ export function LiveSessionAutoRefresh({ status }: { status: string }) {
     if (status === "COMPLETED" || !isAutoSync) return;
 
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       startTransition(() => {
         router.refresh();
       });
-    }, 3000);
+    }, 8000);
 
     return () => clearInterval(interval);
   }, [status, isAutoSync, router]);

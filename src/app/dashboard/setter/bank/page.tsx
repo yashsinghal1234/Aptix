@@ -5,9 +5,19 @@ import { DeleteQuestionButton } from "@/components/DeleteQuestionButton";
 export const dynamic = "force-dynamic";
 
 export default async function QuestionBankDashboard() {
-  const questions = await prisma.question.findMany({
-    orderBy: { category: "asc" }
-  });
+  const [questions, lockedSessions] = await Promise.all([
+    prisma.question.findMany({
+      orderBy: { category: "asc" }
+    }),
+    prisma.examSession.findMany({
+      where: { status: { in: ["LIVE", "COMPLETED"] } },
+      select: { questions: { select: { id: true } } }
+    })
+  ]);
+
+  const lockedQuestionIds = new Set(
+    lockedSessions.flatMap((s) => s.questions.map((q) => q.id))
+  );
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
@@ -53,7 +63,7 @@ export default async function QuestionBankDashboard() {
                         </div>
                       )}
                     </div>
-                    <DeleteQuestionButton id={q.id} />
+                    <DeleteQuestionButton id={q.id} isLocked={lockedQuestionIds.has(q.id)} />
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs max-w-3xl">

@@ -88,11 +88,15 @@ export default async function Home() {
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>Candidate: <strong className="text-white">{name}</strong></span>
             </span>
-            <form action={logoutAction}>
-              <button className="text-xs font-semibold text-slate-300 hover:text-white bg-[#111e3b] hover:bg-[#1a2d58] px-3.5 py-1.5 rounded-xl transition-all border border-slate-700/80 shadow-sm cursor-pointer">
-                Log Out
-              </button>
-            </form>
+            <a
+              href="/api/auth/logout"
+              className="text-xs font-semibold text-slate-300 hover:text-white bg-[#111e3b] hover:bg-[#1a2d58] px-3.5 py-1.5 rounded-xl transition-all border border-slate-700/80 shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Log Out</span>
+            </a>
           </div>
         </header>
 

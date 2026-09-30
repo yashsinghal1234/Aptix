@@ -4,7 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 
-export async function startAttemptAction(sessionId: string) {
+// In-memory registry of active device sessions per attempt:
+// attemptId -> { deviceSessionId: string, lastSeen: number }
+const activeAttemptSessions = new Map<string, { deviceSessionId: string; lastSeen: number }>();
+
+export async function clearAttemptSession(attemptId: string) {
+  activeAttemptSessions.delete(attemptId);
+}
+
+export async function startAttemptAction(sessionId: string, clientDeviceId?: string) {
   const token = cookies().get("token")?.value;
   if (!token) return { error: "Unauthorized" };
   const payload = await verifyToken(token);
@@ -27,10 +35,26 @@ export async function startAttemptAction(sessionId: string) {
     });
   }
 
+  if (clientDeviceId && attempt && attempt.status === "IN_PROGRESS") {
+    const existing = activeAttemptSessions.get(attempt.id);
+    const nowMs = Date.now();
+    if (existing && existing.deviceSessionId !== clientDeviceId && (nowMs - existing.lastSeen) < 25000) {
+      return {
+        error: "Active assessment session already in progress on another device or tab.",
+        concurrentSessionDetected: true,
+        attempt
+      };
+    }
+    activeAttemptSessions.set(attempt.id, {
+      deviceSessionId: clientDeviceId,
+      lastSeen: nowMs
+    });
+  }
+
   return { success: true, attempt };
 }
 
-export async function getAttemptStatusAction(attemptId: string) {
+export async function getAttemptStatusAction(attemptId: string, clientDeviceId?: string) {
   const attempt = await prisma.candidateAttempt.findUnique({
     where: { id: attemptId },
     include: { 
@@ -54,6 +78,30 @@ export async function getAttemptStatusAction(attemptId: string) {
       data: { status: "SUBMITTED", submittedAt: now }
     });
     currentStatus = "SUBMITTED";
+  }
+
+  let concurrentSessionDetected = false;
+  if (clientDeviceId && currentStatus === "IN_PROGRESS") {
+    const existing = activeAttemptSessions.get(attemptId);
+    const nowMs = Date.now();
+    if (existing && existing.deviceSessionId !== clientDeviceId && (nowMs - existing.lastSeen) < 25000) {
+      concurrentSessionDetected = true;
+      prisma.cheatFlag.create({
+        data: {
+          userId: attempt.userId,
+          examSessionId: attempt.examSessionId,
+          type: "CONCURRENT_SESSION",
+          description: "Multiple active browser tabs or devices detected concurrently during assessment."
+        }
+      }).catch(err => console.error("Cheat flag error:", err));
+    } else {
+      activeAttemptSessions.set(attemptId, {
+        deviceSessionId: clientDeviceId,
+        lastSeen: nowMs
+      });
+    }
+  } else if (currentStatus === "SUBMITTED") {
+    activeAttemptSessions.delete(attemptId);
   }
 
   const score = attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0);
@@ -116,6 +164,7 @@ export async function getAttemptStatusAction(attemptId: string) {
     totalMarks: totalMarks || 1,
     startTime: attempt.session.startTime,
     durationMinutes: attempt.session.durationMinutes,
-    detailedResults
+    detailedResults,
+    concurrentSessionDetected
   };
 }

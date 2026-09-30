@@ -109,14 +109,23 @@ export async function createQuestionAction(formData: FormData) {
     answerData = JSON.stringify({ blanks: blanksObj, partialCredit });
   }
 
-  // Duplicate detection (only check if explicit custom text was given)
+  // Intelligent Duplicate & Similarity Detection
   if (rawText.length > 0) {
-    const duplicate = await prisma.question.findFirst({
-      where: { text: { equals: text } }
+    const { findDuplicateInQuestionList } = await import("@/lib/question-duplicate-checker");
+    const existingQuestions = await prisma.question.findMany({
+      where: { category },
+      select: { id: true, text: true }
     });
 
-    if (duplicate) {
-      return { error: "A question with exactly the same text already exists." };
+    const match = findDuplicateInQuestionList(text, existingQuestions);
+    if (match.isDuplicate) {
+      if (match.isExact) {
+        return { error: "Exact duplicate question already exists in this category." };
+      } else {
+        return { 
+          error: `High-similarity duplicate question detected (${Math.round(match.similarity * 100)}% match with: "${match.matchedStem?.substring(0, 80)}...").` 
+        };
+      }
     }
   }
 
@@ -146,6 +155,21 @@ export async function deleteQuestionAction(id: string) {
   if (!user) return { error: "Unauthorized" };
 
   try {
+    // Question Bank Integrity Lock: Prevent deleting questions attached to active or completed sessions
+    const attachedSession = await prisma.examSession.findFirst({
+      where: {
+        questions: { some: { id } },
+        status: { in: ["LIVE", "COMPLETED"] }
+      },
+      include: { exam: { select: { title: true } } }
+    });
+
+    if (attachedSession) {
+      return {
+        error: `Cannot delete locked question: It is bound to an active or completed assessment session ("${attachedSession.exam?.title || attachedSession.id}"). Deletion is blocked to preserve scoring records.`
+      };
+    }
+
     await prisma.candidateResponse.deleteMany({
       where: { questionId: id }
     });
@@ -155,9 +179,10 @@ export async function deleteQuestionAction(id: string) {
     });
 
     revalidatePath("/dashboard/setter");
+    revalidatePath("/dashboard/setter/bank");
     return { success: true };
-  } catch (error) {
-    console.error(error);
-    return { error: "Failed to delete question" };
+  } catch (error: any) {
+    console.error("Failed to delete question:", error);
+    return { error: error.message || "Failed to delete question" };
   }
 }

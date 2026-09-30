@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { logoutAction } from "@/app/actions/auth";
-import { submitExamAction, saveDraftAnswerAction } from "@/app/actions/exam";
+import { submitExamAction, saveDraftAnswerAction, batchSyncDraftAnswersAction } from "@/app/actions/exam";
 import { logCheatSignalAction } from "@/app/actions/cheat";
 import { getAttemptStatusAction } from "@/app/actions/attempt";
 import { useServerTime } from "@/hooks/useServerTime";
+import { saveDraftAnswersToIndexedDB, getDraftAnswersFromIndexedDB, clearDraftAnswersFromIndexedDB } from "@/lib/indexed-db";
+import { detectVirtualMachine, createExtensionGuardian } from "@/lib/anti-cheat-detector";
 
 function createPRNG(seed: number) {
   return function() {
@@ -60,10 +61,99 @@ export function ExamInterface({
   const [finalTotalMarks, setFinalTotalMarks] = useState<number | null>(null);
   const [detailedResults, setDetailedResults] = useState<any[] | null>(null);
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
+  const [isConcurrentLockout, setIsConcurrentLockout] = useState(false);
 
   const [currentExtendedUntil, setCurrentExtendedUntil] = useState<Date | null>(
     attempt.extendedUntil ? new Date(attempt.extendedUntil) : (session.extendedUntil ? new Date(session.extendedUntil) : null)
   );
+
+  const clientDeviceIdRef = useRef<string>("");
+
+  // Pre-exam system diagnostics state
+  const [diagnostics, setDiagnostics] = useState<{
+    ping: number | null;
+    battery: { charging: boolean; level: number } | null;
+    isSingleScreen: boolean;
+    screenRes: string;
+    isVM: boolean;
+    vmRenderer: string;
+    isChecking: boolean;
+  }>({
+    ping: null,
+    battery: null,
+    isSingleScreen: true,
+    screenRes: typeof window !== "undefined" ? `${window.screen.width}×${window.screen.height}` : "1920×1080",
+    isVM: false,
+    vmRenderer: "",
+    isChecking: true,
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storageKey = `aptix_device_id_${attempt.id}`;
+      let devId = sessionStorage.getItem(storageKey);
+      if (!devId) {
+        devId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `dev_${Date.now()}_${Math.random()}`;
+        sessionStorage.setItem(storageKey, devId);
+      }
+      clientDeviceIdRef.current = devId;
+    }
+
+    // 1. Run Pre-flight Terminal Diagnostic Checks
+    const runDiagnostics = async () => {
+      let measuredPing: number | null = null;
+      try {
+        const t0 = performance.now();
+        await fetch("/api/time", { cache: "no-store" });
+        measuredPing = Math.round(performance.now() - t0);
+      } catch {
+        measuredPing = null;
+      }
+
+      let battInfo: { charging: boolean; level: number } | null = null;
+      try {
+        if (typeof navigator !== "undefined" && (navigator as any).getBattery) {
+          const b = await (navigator as any).getBattery();
+          battInfo = { charging: b.charging, level: Math.round(b.level * 100) };
+        }
+      } catch {}
+
+      const vm = detectVirtualMachine();
+      if (vm.isVM) {
+        logCheatSignalAction(session.id, "VIRTUAL_MACHINE", `Virtual machine / sandbox detected (${vm.renderer || vm.vendor}).`);
+      }
+
+      const isSingle = typeof window !== "undefined" ? !(window.screen as any)?.isExtended : true;
+      const resStr = typeof window !== "undefined" ? `${window.screen.width}×${window.screen.height}` : "Standard";
+
+      setDiagnostics({
+        ping: measuredPing,
+        battery: battInfo,
+        isSingleScreen: isSingle,
+        screenRes: resStr,
+        isVM: vm.isVM,
+        vmRenderer: vm.renderer,
+        isChecking: false,
+      });
+    };
+
+    runDiagnostics();
+
+    // 2. Load cached draft answers from IndexedDB for crash recovery
+    getDraftAnswersFromIndexedDB(attempt.id).then((offlineData) => {
+      if (offlineData && offlineData.answers && Object.keys(offlineData.answers).length > 0) {
+        setAnswers((prev) => {
+          const merged = { ...offlineData.answers, ...prev };
+          answersRef.current = merged;
+          return merged;
+        });
+        if (offlineData.timeSpent) {
+          timeSpentRef.current = { ...offlineData.timeSpent, ...timeSpentRef.current };
+        }
+        setIsRecovered(true);
+      }
+    });
+  }, [attempt.id, session.id]);
 
   const answersRef = useRef(answers);
   const timeSpentRef = useRef<Record<string, number>>({});
@@ -204,7 +294,7 @@ export function ExamInterface({
     }
   }, [dbQuestions, attempt.shuffleSeed, config, attempt.id, initialAnswers, isAlreadySubmitted]);
 
-  // Debounced Autosave to Server + Instant Local Storage Mirror
+  // Debounced Autosave to Server + Instant Local Storage & IndexedDB Mirror
   const handleAnswerSelect = useCallback((optValue: any, explicitQId?: string) => {
     if (isFinished || isFinishingRef.current) return;
     const qId = explicitQId || questions[currentQuestion]?.id;
@@ -214,10 +304,11 @@ export function ExamInterface({
       const next = { ...prev, [qId]: optValue };
       answersRef.current = next;
 
-      // 1. Instant local persistence
+      // 1. Instant local persistence (LocalStorage + Asynchronous IndexedDB)
       try {
         localStorage.setItem(`aptix_attempt_${attempt.id}`, JSON.stringify(next));
       } catch (e) {}
+      saveDraftAnswersToIndexedDB(attempt.id, next, timeSpentRef.current).catch(() => {});
 
       return next;
     });
@@ -245,6 +336,56 @@ export function ExamInterface({
       }
     }, 1500);
   }, [attempt.id, currentQuestion, questions, isFinished]);
+
+  // Full checkpoint synchronization across network drops / offline reconnects
+  const flushPendingAnswers = useCallback(async () => {
+    if (isFinished || isFinishingRef.current) return;
+    try {
+      const stringifiedAnswers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(answersRef.current)) {
+        stringifiedAnswers[k] = typeof v === "string" ? v : JSON.stringify(v);
+      }
+      const res = await batchSyncDraftAnswersAction(attempt.id, stringifiedAnswers, timeSpentRef.current);
+      if (res && res.success) {
+        setSyncStatus("saved");
+      }
+    } catch (e) {
+      console.warn("[Aptix Resilience] Pending sync delayed, buffered locally", e);
+    }
+  }, [attempt.id, isFinished]);
+
+  // Network Recovery Listener: Auto-flush offline buffer immediately upon WiFi / Internet reconnection
+  useEffect(() => {
+    const handleOnline = () => {
+      flushPendingAnswers();
+    };
+
+    const handleBeforeUnload = () => {
+      try {
+        const stringifiedAnswers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(answersRef.current)) {
+          stringifiedAnswers[k] = typeof v === "string" ? v : JSON.stringify(v);
+        }
+        localStorage.setItem(`aptix_attempt_${attempt.id}`, JSON.stringify(stringifiedAnswers));
+      } catch (e) {}
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    // Periodic 30-second resilience check: Flushes any unsynced offline state
+    const periodicFlush = setInterval(() => {
+      if (syncStatus === "cached" && typeof navigator !== "undefined" && navigator.onLine) {
+        flushPendingAnswers();
+      }
+    }, 30000);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      clearInterval(periodicFlush);
+    };
+  }, [flushPendingAnswers, syncStatus, attempt.id]);
 
   const jumpToQuestion = useCallback((index: number) => {
     if (index >= 0 && index < questions.length) {
@@ -282,9 +423,11 @@ export function ExamInterface({
     const qId = questions[currentQuestion]?.id;
     if (!qId) return;
 
+    let updatedNext: Record<string, any> = {};
     setAnswers(prev => {
       const next = { ...prev };
       delete next[qId];
+      updatedNext = next;
       return next;
     });
 
@@ -295,6 +438,7 @@ export function ExamInterface({
       localStorage.setItem(localKey, JSON.stringify(local));
     } catch {}
 
+    saveDraftAnswersToIndexedDB(attempt.id, updatedNext, timeSpentRef.current).catch(() => {});
     saveDraftAnswerAction(attempt.id, qId, "").catch(err => console.warn(err));
   }, [currentQuestion, questions, attempt.id]);
 
@@ -378,10 +522,11 @@ export function ExamInterface({
     }
     
     await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current);
+    clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
     setIsFinished(true);
 
     if (config.resultVisibility === "IMMEDIATE") {
-      const statusData = await getAttemptStatusAction(attempt.id);
+      const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
       if (statusData) {
         setFinalScore(statusData.score);
         setFinalTotalMarks(statusData.totalMarks);
@@ -411,7 +556,7 @@ export function ExamInterface({
     if (!hasStarted || isFinished || isFinishingRef.current) return;
 
     const handleSecurityInfraction = (
-      type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "COPY_PASTE" | "DEV_TOOLS" | "CONTEXT_MENU", 
+      type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "COPY_PASTE" | "DEV_TOOLS" | "CONTEXT_MENU" | "MULTI_MONITOR" | "CONCURRENT_SESSION", 
       description: string
     ) => {
       if (isFinishingRef.current || isFinished || !hasStarted) return;
@@ -439,6 +584,19 @@ export function ExamInterface({
         setTabSwitchWarning(`Security Alert: Infraction #${count} logged to examiner (${description}).`);
       }
     };
+
+    // Extended / Multi-monitor Detection
+    const checkMultiMonitor = () => {
+      if (typeof window !== "undefined" && (window.screen as any)?.isExtended === true) {
+        handleSecurityInfraction("MULTI_MONITOR", "Candidate connected multiple displays / extended monitors");
+      }
+    };
+    checkMultiMonitor();
+    if (typeof window !== "undefined" && (window.screen as any)?.addEventListener) {
+      try {
+        (window.screen as any).addEventListener("change", checkMultiMonitor);
+      } catch (_) {}
+    }
 
     const handleBlur = () => {
       handleSecurityInfraction("WINDOW_BLUR", "Candidate switched away from exam window or tab");
@@ -498,6 +656,43 @@ export function ExamInterface({
         e.preventDefault();
         handleSecurityInfraction("DEV_TOOLS", "Candidate attempted to open browser developer tools / inspect elements");
       }
+
+      // Block PrintScreen capture key
+      if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+        e.preventDefault();
+        try {
+          if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText("");
+          }
+        } catch (_) {}
+        handleSecurityInfraction("COPY_PASTE", "Candidate attempted screen capture via PrintScreen key");
+      }
+
+      // Block Ctrl+P (Print/PDF export), Ctrl+S (Save page), Ctrl+A (Select all)
+      if (e.ctrlKey || e.metaKey) {
+        const key = e.key.toLowerCase();
+        if (key === "p") {
+          e.preventDefault();
+          handleSecurityInfraction("COPY_PASTE", "Candidate attempted to print or export page via Ctrl+P");
+        } else if (key === "s") {
+          e.preventDefault();
+          handleSecurityInfraction("DEV_TOOLS", "Candidate attempted to save assessment webpage via Ctrl+S");
+        } else if (key === "a" && config.disableCopyPaste !== false) {
+          e.preventDefault();
+          handleSecurityInfraction("COPY_PASTE", "Candidate attempted to select all content via Ctrl+A");
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+        try {
+          if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText("");
+          }
+        } catch (_) {}
+        handleSecurityInfraction("COPY_PASTE", "Candidate attempted screen capture via PrintScreen key");
+      }
     };
 
     window.addEventListener("blur", handleBlur);
@@ -508,8 +703,14 @@ export function ExamInterface({
     document.addEventListener("cut", handleCut);
     document.addEventListener("contextmenu", handleContextMenu);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    const cleanupGuardian = createExtensionGuardian((extName) => {
+      handleSecurityInfraction("DEV_TOOLS", `Unauthorized third-party AI or helper extension detected: ${extName}`);
+    });
 
     return () => {
+      cleanupGuardian();
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
@@ -518,6 +719,12 @@ export function ExamInterface({
       document.removeEventListener("cut", handleCut);
       document.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      if (typeof window !== "undefined" && (window.screen as any)?.removeEventListener) {
+        try {
+          (window.screen as any).removeEventListener("change", checkMultiMonitor);
+        } catch (_) {}
+      }
     };
   }, [hasStarted, isFinished, session.id, config, executeSubmit]);
 
@@ -536,6 +743,16 @@ export function ExamInterface({
   }, [hasStarted, isFinished, currentQuestion, questions]);
 
   const startExamFullscreen = async () => {
+    const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
+    if (statusData?.concurrentSessionDetected) {
+      setIsConcurrentLockout(true);
+      return;
+    }
+
+    if (diagnostics.isVM) {
+      logCheatSignalAction(session.id, "VIRTUAL_MACHINE", `Candidate launched assessment from a virtualized environment (${diagnostics.vmRenderer}).`);
+    }
+
     if (config.requireFullscreen !== false) {
       try {
         await document.documentElement.requestFullscreen();
@@ -549,9 +766,17 @@ export function ExamInterface({
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      const statusData = await getAttemptStatusAction(attempt.id);
+      const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
       if (!statusData) return;
       
+      if (statusData.concurrentSessionDetected) {
+        setIsConcurrentLockout(true);
+        if (typeof document !== "undefined" && document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        return;
+      }
+
       setSessionStatus(statusData.sessionStatus);
 
       // Instant live resume if Owner reopens the test from SUBMITTED -> IN_PROGRESS
@@ -580,6 +805,34 @@ export function ExamInterface({
     return () => clearInterval(interval);
   }, [attempt.id, isFinished, hasStarted, timeUntilStart, handleFinishTest]);
 
+  // Immediate scorecard retrieval if already submitted on initial page load
+  useEffect(() => {
+    if (isAlreadySubmitted && config.resultVisibility === "IMMEDIATE" && finalScore === null) {
+      getAttemptStatusAction(attempt.id, clientDeviceIdRef.current).then((statusData) => {
+        if (statusData) {
+          setFinalScore(statusData.score);
+          setFinalTotalMarks(statusData.totalMarks);
+          if (statusData.detailedResults) {
+            setDetailedResults(statusData.detailedResults);
+          }
+        }
+      });
+    }
+  }, [isAlreadySubmitted, config.resultVisibility, attempt.id, finalScore]);
+
+  const handleReturnToLogin = () => {
+    if (typeof document !== "undefined" && document.fullscreenElement) {
+      try {
+        document.exitFullscreen().catch(() => {});
+      } catch (e) {}
+    }
+    try {
+      localStorage.removeItem(`aptix_attempt_${attempt.id}`);
+    } catch (e) {}
+    clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
+    window.location.href = "/api/auth/logout";
+  };
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, "0");
     const s = (seconds % 60).toString().padStart(2, "0");
@@ -598,157 +851,52 @@ export function ExamInterface({
     );
   }
 
-  if (timeUntilStart === 999999) {
+  if (isConcurrentLockout) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-white p-6 relative overflow-hidden selection:bg-white selection:text-black">
-        <div className="text-center p-10 bg-[#0a0c10] border border-neutral-800 rounded-3xl max-w-lg w-full shadow-2xl relative z-10">
-          <div className="w-14 h-14 bg-neutral-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 border border-neutral-800 shadow-inner">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <main className="min-h-screen bg-black text-white flex items-center justify-center p-6 selection:bg-rose-500 selection:text-white">
+        <div className="bg-[#0e0a0d] p-10 rounded-3xl shadow-2xl max-w-lg w-full text-center border border-rose-900/50">
+          <div className="w-16 h-16 bg-rose-950/60 text-rose-400 border border-rose-500/40 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-rose-950/30">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m0 0v2m0-2h2m-2 0H10m11-3.5a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[10px] font-bold tracking-widest text-neutral-300 uppercase mb-3">
-            <span className="text-emerald-400">✦</span>
-            <span>Aptix Assessment Hall</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-950/80 border border-rose-500/30 text-rose-300 text-[11px] font-bold tracking-wider uppercase mb-3">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            Security Lockdown
           </div>
-          <h2 className="text-2xl font-black mb-2 tracking-tight text-white">{session.exam.title}</h2>
-          <p className="text-neutral-400 text-sm mb-8 font-medium">Waiting for your test administrator to broadcast and launch the session...</p>
-          <div className="w-10 h-10 border-2 border-neutral-700 border-t-white rounded-full animate-spin mx-auto mb-8"></div>
-          <p className="text-xs text-neutral-500">Live listener active. This screen will auto-refresh when launched.</p>
+          <h1 className="text-2xl font-black tracking-tight text-white mb-3">
+            Concurrent Session Detected
+          </h1>
+          <p className="text-neutral-400 text-xs font-medium leading-relaxed mb-6">
+            This examination attempt is actively running in another browser tab, window, or separate device. Simultaneous multi-tab or multi-device sessions are strictly prohibited to ensure assessment integrity.
+          </p>
+          <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-4 text-left mb-6 text-xs text-neutral-400 space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-neutral-500 font-medium">Candidate:</span>
+              <span className="text-neutral-200 font-bold">{candidateName}</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-neutral-500 font-medium">Security Signal:</span>
+              <span className="text-rose-400 font-bold">Flagged & Logged to Examiner</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-neutral-500 font-medium">Resolution:</span>
+              <span className="text-neutral-300">Close other tabs or contact your proctor</span>
+            </div>
+          </div>
+          <button
+            onClick={handleReturnToLogin}
+            className="w-full py-3.5 bg-neutral-800 hover:bg-neutral-700 text-white font-bold rounded-2xl transition duration-200 text-xs tracking-wider uppercase border border-neutral-700"
+          >
+            Return to Login
+          </button>
         </div>
-      </div>
+      </main>
     );
   }
 
-  if (timeUntilStart > 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-white p-6 relative overflow-hidden selection:bg-white selection:text-black">
-        <div className="text-center p-10 bg-[#0a0c10] border border-neutral-800 rounded-3xl max-w-lg w-full shadow-2xl relative z-10">
-          <div className="w-14 h-14 bg-neutral-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 border border-neutral-800 shadow-inner">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[10px] font-bold tracking-widest text-neutral-300 uppercase mb-3">
-            <span className="text-emerald-400">✦</span>
-            <span>Assessment Starting Soon</span>
-          </div>
-          <h2 className="text-2xl font-black mb-2 tracking-tight text-white">{session.exam.title}</h2>
-          <p className="text-neutral-400 text-sm mb-6 font-medium">Your scheduled assessment unlocks in:</p>
-          <div className="text-6xl font-mono font-black text-white mb-8 tracking-wider bg-neutral-900/90 py-4 px-6 rounded-2xl border border-neutral-800 inline-block shadow-inner">
-            {formatTime(timeUntilStart)}
-          </div>
-          <p className="text-xs text-neutral-500">Please remain on this screen. The assessment will unlock automatically.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!hasStarted && timeUntilStart <= 0) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-6 selection:bg-white selection:text-black">
-        <div className="bg-[#0a0c10] border border-neutral-800 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col md:flex-row">
-          {/* Left Dark Accent Banner */}
-          <div className="md:w-5/12 bg-[#07080c] border-b md:border-b-0 md:border-r border-neutral-800 text-white p-8 md:p-10 flex flex-col justify-between relative overflow-hidden">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2.5 mb-6">
-                <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden shrink-0">
-                  <video
-                    src="/aptix-logo-anim.mp4"
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    poster="/logo-preview-frame.jpg"
-                    className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold text-neutral-400">
-                  <span className="text-emerald-400 text-[10px]">✦</span>
-                  <span>Aptix Assessment</span>
-                </div>
-              </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4 leading-snug text-white">
-                {session.exam.title}
-              </h1>
-              <p className="text-neutral-400 text-sm leading-relaxed font-normal">
-                Please ensure you are in a quiet environment to avoid distractions. Read through the onboarding instructions carefully before starting.
-              </p>
-            </div>
-            
-            <div className="mt-8 pt-6 border-t border-neutral-800 relative z-10 flex items-center justify-between text-xs text-neutral-400">
-              <span>Candidate: <strong className="text-white">{candidateName}</strong></span>
-              <span>{session.durationMinutes} mins total</span>
-            </div>
-          </div>
-
-          {/* Right Content Panel */}
-          <div className="md:w-7/12 p-8 md:p-10 flex flex-col justify-between bg-[#0a0c10]">
-            <div className="space-y-6">
-              <div className="border-b border-neutral-800 pb-4">
-                <h2 className="text-lg font-bold text-white tracking-tight">Overview & Guidelines</h2>
-                <p className="text-neutral-400 text-xs mt-0.5">Answer all {questions.length} questions to showcase your skills</p>
-              </div>
-
-              {session.exam.instructions && (
-                <div className="bg-[#0d0f14] rounded-xl p-4 border border-neutral-800">
-                  <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <span className="text-emerald-400 text-[10px]">✦</span>
-                    <span>Instructor Note</span>
-                  </h3>
-                  <p className="text-neutral-300 text-xs leading-relaxed whitespace-pre-wrap">{session.exam.instructions}</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[#0d0f14] border border-neutral-800">
-                  <div className="w-8 h-8 rounded-lg bg-neutral-900 text-white flex items-center justify-center shrink-0 mt-0.5 border border-neutral-800">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white">Timed Assessment ({session.durationMinutes} Minutes)</h4>
-                    <p className="text-neutral-400 text-xs mt-0.5">The countdown starts immediately upon clicking start and cannot be paused.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[#0d0f14] border border-neutral-800">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 border border-amber-500/20">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white">Automated Integrity Proctoring</h4>
-                    <p className="text-neutral-400 text-xs mt-0.5">Exam runs in full screen. Tab switches and window unfocus events are recorded.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-6 mt-6 border-t border-neutral-800">
-              <button 
-                onClick={startExamFullscreen}
-                className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer"
-              >
-                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-                <span>{isRecovered ? "Enter Fullscreen & Resume Assessment" : "Start Assessment"}</span>
-                <svg className="w-4 h-4 text-black group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isFinished) {
+  // 1. If candidate has completed/submitted the exam, ALWAYS show results/scorecard first
+  if (isFinished || isAlreadySubmitted) {
     const isTimeout = timeLeft <= 0;
     return (
       <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 py-12 overflow-y-auto selection:bg-white selection:text-black">
@@ -905,7 +1053,7 @@ export function ExamInterface({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="px-6 py-2.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl shadow-md transition-colors flex items-center gap-2"
+                className="px-6 py-2.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -913,14 +1061,348 @@ export function ExamInterface({
                 <span>Download / Print Scorecard PDF</span>
               </button>
             )}
-            <form action={logoutAction}>
-              <button className="text-neutral-400 font-bold text-xs hover:text-white px-4 py-2.5 transition-colors">
-                Return to Login
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={handleReturnToLogin}
+              className="px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white font-bold text-xs rounded-xl border border-neutral-800 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+            >
+              <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Return to Login</span>
+            </button>
           </div>
         </div>
       </main>
+    );
+  }
+
+  // 2. If the exam session itself is already COMPLETED (or closed by administrator)
+  if (sessionStatus === "COMPLETED" || session.status === "COMPLETED") {
+    return (
+      <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 selection:bg-white selection:text-black">
+        <div className="bg-[#0a0c10] p-10 rounded-3xl shadow-2xl max-w-md w-full text-center border border-neutral-800">
+          <div className="w-16 h-16 bg-neutral-900 text-neutral-400 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-neutral-800 shadow-inner">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[10px] font-bold tracking-widest text-neutral-400 uppercase mb-3">
+            <span>Assessment Concluded</span>
+          </div>
+          <h1 className="text-2xl font-black text-white mb-2">{session.exam.title}</h1>
+          <p className="text-neutral-400 text-xs font-medium max-w-sm mx-auto mb-8 leading-relaxed">
+            This examination session has concluded and is no longer accepting new attempts or submissions.
+          </p>
+          <button
+            type="button"
+            onClick={handleReturnToLogin}
+            className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Return to Login</span>
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // 3. Waiting for administrator to broadcast/launch the session
+  if (timeUntilStart === 999999) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white p-6 relative overflow-hidden selection:bg-white selection:text-black">
+        <div className="text-center p-10 bg-[#0a0c10] border border-neutral-800 rounded-3xl max-w-lg w-full shadow-2xl relative z-10">
+          <div className="w-14 h-14 bg-neutral-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 border border-neutral-800 shadow-inner">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[10px] font-bold tracking-widest text-neutral-300 uppercase mb-3">
+            <span className="text-emerald-400">✦</span>
+            <span>Aptix Assessment Hall</span>
+          </div>
+          <h2 className="text-2xl font-black mb-2 tracking-tight text-white">{session.exam.title}</h2>
+          <p className="text-neutral-400 text-sm mb-8 font-medium">Waiting for your test administrator to broadcast and launch the session...</p>
+          <div className="w-10 h-10 border-2 border-neutral-700 border-t-white rounded-full animate-spin mx-auto mb-8"></div>
+          <p className="text-xs text-neutral-500 mb-6">Live listener active. This screen will auto-refresh when launched.</p>
+          
+          <button
+            type="button"
+            onClick={handleReturnToLogin}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 px-4 py-2.5 rounded-xl transition-all border border-neutral-800 cursor-pointer"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Return to Login</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Countdown to scheduled start
+  if (timeUntilStart > 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white p-6 relative overflow-hidden selection:bg-white selection:text-black">
+        <div className="text-center p-10 bg-[#0a0c10] border border-neutral-800 rounded-3xl max-w-lg w-full shadow-2xl relative z-10">
+          <div className="w-14 h-14 bg-neutral-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 border border-neutral-800 shadow-inner">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[10px] font-bold tracking-widest text-neutral-300 uppercase mb-3">
+            <span className="text-emerald-400">✦</span>
+            <span>Assessment Starting Soon</span>
+          </div>
+          <h2 className="text-2xl font-black mb-2 tracking-tight text-white">{session.exam.title}</h2>
+          <p className="text-neutral-400 text-sm mb-6 font-medium">Your scheduled assessment unlocks in:</p>
+          <div className="text-6xl font-mono font-black text-white mb-8 tracking-wider bg-neutral-900/90 py-4 px-6 rounded-2xl border border-neutral-800 inline-block shadow-inner">
+            {formatTime(timeUntilStart)}
+          </div>
+          <p className="text-xs text-neutral-500 mb-6">Please remain on this screen. The assessment will unlock automatically.</p>
+          
+          <button
+            type="button"
+            onClick={handleReturnToLogin}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 px-4 py-2.5 rounded-xl transition-all border border-neutral-800 cursor-pointer"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Return to Login</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. If allotted time has expired (whether started or not)
+  if (timeLeft <= 0) {
+    return (
+      <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 selection:bg-white selection:text-black">
+        <div className="bg-[#0a0c10] p-10 rounded-3xl shadow-2xl max-w-md w-full text-center border border-neutral-800">
+          <div className="w-16 h-16 bg-amber-950/40 text-amber-400 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-black text-white mb-2">Time Has Expired</h1>
+          <p className="text-neutral-400 text-xs font-medium max-w-sm mx-auto mb-8 leading-relaxed">
+            The allotted examination time for this session has completed.
+          </p>
+          <button
+            type="button"
+            onClick={handleReturnToLogin}
+            className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Return to Login</span>
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // 6. Onboarding / Guidelines screen (ONLY shown when exam is open and candidate has not clicked start yet)
+  if (!hasStarted && timeUntilStart <= 0 && timeLeft > 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-6 selection:bg-white selection:text-black">
+        <div className="bg-[#0a0c10] border border-neutral-800 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col md:flex-row">
+          {/* Left Dark Accent Banner */}
+          <div className="md:w-5/12 bg-[#07080c] border-b md:border-b-0 md:border-r border-neutral-800 text-white p-8 md:p-10 flex flex-col justify-between relative overflow-hidden">
+            <div className="relative z-10">
+              <div className="flex items-center gap-2.5 mb-6">
+                <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden shrink-0">
+                  <video
+                    src="/aptix-logo-anim.mp4"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    poster="/logo-preview-frame.jpg"
+                    className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold text-neutral-400">
+                  <span className="text-emerald-400 text-[10px]">✦</span>
+                  <span>Aptix Assessment</span>
+                </div>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4 leading-snug text-white">
+                {session.exam.title}
+              </h1>
+              <p className="text-neutral-400 text-sm leading-relaxed font-normal">
+                Please ensure you are in a quiet environment to avoid distractions. Read through the onboarding instructions carefully before starting.
+              </p>
+            </div>
+            
+            <div className="mt-8 pt-6 border-t border-neutral-800 relative z-10 flex items-center justify-between text-xs text-neutral-400">
+              <span>Candidate: <strong className="text-white">{candidateName}</strong></span>
+              <span>{session.durationMinutes} mins total</span>
+            </div>
+          </div>
+
+          {/* Right Content Panel */}
+          <div className="md:w-7/12 p-8 md:p-10 flex flex-col justify-between bg-[#0a0c10]">
+            <div className="space-y-6">
+              <div className="border-b border-neutral-800 pb-4">
+                <h2 className="text-lg font-bold text-white tracking-tight">Overview & Guidelines</h2>
+                <p className="text-neutral-400 text-xs mt-0.5">Answer all {questions.length} questions to showcase your skills</p>
+              </div>
+
+              {session.exam.instructions && (
+                <div className="bg-[#0d0f14] rounded-xl p-4 border border-neutral-800">
+                  <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <span className="text-emerald-400 text-[10px]">✦</span>
+                    <span>Instructor Note</span>
+                  </h3>
+                  <p className="text-neutral-300 text-xs leading-relaxed whitespace-pre-wrap">{session.exam.instructions}</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[#0d0f14] border border-neutral-800">
+                  <div className="w-8 h-8 rounded-lg bg-neutral-900 text-white flex items-center justify-center shrink-0 mt-0.5 border border-neutral-800">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Timed Assessment ({session.durationMinutes} Minutes)</h4>
+                    <p className="text-neutral-400 text-xs mt-0.5">The countdown starts immediately upon clicking start and cannot be paused.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[#0d0f14] border border-neutral-800">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 border border-amber-500/20">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Automated Integrity Proctoring</h4>
+                    <p className="text-neutral-400 text-xs mt-0.5">Exam runs in full screen. Tab switches and window unfocus events are recorded.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pre-Exam Hardware & Integrity Diagnostics */}
+              <div className="bg-[#07080c] rounded-2xl p-4 border border-neutral-800/90 space-y-3">
+                <div className="flex items-center justify-between border-b border-neutral-800/60 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Pre-Flight System Check</h4>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                    {diagnostics.isChecking ? "Diagnosing..." : "All Systems Ready"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  {/* Ping / Latency */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span className="text-neutral-400">Ping Latency</span>
+                    </div>
+                    <span className="font-bold text-white">
+                      {diagnostics.ping !== null ? `${diagnostics.ping}ms` : "Active"}
+                    </span>
+                  </div>
+
+                  {/* Display / Screen */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      <span className="text-neutral-400">Display</span>
+                    </div>
+                    <span className={`font-bold ${diagnostics.isSingleScreen ? "text-emerald-400" : "text-amber-400"}`}>
+                      {diagnostics.isSingleScreen ? "Single Monitor" : "Dual Screen"}
+                    </span>
+                  </div>
+
+                  {/* Battery / Power */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span className="text-neutral-400">Power Source</span>
+                    </div>
+                    <span className="font-bold text-white">
+                      {diagnostics.battery
+                        ? diagnostics.battery.charging
+                          ? `AC Connected (${diagnostics.battery.level}%)`
+                          : `${diagnostics.battery.level}% Battery`
+                        : "AC / Ready"}
+                    </span>
+                  </div>
+
+                  {/* Environment / VM */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      <span className="text-neutral-400">Terminal Type</span>
+                    </div>
+                    <span className={`font-bold ${diagnostics.isVM ? "text-rose-400" : "text-emerald-400"}`}>
+                      {diagnostics.isVM ? "Virtual Machine" : "Physical OS"}
+                    </span>
+                  </div>
+                </div>
+
+                {diagnostics.isVM && (
+                  <p className="text-[11px] text-rose-400 bg-rose-950/40 border border-rose-500/30 rounded-lg p-2 font-medium">
+                    ⚠️ Virtual machine environment detected. Assessments should be taken on a physical host machine.
+                  </p>
+                )}
+                {!diagnostics.isSingleScreen && (
+                  <p className="text-[11px] text-amber-400 bg-amber-950/40 border border-amber-500/30 rounded-lg p-2 font-medium">
+                    ⚠️ Multiple displays detected. Please disconnect secondary monitors before beginning.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-6 mt-6 border-t border-neutral-800 space-y-2.5">
+              <button 
+                onClick={startExamFullscreen}
+                className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+                <span>{isRecovered ? "Enter Fullscreen & Resume Assessment" : "Start Assessment"}</span>
+                <svg className="w-4 h-4 text-black group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleReturnToLogin}
+                className="w-full py-2.5 bg-transparent hover:bg-neutral-900 text-neutral-400 hover:text-white font-semibold text-xs rounded-xl border border-neutral-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Return to Login</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -968,9 +1450,16 @@ export function ExamInterface({
           <p className="text-neutral-400 text-sm mb-8 leading-relaxed">
             This exam session was generated without any questions. Please notify the test administrator.
           </p>
-          <form action={logoutAction}>
-            <button className="text-neutral-400 hover:text-white font-bold text-sm transition-colors">Log Out</button>
-          </form>
+          <button
+            type="button"
+            onClick={handleReturnToLogin}
+            className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Return to Login</span>
+          </button>
         </div>
       </main>
     );

@@ -76,7 +76,7 @@ export async function analyzeSingleQuestionAction(
 export async function saveVerifiedQuestionsAction(
   questions: ParsedQuestionWithAI[],
   status: "DRAFT" | "SUBMITTED" = "SUBMITTED"
-): Promise<{ error?: string; count?: number }> {
+): Promise<{ error?: string; count?: number; skippedDuplicates?: number }> {
   const user = await getAuthorizedUser();
   if (!user) return { error: "Unauthorized" };
 
@@ -85,8 +85,20 @@ export async function saveVerifiedQuestionsAction(
   }
 
   let createdCount = 0;
+  let skippedDuplicates = 0;
 
   for (const q of questions) {
+    // Check if exact duplicate question already exists
+    const duplicate = await prisma.question.findFirst({
+      where: { text: { equals: q.text } },
+      select: { id: true }
+    });
+
+    if (duplicate) {
+      skippedDuplicates++;
+      continue;
+    }
+
     const formattedOptions = q.options.map((opt, idx) => ({
       text: opt.text,
       explanation: idx === q.correctAnswerIndex ? (q.draftExplanation || opt.explanation || null) : (opt.explanation || null),
@@ -117,5 +129,5 @@ export async function saveVerifiedQuestionsAction(
   revalidatePath("/dashboard/setter");
   revalidatePath("/dashboard/setter/bank");
   revalidatePath("/dashboard/owner");
-  return { count: createdCount };
+  return { count: createdCount, skippedDuplicates };
 }

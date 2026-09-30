@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
 import { z } from "zod";
 
 const templateSchema = z.object({
@@ -131,6 +132,7 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
     }
   });
 
+  invalidateOwnerDashboardCache();
   revalidatePath("/dashboard/owner");
   return { success: true, templateId: template.id };
 }
@@ -156,6 +158,7 @@ export async function deleteTemplateAction(id: string) {
       }
     });
 
+    invalidateOwnerDashboardCache();
     revalidatePath("/dashboard/owner");
     return { success: true };
   } catch (error) {
@@ -233,6 +236,7 @@ export async function duplicateTemplateAction(id: string) {
       }
     });
 
+    invalidateOwnerDashboardCache();
     revalidatePath("/dashboard/owner");
     return { success: true, newTemplateId: newTemplate.id };
   } catch (error: any) {

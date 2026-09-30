@@ -9,11 +9,12 @@ export function NoExamPoller() {
 
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       const active = await getActiveExamStatusAction();
       if (active) {
         router.refresh();
       }
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [router]);
 

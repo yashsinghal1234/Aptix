@@ -61,20 +61,34 @@ graph TD
 
 ### 1. 🛡️ High-Scale Concurrency & Zero Data Loss
 * **Thundering-Herd Read Mitigation**: Pre-cached and snapshotted question set definitions eliminate database bottlenecks when 1,000+ candidates initiate tests at the exact same second.
-* **Progressive Debounced Autosave**: Candidate selections stream automatically to PostgreSQL on a debounced timeline, backed by an immediate `localStorage` buffer for 100% offline recovery.
+* **Transaction-Free Raw SQL Bulk Upsert**: Candidate answer submissions use high-speed parameterized SQL (`INSERT ... ON CONFLICT DO UPDATE`), collapsing 50+ individual database round-trips into a single atomic write without transaction locks.
+* **Dual-Layer Storage (IndexedDB + In-Memory)**: Non-blocking client-side IndexedDB persistence ensures zero frame drops during autosaves, with automatic retry queues when lab Wi-Fi fluctuates.
 * **Dual-Layer Crash Restoration**: If a candidate experiences power failure, browser crash, or machine reboot, re-entering the exam instantly restores all previously marked answers, visited question states, and remaining time down to the exact second.
+* **In-Memory TTL Multi-Tier Caching**: Dashboard statistics, active session rosters, and candidate mastery metrics leverage atomic cache layers to keep Neon query latency under 50ms.
 * **$O(1)$ Deadline Sweeper & Lazy Submission**: Strict deadlines are checked at the millisecond level on candidate interactions (Check-on-Access) combined with an automated scheduled sweep.
 
 ### 2. 🔒 Ironclad Anti-Cheating & AI Proctoring
-* **Server-Calibrated NTP Timekeeping**: Prevents local device clock tampering; timers run against high-precision server time delta stamps.
+* **Server-Calibrated NTP Timekeeping**: Prevents local device clock tampering; timers run against high-precision server time delta stamps with server-side deadline capping.
+* **Sliding-Window Rate Limiting**: Anti-brute-force defense throttles unauthorized PIN guesses and credential spraying on all authentication entrypoints.
+* **Single-Device / Single-Tab Session Lock**: Enforces a strict lease lock per candidate session, immediately booting duplicate tabs or concurrent devices.
+* **Hardware & Sandbox Detection**: Client initialization inspects WebGL unmasked hardware renderers to identify virtual machines and sandbox cheating environments (`VMware`, `VirtualBox`, `SwiftShader`, `llvmpipe`, `Parallels`).
+* **Extension Injection Guardian**: `MutationObserver` monitors document body for unauthorized third-party AI extensions, floating overlays, and ChatGPT/Copilot sidebars.
+* **Multi-Display & PrintScreen Defense**: Tracks secondary monitors via the Window Management API and actively purges the system clipboard upon OS-level PrintScreen keystrokes.
 * **Window Minimization & Tab-Switch Limit**: Real-time detection tracks every tab switch or window blur, increments persistent security violation flags, and triggers automatic force-submission upon exceeding thresholds.
 * **Fullscreen Enforced Lockdown**: Exams prompt strict full-screen enforcement; exiting logs audit warnings.
-* **Payload Answer Obfuscation**: Correct choices and explanations are completely stripped from client payloads, guaranteeing zero client-side inspect-element cheating.
+* **Payload Answer Obfuscation**: Correct choices, explanations, and author IDs are completely stripped from candidate payloads, guaranteeing zero client-side inspect-element cheating.
 * **Institutional Domain Locking**: Restrict test eligibility to specific verified institutional email domains (e.g. `@college.edu`).
 
-### 3. 📊 Psychometrics & Executive Analytics
+### 3. 📚 Question Bank Integrity & Setter Intelligence
+* **Question Bank Integrity Lock**: Questions bound to active (`LIVE`) or concluded (`COMPLETED`) assessment sessions are hard-locked against accidental deletion, permanently safeguarding historical scorecards and candidate response archives.
+* **Visual Lock Transparency**: Setters and administrators receive clear `🔒 Locked` status indicators and protective tooltips in the Question Bank management portal.
+* **Intelligent Duplicate Stem Detection**: Token-based Jaccard similarity engine with prefix normalization (`Q1:`, `1)`, etc.) and stop-word filtering prevents question bank pollution, flagging exact duplicates and near-identical questions (>85% match).
+* **Quote-Aware CSV Bulk Importer**: RFC 4180-compliant CSV parser seamlessly processes questions containing internal commas, escaped quotes, and multiline choices with automated duplicate skip reporting.
+* **AI Extraction Deduplication**: The AI question extractor audits incoming batches and automatically skips existing items to prevent redundant entries.
+
+### 4. 📊 Psychometrics & Executive Analytics
 * **Cohort Mastery Metrics**: Automatic calculation of cohort mean score, median score, pass rates, and candidate decile score histograms.
-* **Psychometric Item Discrimination**: Per-question analytics measure question difficulty index, average time spent per question, and distractor efficiency.
+* **Psychometric Item Discrimination**: Per-question analytics measure question difficulty index ($p$-value), discrimination index ($D$), and distractor frequency distributions.
 * **Audit Trail & Response Inspection**: Comprehensive timeline view of every student's answer submission, flag occurrences, and time logged.
 
 ---
@@ -166,6 +180,12 @@ npm run dev
 ```
 
 Access the application at [**http://localhost:3000**](http://localhost:3000).
+
+### 6. Run Critical Path Test Suite
+Verify 67 platform invariants across scoring, rate limiting, anti-cheat detection, PRNG shuffling, psychometrics, and question bank deduplication:
+```bash
+npm test
+```
 
 ---
 

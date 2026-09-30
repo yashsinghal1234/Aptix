@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
 import { z } from "zod";
 
 const scheduleSchema = z.object({
@@ -135,6 +136,7 @@ export async function approveAllQuestionsAction() {
     data: { status: "APPROVED" }
   });
 
+  invalidateOwnerDashboardCache();
   revalidatePath("/dashboard/owner");
   revalidatePath("/dashboard/setter/bank");
   return { success: true };

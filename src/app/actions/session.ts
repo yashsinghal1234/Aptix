@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
 
 function parseStartTime(startTimeStr: string | null | undefined, tzOffsetStr: string | null | undefined): Date | undefined {
   if (!startTimeStr || !startTimeStr.trim()) return undefined;
@@ -159,6 +160,7 @@ export async function createSessionAction(formData: FormData) {
     }
   });
 
+  invalidateOwnerDashboardCache();
   revalidatePath("/dashboard/owner");
   return { success: true, sessionId: session.id, pin };
 }
@@ -194,6 +196,7 @@ export async function setSessionStatusAction(formData: FormData) {
     }
   }
 
+  invalidateOwnerDashboardCache();
   revalidatePath("/dashboard/owner");
   revalidatePath(`/dashboard/owner/session/${sessionId}`);
   return { success: true };

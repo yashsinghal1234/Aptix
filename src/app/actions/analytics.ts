@@ -121,7 +121,26 @@ export async function computeSessionAnalytics(sessionId: string) {
   }
 }
 
+let telemetryCache: {
+  timestamp: number;
+  data: {
+    liveSessionsCount: number;
+    inProgressAttemptsCount: number;
+    liveCheatFlagsCount: number;
+    totalCheatFlagsCount: number;
+    cheatFlagsByType: { type: string; count: number }[];
+    completedAttemptsCount: number;
+  };
+} | null = null;
+
+const TELEMETRY_CACHE_TTL_MS = 6000; // 6 seconds memory cache
+
 export async function getLiveTelemetryData() {
+  const now = Date.now();
+  if (telemetryCache && (now - telemetryCache.timestamp) < TELEMETRY_CACHE_TTL_MS) {
+    return telemetryCache.data;
+  }
+
   try {
     const [
       liveSessionsCount,
@@ -152,7 +171,7 @@ export async function getLiveTelemetryData() {
       prisma.candidateAttempt.count({ where: { status: "SUBMITTED" } }),
     ]);
 
-    return {
+    const result = {
       liveSessionsCount,
       inProgressAttemptsCount,
       liveCheatFlagsCount,
@@ -160,9 +179,16 @@ export async function getLiveTelemetryData() {
       cheatFlagsByType: cheatFlagsByType.map(f => ({ type: f.type, count: f._count.id })),
       completedAttemptsCount,
     };
+
+    telemetryCache = {
+      timestamp: now,
+      data: result
+    };
+
+    return result;
   } catch (err) {
     console.error("[getLiveTelemetryData] Error fetching live telemetry:", err);
-    return null;
+    return telemetryCache?.data || null;
   }
 }
 

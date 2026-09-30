@@ -1,10 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { signToken, verifyToken } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { checkRateLimit, recordFailedAttempt, resetRateLimit } from "@/lib/rate-limiter";
 
 const OWNER_EMAILS = ["admin@aptix.com", "singhalyash307@gmail.com"];
 const DEFAULT_OWNER_PASSWORD = "282007@aA";
@@ -32,6 +33,18 @@ export async function candidateLoginAction(formData: FormData) {
     const normalizedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
 
+    const headerList = headers();
+    const clientIp = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip") || "local_client";
+    const rateLimitKey = `pin_${clientIp}`;
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(rateLimitKey);
+    if (!allowed) {
+      return {
+        field: "examPin",
+        error: `Security Lockout: Too many failed login attempts. Please wait ${retryAfterSeconds} seconds before trying again.`
+      };
+    }
+
     // 1. Verify that session exists with this PIN
     const session = await prisma.examSession.findFirst({
       where: { pin: normalizedPin },
@@ -39,6 +52,7 @@ export async function candidateLoginAction(formData: FormData) {
     });
 
     if (!session) {
+      recordFailedAttempt(rateLimitKey);
       return { 
         field: "examPin",
         error: "Exam PIN not found. Please double-check the code provided by your instructor or proctor." 
@@ -132,6 +146,7 @@ export async function candidateLoginAction(formData: FormData) {
       path: "/"
     });
 
+    resetRateLimit(rateLimitKey);
     redirect("/?started=true");
   } catch (error: any) {
     if (error?.digest?.startsWith("NEXT_REDIRECT") || error?.message === "NEXT_REDIRECT") {
@@ -160,6 +175,18 @@ export async function staffLoginAction(formData: FormData) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    const headerList = headers();
+    const clientIp = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip") || "local_client";
+    const staffRateKey = `staff_${clientIp}_${normalizedEmail}`;
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(staffRateKey);
+    if (!allowed) {
+      return {
+        field: "password",
+        error: `Account temporarily locked due to repeated failed logins. Please wait ${retryAfterSeconds} seconds before retrying.`
+      };
+    }
+
     // 1. Check Owner Accounts
     if (OWNER_EMAILS.includes(normalizedEmail)) {
       let ownerUser = await prisma.user.findUnique({
@@ -174,8 +201,11 @@ export async function staffLoginAction(formData: FormData) {
       }
 
       if (!isValid) {
+        recordFailedAttempt(staffRateKey);
         return { field: "password", error: "Incorrect password. Please verify your credentials and try again." };
       }
+
+      resetRateLimit(staffRateKey);
 
       // Auto-seed/update password hash and role
       if (!ownerUser) {
@@ -248,8 +278,11 @@ export async function staffLoginAction(formData: FormData) {
     }
 
     if (!isSetterValid) {
+      recordFailedAttempt(staffRateKey);
       return { field: "password", error: "Incorrect password. Please verify your credentials and try again." };
     }
+
+    resetRateLimit(staffRateKey);
 
     if (!setter.passwordHash) {
       await prisma.user.update({
@@ -351,7 +384,15 @@ export async function setupFirstTimePasswordAction(formData: FormData) {
 }
 
 export async function logoutAction() {
-  cookies().delete("token");
+  const cookieStore = cookies();
+  cookieStore.set("token", "", {
+    path: "/",
+    expires: new Date(0),
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
   redirect("/");
 }
 

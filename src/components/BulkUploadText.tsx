@@ -90,9 +90,14 @@ export function BulkUploadText() {
     if (res.error) {
       setError(res.error);
     } else {
-      setSuccessMsg(`Successfully saved ${res.count} questions as ${status === "DRAFT" ? "Drafts" : "Submitted for Review"}!`);
-      setParsedQuestions([]);
-      setTextBlob("");
+      const dupMsg = res.skippedDuplicates && res.skippedDuplicates > 0 ? ` (${res.skippedDuplicates} duplicate${res.skippedDuplicates > 1 ? "s" : ""} skipped)` : "";
+      if (res.count === 0 && res.skippedDuplicates) {
+        setError(`All ${res.skippedDuplicates} questions already exist in the question bank.`);
+      } else {
+        setSuccessMsg(`Successfully saved ${res.count} questions as ${status === "DRAFT" ? "Drafts" : "Submitted for Review"}!${dupMsg}`);
+        setParsedQuestions([]);
+        setTextBlob("");
+      }
     }
   };
 
@@ -106,6 +111,8 @@ export function BulkUploadText() {
 
     if (res.error) {
       setError(res.error);
+    } else if (res.count === 0 && res.skippedDuplicates) {
+      setError("This question already exists in the question bank.");
     } else {
       setSuccessMsg(`Question saved successfully as ${status === "DRAFT" ? "Draft" : "Submitted"}.`);
       setParsedQuestions(prev => prev.filter((_, idx) => idx !== index));

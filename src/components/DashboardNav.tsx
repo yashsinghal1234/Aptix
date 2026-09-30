@@ -225,17 +225,15 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
           </div>
           <div className="flex items-center gap-3">
             <ChangePasswordModal />
-            <form action={logoutAction}>
-              <button
-                type="submit"
-                className="px-4 py-2 sm:px-4.5 sm:py-2.5 text-xs sm:text-sm font-bold text-neutral-200 bg-neutral-900 hover:bg-rose-950/40 hover:text-rose-400 hover:border-rose-900/50 rounded-xl transition-all border border-neutral-800 flex items-center gap-2 cursor-pointer shadow-xs"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                <span>Logout</span>
-              </button>
-            </form>
+            <a
+              href="/api/auth/logout"
+              className="px-4 py-2 sm:px-4.5 sm:py-2.5 text-xs sm:text-sm font-bold text-neutral-200 bg-neutral-900 hover:bg-rose-950/40 hover:text-rose-400 hover:border-rose-900/50 rounded-xl transition-all border border-neutral-800 flex items-center gap-2 cursor-pointer shadow-xs"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Logout</span>
+            </a>
           </div>
         </header>
         <div className="flex-1 overflow-auto bg-[#000000] p-4 sm:p-6 md:p-8 text-neutral-100">

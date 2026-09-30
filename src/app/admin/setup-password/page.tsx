@@ -105,14 +105,12 @@ export default function SetupPasswordPage() {
         </form>
 
         <div className="mt-4 pt-3.5 border-t border-neutral-800 text-center">
-          <form action={logoutAction}>
-            <button 
-              type="submit"
-              className="text-xs font-semibold text-neutral-500 hover:text-neutral-300 transition-colors"
-            >
-              Sign out and return later
-            </button>
-          </form>
+          <a 
+            href="/api/auth/logout"
+            className="text-xs font-semibold text-neutral-500 hover:text-neutral-300 transition-colors inline-block"
+          >
+            Sign out and return later
+          </a>
         </div>
       </div>
     </main>

@@ -3,6 +3,25 @@
 import { useState } from "react";
 import { createQuestionAction } from "@/app/actions/setter";
 
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"' || char === "'") {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      result.push(cur.trim().replace(/^["']|["']$/g, ""));
+      cur = "";
+    } else {
+      cur += char;
+    }
+  }
+  result.push(cur.trim().replace(/^["']|["']$/g, ""));
+  return result;
+}
+
 export function BulkUploadCSV() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -18,16 +37,16 @@ export function BulkUploadCSV() {
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        // Basic CSV split, ignores quotes handling for simplicity
         const rows = text.split("\n").map(row => row.trim()).filter(row => row.length > 0);
         
         let successCount = 0;
+        let duplicateCount = 0;
 
-        // Skip header row if it exists (check if first row has 'Question Text' or similar)
+        // Skip header row if it exists
         const startIndex = rows[0].toLowerCase().includes("question") ? 1 : 0;
 
         for (let i = startIndex; i < rows.length; i++) {
-          const cols = rows[i].split(",").map(c => c.trim());
+          const cols = parseCSVLine(rows[i]);
           if (cols.length >= 7) {
             const formData = new FormData();
             formData.append("text", cols[0]);
@@ -36,14 +55,13 @@ export function BulkUploadCSV() {
             formData.append("option2", cols[3]);
             formData.append("option3", cols[4]);
             
-            // Handle if they passed text like "Option 1" instead of "0"
             let correctIndex = parseInt(cols[5]);
             if (isNaN(correctIndex)) {
               if (cols[5].includes("1") || cols[5].toLowerCase() === "a") correctIndex = 0;
               else if (cols[5].includes("2") || cols[5].toLowerCase() === "b") correctIndex = 1;
               else if (cols[5].includes("3") || cols[5].toLowerCase() === "c") correctIndex = 2;
               else if (cols[5].includes("4") || cols[5].toLowerCase() === "d") correctIndex = 3;
-              else correctIndex = 0; // fallback
+              else correctIndex = 0;
             }
 
             formData.append("correctAnswer", correctIndex.toString());
@@ -52,16 +70,21 @@ export function BulkUploadCSV() {
             const res = await createQuestionAction(formData);
             if (res.success) {
               successCount++;
+            } else if (res.error && res.error.toLowerCase().includes("duplicate")) {
+              duplicateCount++;
             }
           }
         }
         
-        setResult(`Successfully imported ${successCount} questions!`);
+        if (successCount === 0 && duplicateCount > 0) {
+          setResult(`All ${duplicateCount} questions in this file already exist in the question bank.`);
+        } else {
+          setResult(`Successfully imported ${successCount} questions!${duplicateCount > 0 ? ` (${duplicateCount} duplicate questions skipped)` : ""}`);
+        }
       } catch (err) {
         setResult("Failed to parse CSV.");
       } finally {
         setLoading(false);
-        // Reset file input
         e.target.value = "";
       }
     };
