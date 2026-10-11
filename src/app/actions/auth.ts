@@ -16,20 +16,33 @@ function formatAuthError(error: any, fallbackMessage: string): string {
   const code = String(error?.code || "").toUpperCase();
   const name = String(error?.name || "").toLowerCase();
 
-  // Prisma connection error codes & database connection errors
+  // 1. Missing or unconfigured DATABASE_URL
+  if (!process.env.DATABASE_URL || msg.includes("environment variable not found: database_url") || msg.includes("database_url")) {
+    return "Configuration error: DATABASE_URL environment variable is missing in your deployment settings.";
+  }
+
+  // 2. Authentication failure
+  if (code === "P1000" || msg.includes("authentication failed")) {
+    return "Database authentication failed (P1000). Check database username and password in deployment settings.";
+  }
+
+  // 3. Unreachable database host / Neon asleep or invalid host
+  if (code === "P1001" || msg.includes("can't reach database server") || msg.includes("cannot reach database server")) {
+    return "Database server unreachable (P1001). Please check if your Neon project is active and DATABASE_URL is set in deployment settings.";
+  }
+
+  // 4. Database does not exist
+  if (code === "P1003") {
+    return "Database does not exist (P1003). Please check the database name in DATABASE_URL.";
+  }
+
+  // 5. Connection lag, pool timeout or server termination
   if (
-    ["P1001", "P1002", "P1008", "P1017"].includes(code) ||
-    name.includes("prismaclientinitializationerror") ||
+    ["P1002", "P1008", "P1017"].includes(code) ||
     name.includes("prismaclientrustpanicerror") ||
-    msg.includes("can't reach database server") ||
-    msg.includes("cannot reach database server") ||
-    msg.includes("please make sure your database server is running") ||
-    msg.includes("getaddrinfo") ||
-    msg.includes("enotfound") ||
     msg.includes("etimedout") ||
     msg.includes("econnrefused") ||
     msg.includes("econnreset") ||
-    msg.includes("eai_again") ||
     msg.includes("socket hang up") ||
     msg.includes("connection closed") ||
     msg.includes("connection terminated") ||
@@ -38,7 +51,11 @@ function formatAuthError(error: any, fallbackMessage: string): string {
     msg.includes("database connection") ||
     msg.includes("unable to connect to prisma")
   ) {
-    return "Database service is temporarily unavailable. Please retry in a few moments.";
+    return "Database service is temporarily unavailable. The server is connecting to Neon, please retry in a moment.";
+  }
+
+  if (code) {
+    return `Database error [${code}]: Please retry or check deployment logs.`;
   }
 
   if (error?.message && !error.message.includes("PrismaClient") && !error.message.includes("\n")) {

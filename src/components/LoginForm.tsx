@@ -67,15 +67,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       return "Internet is not connected. Please check your internet connection and try again.";
     }
 
-    const lower = msg.toLowerCase();
-    if (
-      lower.includes("database service is temporarily unavailable") ||
-      lower.includes("can't reach database") ||
-      lower.includes("cannot reach database")
-    ) {
-      return "Database connection issue. The server is connecting to the database, please retry in a moment.";
-    }
-
+    // Return the server's exact message directly without obscuring diagnostics
     return msg;
   };
 

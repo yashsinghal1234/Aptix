@@ -2,9 +2,21 @@ import { PrismaClient } from '@prisma/client'
 
 const isServer = typeof window === 'undefined';
 
+const getSanitizedDatabaseUrl = (): string | undefined => {
+  let url = process.env.DATABASE_URL;
+  if (!url) return undefined;
+  url = url.trim();
+  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+    url = url.slice(1, -1).trim();
+  }
+  return url;
+};
+
 const createPrismaClient = () => {
+  const sanitizedUrl = getSanitizedDatabaseUrl();
   const baseClient = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+    ...(sanitizedUrl ? { datasources: { db: { url: sanitizedUrl } } } : {}),
   })
 
   return baseClient.$extends({
