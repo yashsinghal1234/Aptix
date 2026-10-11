@@ -5,7 +5,7 @@ const isServer = typeof window === 'undefined';
 const getSanitizedDatabaseUrl = (): string | undefined => {
   let url = process.env.DATABASE_URL;
   if (!url) return undefined;
-  url = url.trim();
+  url = url.replace(/[\r\n\t\s]+/g, "").trim();
   if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
     url = url.slice(1, -1).trim();
   }
