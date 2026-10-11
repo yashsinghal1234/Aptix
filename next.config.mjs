@@ -6,9 +6,12 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: [
       "jose",
-      "@prisma/client",
       "hls.js",
     ],
+    serverComponentsExternalPackages: ["@prisma/client", "prisma"],
+  },
+  outputFileTracingIncludes: {
+    "/**": ["./node_modules/.prisma/client/**/*"],
   },
   async headers() {
     if (process.env.NODE_ENV !== "production") {
