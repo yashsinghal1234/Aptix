@@ -10,9 +10,19 @@ export default function SetupPasswordPage() {
   const handleSubmit = async (formData: FormData) => {
     setLoading(true);
     setError(null);
-    const res = await setupFirstTimePasswordAction(formData);
-    if (res?.error) {
-      setError(res.error);
+    try {
+      const res = await setupFirstTimePasswordAction(formData);
+      if (res?.error) {
+        setError(res.error);
+        setLoading(false);
+        return;
+      }
+      if (res?.redirectUrl) {
+        window.location.href = res.redirectUrl;
+        return;
+      }
+    } catch (err: any) {
+      setError(err?.message || "An unexpected error occurred. Please try again.");
       setLoading(false);
     }
   };

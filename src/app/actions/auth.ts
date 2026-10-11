@@ -16,7 +16,7 @@ function formatAuthError(error: any, fallbackMessage: string): string {
   const code = String(error?.code || "").toUpperCase();
   const name = String(error?.name || "").toLowerCase();
 
-  // Prisma connection error codes & network / DNS / socket errors
+  // Prisma connection error codes & database connection errors
   if (
     ["P1001", "P1002", "P1008", "P1017"].includes(code) ||
     name.includes("prismaclientinitializationerror") ||
@@ -31,20 +31,21 @@ function formatAuthError(error: any, fallbackMessage: string): string {
     msg.includes("econnreset") ||
     msg.includes("eai_again") ||
     msg.includes("socket hang up") ||
-    msg.includes("fetch failed") ||
     msg.includes("connection closed") ||
     msg.includes("connection terminated") ||
     msg.includes("connection timeout") ||
     msg.includes("connection timed out") ||
     msg.includes("database connection") ||
-    msg.includes("unable to connect to prisma") ||
-    msg.includes("prisma") ||
-    msg.includes("network error")
+    msg.includes("unable to connect to prisma")
   ) {
-    return "Internet is not connected. Please check your internet connection and try again.";
+    return "Database service is temporarily unavailable. Please retry in a few moments.";
   }
 
-  return error?.message || fallbackMessage;
+  if (error?.message && !error.message.includes("PrismaClient") && !error.message.includes("\n")) {
+    return error.message;
+  }
+
+  return fallbackMessage;
 }
 
 /**
@@ -184,7 +185,7 @@ export async function candidateLoginAction(formData: FormData) {
     });
 
     resetRateLimit(rateLimitKey);
-    redirect("/?started=true");
+    return { success: true, redirectUrl: "/?started=true" };
   } catch (error: any) {
     if (error?.digest?.startsWith("NEXT_REDIRECT") || error?.message === "NEXT_REDIRECT") {
       throw error;
@@ -276,7 +277,7 @@ export async function staffLoginAction(formData: FormData) {
         ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {})
       });
 
-      redirect("/dashboard/owner");
+      return { success: true, redirectUrl: "/dashboard/owner" };
     }
 
     // 2. Check Other Registered Accounts
@@ -328,9 +329,11 @@ export async function staffLoginAction(formData: FormData) {
       });
     }
 
+    const userRole = existingUser.role;
+
     const token = await signToken({
       userId: setter.id,
-      role: "SETTER",
+      role: userRole,
       email: normalizedEmail,
       name: setter.name,
       mustChangePassword: setter.mustChangePassword === true
@@ -345,9 +348,11 @@ export async function staffLoginAction(formData: FormData) {
     });
 
     if (setter.mustChangePassword) {
-      redirect("/admin/setup-password");
+      return { success: true, redirectUrl: "/admin/setup-password" };
+    } else if (userRole === "OWNER") {
+      return { success: true, redirectUrl: "/dashboard/owner" };
     } else {
-      redirect("/dashboard/setter");
+      return { success: true, redirectUrl: "/dashboard/setter" };
     }
   } catch (error: any) {
     if (error?.digest?.startsWith("NEXT_REDIRECT") || error?.message === "NEXT_REDIRECT") {
@@ -417,7 +422,10 @@ export async function setupFirstTimePasswordAction(formData: FormData) {
     path: "/"
   });
 
-  redirect(user.role === "OWNER" ? "/dashboard/owner" : "/dashboard/setter");
+  return { 
+    success: true, 
+    redirectUrl: user.role === "OWNER" ? "/dashboard/owner" : "/dashboard/setter" 
+  };
 }
 
 export async function logoutAction() {

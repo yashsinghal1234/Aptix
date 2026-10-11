@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 
-const isServer = typeof window === 'undefined' && typeof process !== 'undefined' && Boolean(process.versions?.node);
+const isServer = typeof window === 'undefined';
 
 const createPrismaClient = () => {
   const baseClient = new PrismaClient({
@@ -42,21 +42,15 @@ const createPrismaClient = () => {
 
 type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>
 
-const PRISMA_INSTANCE_VERSION = "v2-resilient"
-
 const globalForPrisma = globalThis as unknown as {
   prisma: ExtendedPrismaClient | undefined
-  prismaVersion: string | undefined
 }
 
 export const prisma: ExtendedPrismaClient =
-  !isServer
-    ? (new Proxy({}, { get: () => () => ({}) }) as unknown as ExtendedPrismaClient)
-    : globalForPrisma.prisma && globalForPrisma.prismaVersion === PRISMA_INSTANCE_VERSION
-      ? globalForPrisma.prisma
-      : createPrismaClient()
+  isServer
+    ? (globalForPrisma.prisma ?? createPrismaClient())
+    : (new Proxy({}, { get: () => () => ({}) }) as unknown as ExtendedPrismaClient)
 
-if (process.env.NODE_ENV !== 'production') {
+if (isServer) {
   globalForPrisma.prisma = prisma
-  globalForPrisma.prismaVersion = PRISMA_INSTANCE_VERSION
 }

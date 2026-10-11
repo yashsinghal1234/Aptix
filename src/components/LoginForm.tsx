@@ -61,25 +61,21 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
 
   const formatClientAuthError = (msg: string): string => {
     if (!msg) return "An unexpected error occurred. Please try again.";
-    const lower = msg.toLowerCase();
-    if (
-      lower.includes("prisma") ||
-      lower.includes("database connection") ||
-      lower.includes("can't reach database") ||
-      lower.includes("cannot reach database") ||
-      lower.includes("enotfound") ||
-      lower.includes("etimedout") ||
-      lower.includes("econnrefused") ||
-      lower.includes("econnreset") ||
-      lower.includes("getaddrinfo") ||
-      lower.includes("fetch failed") ||
-      lower.includes("network connection interrupted") ||
-      lower.includes("network connection") ||
-      lower.includes("network error") ||
-      (typeof navigator !== "undefined" && !navigator.onLine)
-    ) {
+    
+    // Only return "Internet is not connected" if the browser is genuinely offline
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
       return "Internet is not connected. Please check your internet connection and try again.";
     }
+
+    const lower = msg.toLowerCase();
+    if (
+      lower.includes("database service is temporarily unavailable") ||
+      lower.includes("can't reach database") ||
+      lower.includes("cannot reach database")
+    ) {
+      return "Database connection issue. The server is connecting to the database, please retry in a moment.";
+    }
+
     return msg;
   };
 
@@ -249,10 +245,22 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       if (res?.error) {
         triggerCandidateError(res.error, res.field || null);
         setLoading(false);
+        return;
       }
-    } catch {
-      triggerCandidateError("Internet is not connected. Please check your internet connection and try again.", null);
+      if (res?.redirectUrl) {
+        window.location.href = res.redirectUrl;
+        return;
+      }
+    } catch (err: any) {
       setLoading(false);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        triggerCandidateError("Internet is not connected. Please check your internet connection and try again.", null);
+      } else if (err?.message?.includes("NEXT_REDIRECT") || err?.digest?.includes("NEXT_REDIRECT")) {
+        return;
+      } else {
+        const errorText = err?.message || "Login request failed. Please try again.";
+        triggerCandidateError(errorText, null);
+      }
     }
   };
 
@@ -304,10 +312,22 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       if (res?.error) {
         triggerStaffError(res.error, res.field === "email" ? "staffEmail" : (res.field === "password" ? "staffPassword" : null));
         setLoading(false);
+        return;
       }
-    } catch {
-      triggerStaffError("Internet is not connected. Please check your internet connection and try again.", null);
+      if (res?.redirectUrl) {
+        window.location.href = res.redirectUrl;
+        return;
+      }
+    } catch (err: any) {
       setLoading(false);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        triggerStaffError("Internet is not connected. Please check your internet connection and try again.", null);
+      } else if (err?.message?.includes("NEXT_REDIRECT") || err?.digest?.includes("NEXT_REDIRECT")) {
+        return;
+      } else {
+        const errorText = err?.message || "Staff login request failed. Please try again.";
+        triggerStaffError(errorText, null);
+      }
     }
   };
 
