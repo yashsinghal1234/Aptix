@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
+import { getCachedResultsData } from "@/lib/dashboard-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -14,19 +15,8 @@ export default async function ResultsDashboard() {
   const payload = await verifyToken(token);
   if (!payload || payload.role !== "OWNER") redirect("/");
 
-  const completedSessions = await prisma.examSession.findMany({
-    where: { status: "COMPLETED" },
-    include: {
-      exam: true,
-      questions: { select: { points: true } },
-      sessionStats: true,
-      _count: { select: { attempts: true } }
-    },
-    orderBy: [
-      { attempts: { _count: "desc" } },
-      { createdAt: "desc" }
-    ]
-  });
+  const completedSessions = await getCachedResultsData();
+
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">

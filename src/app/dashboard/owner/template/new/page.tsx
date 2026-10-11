@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
 import { CreateTemplateForm } from "@/components/CreateTemplateForm";
+import { getCachedApprovedQuestions } from "@/lib/dashboard-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,8 @@ export default async function NewTemplatePage() {
   const payload = await verifyToken(token);
   if (!payload || payload.role !== "OWNER") redirect("/");
 
-  const allQuestions = await prisma.question.findMany({
-    where: { status: "APPROVED" },
-    include: { _count: { select: { responses: true } } }
-  });
+  const allQuestions = await getCachedApprovedQuestions();
+
 
   return (
     <div className="max-w-7xl mx-auto pb-12">

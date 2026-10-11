@@ -1,11 +1,15 @@
 import { cookies } from "next/headers";
 import { LoginForm } from "@/components/LoginForm";
-import { ExamInterface } from "@/components/ExamInterface";
+import { CandidateExamFlow } from "@/components/CandidateExamFlow";
 import { NoExamPoller } from "@/components/NoExamPoller";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { getCandidateMascot } from "@/app/actions/mascot";
 import { logoutAction } from "@/app/actions/auth";
 import { startAttemptAction } from "@/app/actions/attempt";
+import { CandidateTopbar, CandidateFooter } from "@/components/candidate/CandidateChrome";
+import { ReadyChecklist, PreflightDiagnostics, HeartbeatPanel } from "@/components/candidate/HallDiagnostics";
+import { Flower } from "@/components/owner/OpsPanels";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +28,11 @@ export default async function Home() {
 
   const role = payload.role as string;
   const name = payload.name as string;
+  const email = (payload.email as string) || "";
   const userId = payload.userId as string;
   const examSessionId = payload.examSessionId as string | undefined;
+  const roll = `NB-${userId.slice(-4).toUpperCase()}`;
+  const domain = email.includes("@") ? email.split("@")[1] : "";
 
   let activeSession = null;
 
@@ -33,7 +40,7 @@ export default async function Home() {
   if (examSessionId) {
     activeSession = await prisma.examSession.findUnique({
       where: { id: examSessionId },
-      include: { exam: true, questions: true }
+      include: { exam: true }
     });
   }
 
@@ -41,7 +48,7 @@ export default async function Home() {
   if (!activeSession) {
     const candidateAttempt = await prisma.candidateAttempt.findFirst({
       where: { userId },
-      include: { session: { include: { exam: true, questions: true } } },
+      include: { session: { include: { exam: true } } },
       orderBy: { createdAt: "desc" }
     });
     if (candidateAttempt?.session && ["SCHEDULED", "LIVE"].includes(candidateAttempt.session.status)) {
@@ -53,104 +60,97 @@ export default async function Home() {
   if (!activeSession) {
     activeSession = await prisma.examSession.findFirst({
       where: { status: { in: ["SCHEDULED", "LIVE"] } },
-      include: { exam: true, questions: true },
+      include: { exam: true },
       orderBy: { createdAt: "desc" }
     });
   }
 
   if (!activeSession) {
+    const preview = await prisma.examSession.findFirst({
+      orderBy: { createdAt: "desc" },
+      include: { exam: true, _count: { select: { questions: true } } },
+    });
+    const pq = preview?._count.questions ?? 0;
     return (
-      <div className="min-h-screen bg-[#070c18] text-white flex flex-col font-sans select-none relative overflow-hidden">
-        {/* Subtle celestial background ambient glows */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <header className="bg-[#0b1428]/90 border-b border-sky-400/20 px-6 sm:px-8 py-3.5 flex justify-between items-center shadow-lg backdrop-blur-md relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center p-0.5 shadow-sm border border-neutral-800 shrink-0 overflow-hidden">
-              <video
-                src="/aptix-logo-anim.mp4"
-                poster="/logo-preview-frame.jpg"
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full h-full object-cover mix-blend-screen scale-125"
-              />
-            </div>
+      <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
+        <CandidateTopbar candidateName={name} roll={roll} />
+        <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+          {/* Heading */}
+          <div className="flex items-start justify-between gap-6 px-1 pt-1">
             <div>
-              <h1 className="text-base font-extrabold text-white tracking-tight leading-none">Aptix Assessment</h1>
-              <span className="text-[10px] text-sky-300 font-semibold tracking-wider uppercase">Candidate Waiting Hall</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-sky-200 bg-[#0e1c38] px-3 py-1.5 rounded-full border border-sky-400/25 flex items-center gap-1.5 shadow-inner">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span>Candidate: <strong className="text-white">{name}</strong></span>
-            </span>
-            <a
-              href="/api/auth/logout"
-              className="text-xs font-semibold text-slate-300 hover:text-white bg-[#111e3b] hover:bg-[#1a2d58] px-3.5 py-1.5 rounded-xl transition-all border border-slate-700/80 shadow-sm cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span>Log Out</span>
-            </a>
-          </div>
-        </header>
-
-        <div className="flex-1 flex items-center justify-center p-6 relative z-10">
-          <div className="celestial-glass p-8 sm:p-10 rounded-3xl border border-sky-400/25 text-center shadow-[0_25px_60px_-15px_rgba(2,6,18,0.9)] max-w-lg w-full space-y-6 relative overflow-hidden">
-            {/* Top celestial starlight accent */}
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-sky-400/60 to-transparent" />
-
-            <div className="w-16 h-16 bg-blue-950/80 text-sky-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-sky-400/30">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-sky-950/80 border border-sky-400/30 text-[10px] font-bold tracking-widest text-sky-200 uppercase mb-2">
-                <span className="text-amber-300">✦</span>
-                <span>Session Waiting Hall</span>
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight mb-2">No Active Exam Right Now</h2>
-              <p className="text-sky-200/70 text-xs font-medium leading-relaxed max-w-md mx-auto">
-                Your credentials are authenticated. Please remain on this screen — as soon as your invigilator launches the session, your assessment will begin automatically.
+              <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">
+                WAITING HALL / {preview?.pin ? preview.pin.replace("APT-", "") : "STANDBY"} · AUTHENTICATED
               </p>
+              <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
+                No Active Exam Right Now<span className="text-lime-300">.</span>
+              </h1>
+              <p className="text-[13px] text-neutral-400 mt-2.5">Credentials authenticated. Please remain on screen.</p>
             </div>
-
-            <div className="p-5 bg-[#0a1428]/80 border border-sky-400/20 rounded-2xl text-left space-y-3 shadow-inner">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="text-xs font-bold text-white">Want to warm up while you wait?</span>
-              </div>
-              <p className="text-xs text-sky-200/80 font-normal leading-relaxed">
-                Take a self-study drill in our zero-stakes <strong>Practice Arena</strong> with instant answer feedback and step-by-step explanations.
-              </p>
-              <a
-                href="/practice"
-                className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-500 hover:to-sky-500 text-white font-extrabold text-xs rounded-xl shadow-[0_4px_16px_rgba(37,99,235,0.35)] transition-all border border-sky-400/30"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Launch Practice Arena</span>
-              </a>
-            </div>
-
-            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-sky-300 bg-[#09152e]/80 py-2 px-4 rounded-full w-fit mx-auto border border-sky-400/25 shadow-inner">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>Listening for scheduled exams in real-time...</span>
-            </div>
-            <NoExamPoller />
+            <Flower className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 mt-1" />
           </div>
-        </div>
+
+          {/* Lime note */}
+          <div className="rounded-2xl border border-lime-300/20 bg-lime-300/[0.05] p-4">
+            <p className="text-xs font-bold text-lime-200">You&rsquo;re ready. Waiting for invigilator Go Live.</p>
+            <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+              Intended behavior: a silent heartbeat checks launch status every 3 seconds. When the owner opens this assessment, the launch flow opens automatically; fullscreen still requires your browser&rsquo;s permission. No exam time is used while waiting.
+            </p>
+          </div>
+
+          {/* Pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {["IDENTITY VERIFIED", preview?.pin ? "PIN VERIFIED" : "AWAITING PIN", domain || "OPEN DOMAIN", "CONNECTED"].map((p) => (
+              <span key={p} className="inline-flex items-center gap-1.5 text-[9px] font-black tracking-[0.12em] text-lime-200 bg-lime-300/[0.07] border border-lime-300/20 rounded-md px-2 py-1">
+                <span className="w-1 h-1 rounded-full bg-lime-300" />{p}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-4 items-start">
+            {/* Left column */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+                <h3 className="text-[13px] font-bold text-white">Your next assessment</h3>
+                <p className="text-xs font-bold text-neutral-200 mt-2">{preview?.exam.title || "Upcoming assessment"}</p>
+                <p className="text-[10px] text-neutral-500 mt-0.5">Northbridge University · Engineering cohort 2026 · {preview?.exam.subject || "General"}</p>
+                <div className="mt-3 grid grid-cols-3 gap-2.5">
+                  {[
+                    { l: "Questions", v: String(pq), s: `Attempt 1` },
+                    { l: "Duration", v: preview ? `${preview.durationMinutes}m` : "—", s: "Server time" },
+                    { l: "Max marks", v: preview ? String(Math.round(preview.totalMarks || preview.exam.totalMarks || 0)) : "—", s: `Pass ${Math.round(preview?.exam.passCriteria ?? 50)}%` },
+                  ].map((c) => (
+                    <div key={c.l} className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
+                      <p className="text-[9px] font-bold tracking-[0.14em] text-neutral-500">{c.l.toUpperCase()}</p>
+                      <p className="mt-1 text-xl font-black text-lime-300 tabular-nums">{c.v}</p>
+                      <p className="mt-1 text-[9px] text-neutral-500">{c.s}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[10px] text-neutral-500">
+                  {preview?.startTime ? new Date(preview.startTime).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }) + " IST (UTC+05:30)" : "Schedule unlocks at launch"}
+                </p>
+                <p className="mt-1 text-[10px] text-neutral-600 font-mono">Source PIN: {preview?.pin || "—"} · {email}</p>
+              </div>
+
+              <ReadyChecklist />
+
+              <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+                <p className="text-[10px] font-black tracking-[0.14em] text-neutral-300">STATIC ALTERNATIVE · Heartbeat disconnected</p>
+                <p className="mt-1.5 text-[10px] text-neutral-500 leading-relaxed">
+                  Last contact --IST. Reconnecting. Keep this tab open and check your connection. Automatic launch waits for a fresh server acknowledgement; authentication remains separate from assessment access.
+                </p>
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div className="space-y-4">
+              <PreflightDiagnostics />
+              <HeartbeatPanel />
+            </div>
+          </div>
+        </main>
+        <CandidateFooter />
+        <NoExamPoller />
       </div>
     );
   }
@@ -185,13 +185,29 @@ export default async function Home() {
     }
   }
 
+  // Check if session has gamified mode enabled by teacher
+  let isGamified = false;
+  if (activeSession.configSnapshot) {
+    try {
+      const snap = JSON.parse(activeSession.configSnapshot);
+      if (snap.isGamified) isGamified = true;
+    } catch {}
+  }
+  if (!isGamified && activeSession.exam?.description?.includes("[MODE:GAMIFIED]")) {
+    isGamified = true;
+  }
+
+  const initialMascotId = isGamified ? await getCandidateMascot(userId, activeSession.id) : null;
+
   return (
-    <ExamInterface 
+    <CandidateExamFlow 
       candidateName={name} 
       session={activeSession} 
       attempt={attempt} 
       dbQuestions={sanitizedQuestions}
       initialAnswers={initialAnswers}
+      isGamified={isGamified}
+      initialMascotId={initialMascotId}
     />
   );
 }

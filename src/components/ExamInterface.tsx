@@ -7,6 +7,11 @@ import { getAttemptStatusAction } from "@/app/actions/attempt";
 import { useServerTime } from "@/hooks/useServerTime";
 import { saveDraftAnswersToIndexedDB, getDraftAnswersFromIndexedDB, clearDraftAnswersFromIndexedDB } from "@/lib/indexed-db";
 import { detectVirtualMachine, createExtensionGuardian } from "@/lib/anti-cheat-detector";
+import { getMascotById } from "@/lib/mascots";
+import { ExamReviewModal } from "@/components/ExamReviewModal";
+import CandidateScorecardView from "@/components/CandidateScorecardView";
+import { CandidateTopbar, CandidateFooter } from "@/components/candidate/CandidateChrome";
+import { Flower } from "@/components/owner/OpsPanels";
 
 function createPRNG(seed: number) {
   return function() {
@@ -29,19 +34,27 @@ export function ExamInterface({
   session, 
   attempt, 
   dbQuestions,
-  initialAnswers = {}
+  initialAnswers = {},
+  mascotId = null,
+  isGamified = false,
 }: { 
   candidateName: string; 
   session: any; 
   attempt: any; 
   dbQuestions: any[];
   initialAnswers?: Record<string, string>;
+  mascotId?: string | null;
+  isGamified?: boolean;
 }) {
+  const chosenMascot = isGamified && mascotId ? getMascotById(mascotId) : null;
   const [hasStarted, setHasStarted] = useState(false);
+  const [rulesAccepted, setRulesAccepted] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>(initialAnswers);
   const [syncStatus, setSyncStatus] = useState<"saved" | "syncing" | "cached">("saved");
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [isRecovered, setIsRecovered] = useState(false);
   
   const [visited, setVisited] = useState<Set<string>>(new Set());
@@ -60,8 +73,19 @@ export function ExamInterface({
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [finalTotalMarks, setFinalTotalMarks] = useState<number | null>(null);
   const [detailedResults, setDetailedResults] = useState<any[] | null>(null);
+  const [cohortData, setCohortData] = useState<any | null>(null);
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const [isConcurrentLockout, setIsConcurrentLockout] = useState(false);
+
+  const initialTimeSpent = useMemo(() => {
+    if (attempt.submittedAt && attempt.createdAt) {
+      const diffSec = Math.round((new Date(attempt.submittedAt).getTime() - new Date(attempt.createdAt).getTime()) / 1000);
+      return Math.min(session.durationMinutes * 60, Math.max(1, diffSec));
+    }
+    return null;
+  }, [attempt.submittedAt, attempt.createdAt, session.durationMinutes]);
+
+  const [finalTimeSpent, setFinalTimeSpent] = useState<number | null>(initialTimeSpent);
 
   const [currentExtendedUntil, setCurrentExtendedUntil] = useState<Date | null>(
     attempt.extendedUntil ? new Date(attempt.extendedUntil) : (session.extendedUntil ? new Date(session.extendedUntil) : null)
@@ -172,6 +196,11 @@ export function ExamInterface({
   useEffect(() => { 
     answersRef.current = answers; 
   }, [answers]);
+
+  // Stamp the last successful cloud sync for the telemetry banner
+  useEffect(() => {
+    if (syncStatus === "saved") setLastSyncedAt(new Date());
+  }, [syncStatus]);
 
   const { answeredCount, notAnsweredCount, notVisitedCount, markedCount, ansMarkedCount } = useMemo(() => {
     let ans = 0;
@@ -357,7 +386,13 @@ export function ExamInterface({
   // Network Recovery Listener: Auto-flush offline buffer immediately upon WiFi / Internet reconnection
   useEffect(() => {
     const handleOnline = () => {
+      setIsOnline(true);
       flushPendingAnswers();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSyncStatus("cached");
     };
 
     const handleBeforeUnload = () => {
@@ -371,6 +406,7 @@ export function ExamInterface({
     };
 
     window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     // Periodic 30-second resilience check: Flushes any unsynced offline state
@@ -382,6 +418,7 @@ export function ExamInterface({
 
     return () => {
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       clearInterval(periodicFlush);
     };
@@ -456,57 +493,57 @@ export function ExamInterface({
 
   useEffect(() => {
     if (!synced) return;
+    if (isFinished || isAlreadySubmitted) return;
 
     const calculateTimes = () => {
       const now = getServerTime();
       const rawStart = session.startTime ? new Date(session.startTime).getTime() : null;
-      
-      // If session is officially LIVE or forced live
-      if (isForcedLive || sessionStatus === "LIVE") {
-        setTimeUntilStart(0);
-        
-        // If rawStart was set in the past, use it; otherwise start clock from now
-        const effectiveStart = (rawStart && rawStart <= now) ? rawStart : (rawStart ? Math.min(rawStart, now) : now);
-        const baseEnd = effectiveStart + (session.durationMinutes * 60 * 1000);
-        const end = currentExtendedUntil ? currentExtendedUntil.getTime() : baseEnd;
-        
-        if (now < end) {
-          setTimeLeft(Math.floor((end - now) / 1000));
-        } else {
-          setTimeLeft(0);
-          if (!isFinished && hasStarted) setShouldAutoSubmit(true);
-        }
-        return;
-      }
 
       // Scheduled session: waiting for start time
-      if (!rawStart) {
-        setTimeUntilStart(999999);
+      if (sessionStatus === "SCHEDULED" && rawStart && now < rawStart && !isForcedLive) {
+        setTimeUntilStart(Math.floor((rawStart - now) / 1000));
+        setTimeLeft(session.durationMinutes * 60);
         return;
       }
 
-      if (now < rawStart) {
-        // Exam hasn't started yet: countdown to start
-        setTimeUntilStart(Math.floor((rawStart - now) / 1000));
-      } else {
-        // Exam is in progress
-        setTimeUntilStart(0);
-        const baseEnd = rawStart + (session.durationMinutes * 60 * 1000);
-        const end = currentExtendedUntil ? currentExtendedUntil.getTime() : baseEnd;
+      setTimeUntilStart(0);
 
-        if (now < end) {
-          setTimeLeft(Math.floor((end - now) / 1000));
-        } else {
-          setTimeLeft(0);
-          if (!isFinished && hasStarted) setShouldAutoSubmit(true);
+      // Check if candidate previously started (crash recovery / page refresh)
+      const storageStart = typeof window !== "undefined" ? localStorage.getItem(`aptix_attempt_start_${attempt.id}`) : null;
+
+      // If candidate has NOT started yet and has no recorded start time:
+      if (!hasStarted && !storageStart) {
+        // Freeze allotted time at full duration while on guidelines/readiness
+        setTimeLeft(session.durationMinutes * 60);
+        return;
+      }
+
+      // Candidate has started (either currently or recovered from previous start)
+      let attemptStart: number;
+      if (storageStart) {
+        attemptStart = Number(storageStart);
+      } else {
+        attemptStart = now;
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`aptix_attempt_start_${attempt.id}`, String(now));
         }
+      }
+
+      const baseEnd = attemptStart + (session.durationMinutes * 60 * 1000);
+      const end = currentExtendedUntil ? currentExtendedUntil.getTime() : baseEnd;
+
+      if (now < end) {
+        setTimeLeft(Math.floor((end - now) / 1000));
+      } else {
+        setTimeLeft(0);
+        if (!isFinished && hasStarted) setShouldAutoSubmit(true);
       }
     };
 
     calculateTimes();
     const timer = setInterval(calculateTimes, 1000);
     return () => clearInterval(timer);
-  }, [session, currentExtendedUntil, isFinished, hasStarted, isForcedLive, sessionStatus, synced, getServerTime]);
+  }, [session, currentExtendedUntil, isFinished, hasStarted, isForcedLive, sessionStatus, synced, getServerTime, attempt.id]);
 
   const executeSubmit = useCallback(async () => {
     if (isFinishingRef.current && isFinished) return;
@@ -516,11 +553,20 @@ export function ExamInterface({
       document.exitFullscreen().catch(err => console.log(err));
     }
     
+    try {
+      localStorage.removeItem(`aptix_attempt_start_${attempt.id}`);
+    } catch (e) {}
+
     const stringifiedAnswers: Record<string, string> = {};
     for (const [k, v] of Object.entries(answersRef.current)) {
       stringifiedAnswers[k] = typeof v === "string" ? v : JSON.stringify(v);
     }
     
+    const finalElapsed = session.durationMinutes
+      ? Math.max(1, session.durationMinutes * 60 - timeLeft)
+      : (attempt.createdAt ? Math.round((Date.now() - new Date(attempt.createdAt).getTime()) / 1000) : 180);
+    setFinalTimeSpent(finalElapsed);
+
     await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current);
     clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
     setIsFinished(true);
@@ -533,9 +579,15 @@ export function ExamInterface({
         if (statusData.detailedResults) {
           setDetailedResults(statusData.detailedResults);
         }
+        if (statusData.cohort) {
+          setCohortData(statusData.cohort);
+        }
+        if (statusData.timeTakenSeconds) {
+          setFinalTimeSpent(statusData.timeTakenSeconds);
+        }
       }
     }
-  }, [attempt.id, config.resultVisibility, isFinished]);
+  }, [attempt.id, config.resultVisibility, isFinished, session.durationMinutes, timeLeft, attempt.createdAt]);
 
   useEffect(() => {
     if (shouldAutoSubmit && !isFinishingRef.current) {
@@ -761,6 +813,14 @@ export function ExamInterface({
         console.warn("Fullscreen request failed", err);
       }
     }
+
+    if (typeof window !== "undefined") {
+      const startKey = `aptix_attempt_start_${attempt.id}`;
+      if (!localStorage.getItem(startKey)) {
+        localStorage.setItem(startKey, String(Date.now()));
+      }
+    }
+
     setHasStarted(true);
   };
 
@@ -815,6 +875,12 @@ export function ExamInterface({
           if (statusData.detailedResults) {
             setDetailedResults(statusData.detailedResults);
           }
+          if (statusData.cohort) {
+            setCohortData(statusData.cohort);
+          }
+          if (statusData.timeTakenSeconds) {
+            setFinalTimeSpent(statusData.timeTakenSeconds);
+          }
         }
       });
     }
@@ -828,6 +894,7 @@ export function ExamInterface({
     }
     try {
       localStorage.removeItem(`aptix_attempt_${attempt.id}`);
+      localStorage.removeItem(`aptix_attempt_start_${attempt.id}`);
     } catch (e) {}
     clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
     window.location.href = "/api/auth/logout";
@@ -897,183 +964,28 @@ export function ExamInterface({
 
   // 1. If candidate has completed/submitted the exam, ALWAYS show results/scorecard first
   if (isFinished || isAlreadySubmitted) {
-    const isTimeout = timeLeft <= 0;
+    const timeSpentCalculated = finalTimeSpent !== null
+      ? finalTimeSpent
+      : (session.durationMinutes ? Math.max(1, session.durationMinutes * 60 - timeLeft) : 180);
     return (
-      <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 py-12 overflow-y-auto selection:bg-white selection:text-black">
-        <div className={`bg-[#0a0c10] p-10 rounded-3xl shadow-2xl w-full text-center border border-neutral-800 ${detailedResults && detailedResults.length > 0 ? 'max-w-4xl' : 'max-w-md'}`}>
-          {/* Icon (Alarm clock if timeout, checkmark if regular submit) */}
-          <div className={`w-16 h-16 ${isTimeout ? 'bg-amber-950/40 text-amber-400 border border-amber-500/30' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/30'} rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm`}>
-            {isTimeout ? (
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            ) : (
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-          </div>
-
-          <h1 className="text-2xl font-black tracking-tight text-white mb-2">
-            {isTimeout ? "Time Has Expired" : "Assessment Complete!"}
-          </h1>
-          <p className="text-neutral-400 text-xs font-medium max-w-sm mx-auto mb-8">
-            {isTimeout 
-              ? "Your allocated examination time has completed. Your responses were automatically synchronized and sealed."
-              : "Thank you for completing this assessment. Your responses have been submitted to the evaluating examiner."
-            }
-          </p>
-
-          <div className="bg-[#0d0f14] rounded-2xl p-4 border border-neutral-800 text-xs font-semibold text-neutral-400 mb-6 flex justify-around">
-            <span>Questions Attempted: <strong className="text-white">{Object.keys(answers).length} / {questions.length}</strong></span>
-          </div>
-          
-          {config.resultVisibility === "IMMEDIATE" && finalScore !== null && (
-            <div className="mb-8 w-full max-w-4xl mx-auto text-left">
-              <div className="p-6 bg-[#0d0f14] border border-neutral-800 rounded-3xl mb-6 text-center shadow-lg">
-                <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Your Overall Score</h3>
-                <div className="text-4xl font-black text-white tracking-tight">
-                  {typeof finalScore === 'number' ? finalScore.toFixed(1) : 0} <span className="text-lg text-neutral-400 font-bold">/ {finalTotalMarks}</span>
-                </div>
-                <div className="mt-2 text-xs font-bold text-neutral-400">
-                  Accuracy: {finalTotalMarks ? Math.round(((finalScore || 0) / finalTotalMarks) * 100) : 0}%
-                </div>
-              </div>
-
-              {/* Topic Performance Diagnostics */}
-              {topicBreakdown && topicBreakdown.topics.length > 0 && (
-                <div className="mb-8 p-6 bg-[#0d0f14] border border-neutral-800 rounded-3xl space-y-5">
-                  <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                      <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                      <span>Topic Mastery & Performance Breakdown</span>
-                    </h3>
-                    <span className="text-[11px] font-bold text-neutral-400">{topicBreakdown.topics.length} Evaluated Areas</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {topicBreakdown.topics.map((t, idx) => (
-                      <div key={idx} className="bg-neutral-900 p-4 rounded-2xl border border-neutral-800 shadow-xs">
-                        <div className="flex justify-between items-center text-xs font-bold mb-2">
-                          <span className="text-neutral-200">{t.name}</span>
-                          <span className={`${t.pct >= 75 ? 'text-emerald-400' : t.pct >= 50 ? 'text-white' : 'text-amber-400'}`}>
-                            {t.pct}% ({t.earned.toFixed(1)}/{t.totalPossible} pts)
-                          </span>
-                        </div>
-                        <div className="w-full h-2.5 bg-neutral-950 rounded-full overflow-hidden border border-neutral-800/80">
-                          <div 
-                            className={`h-full rounded-full transition-all ${t.pct >= 75 ? 'bg-striped-emerald' : t.pct >= 50 ? 'bg-striped-blue' : 'bg-striped-pink'}`}
-                            style={{ width: `${t.pct}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-neutral-500 mt-1.5 block">{t.count} question{t.count > 1 ? 's' : ''}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Diagnostic Highlights */}
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-neutral-800">
-                    {topicBreakdown.strongest && (
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
-                        <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <span>Top Strength:</span>
-                        <span>{topicBreakdown.strongest.name} ({topicBreakdown.strongest.pct}%)</span>
-                      </div>
-                    )}
-                    {topicBreakdown.focusArea && topicBreakdown.focusArea.name !== topicBreakdown.strongest?.name && (
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs font-bold">
-                        <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        <span>Recommended Focus:</span>
-                        <span>{topicBreakdown.focusArea.name} ({topicBreakdown.focusArea.pct}%)</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {detailedResults && detailedResults.length > 0 && (
-                <div className="space-y-4">
-                  <h3 className="text-base font-bold text-white border-b border-neutral-800 pb-2">Detailed Question Review</h3>
-                  {dbQuestions.map((q, idx) => {
-                    const res = detailedResults.find(r => r.questionId === q.id);
-                    if (!res) return null;
-                    
-                    return (
-                      <div key={q.id} className={`p-5 rounded-2xl border transition-all ${res.isCorrect ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-rose-950/20 border-rose-500/40'}`}>
-                        <div className="flex gap-4">
-                          <span className={`font-black text-sm shrink-0 mt-0.5 ${res.isCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>Q{idx + 1}.</span>
-                          <div className="flex-1 space-y-3">
-                            <p className="font-semibold text-white text-sm">{q.text}</p>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <span className="font-bold text-neutral-400 block mb-1">Your Submission:</span>
-                                <div className="px-3.5 py-2.5 bg-neutral-900 rounded-xl border border-neutral-800 font-medium text-neutral-200">
-                                  {answers[q.id] ? (Array.isArray(answers[q.id]) ? (answers[q.id] as string[]).join(", ") : answers[q.id]) : <span className="text-neutral-500 italic">No Answer</span>}
-                                </div>
-                              </div>
-                              {res.correctAnswer && (
-                                <div>
-                                  <span className="font-bold text-neutral-400 block mb-1">Correct Answer:</span>
-                                  <div className="px-3.5 py-2.5 bg-emerald-950/60 rounded-xl border border-emerald-500/40 text-emerald-300 font-semibold">
-                                    {Array.isArray(res.correctAnswer) ? res.correctAnswer.join(", ") : res.correctAnswer}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            {res.explanation && (
-                              <div className="mt-3 p-3.5 bg-[#07080c] rounded-xl text-xs border border-neutral-800">
-                                <span className="font-bold text-neutral-300 block mb-1">Explanation:</span>
-                                <p className="text-neutral-400 leading-relaxed whitespace-pre-wrap">{res.explanation}</p>
-                              </div>
-                            )}
-                            
-                            <div className="text-right text-[11px] font-bold uppercase tracking-wider text-neutral-500 pt-2 border-t border-neutral-800">
-                              Points Earned: {res.earnedPoints.toFixed(1)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-center gap-4 mt-6">
-            {config.resultVisibility === "IMMEDIATE" && finalScore !== null && (
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-6 py-2.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                <span>Download / Print Scorecard PDF</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleReturnToLogin}
-              className="px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white font-bold text-xs rounded-xl border border-neutral-800 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-            >
-              <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span>Return to Login</span>
-            </button>
-          </div>
-        </div>
-      </main>
+      <CandidateScorecardView
+        candidateName={candidateName}
+        candidateRoll={session.pin ? `PIN-${session.pin}` : (attempt.id ? `ID-${String(attempt.id).slice(-8).toUpperCase()}` : "NB2026-0418")}
+        examTitle={session.exam?.title || session.title || "Quantitative Aptitude"}
+        examCode={session.exam?.code || "ENG-26"}
+        dateStr={new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+        attemptNumber={attempt.attemptNumber || 1}
+        finalScore={finalScore}
+        totalMarks={finalTotalMarks}
+        timeTakenSeconds={timeSpentCalculated}
+        allottedMinutes={session.durationMinutes || 60}
+        questions={questions}
+        answers={answers}
+        detailedResults={detailedResults || []}
+        timeSpent={timeSpentRef.current}
+        cohort={cohortData}
+        onReturnToLogin={handleReturnToLogin}
+      />
     );
   }
 
@@ -1121,7 +1033,7 @@ export function ExamInterface({
           </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[10px] font-bold tracking-widest text-neutral-300 uppercase mb-3">
             <span className="text-emerald-400">✦</span>
-            <span>Aptix Assessment Hall</span>
+            <span>APTIX Assessment Hall</span>
           </div>
           <h2 className="text-2xl font-black mb-2 tracking-tight text-white">{session.exam.title}</h2>
           <p className="text-neutral-400 text-sm mb-8 font-medium">Waiting for your test administrator to broadcast and launch the session...</p>
@@ -1210,198 +1122,153 @@ export function ExamInterface({
 
   // 6. Onboarding / Guidelines screen (ONLY shown when exam is open and candidate has not clicked start yet)
   if (!hasStarted && timeUntilStart <= 0 && timeLeft > 0) {
+    const totalMarksPreview = questions.reduce((s, q) => s + (q.points || 1), 0) || session.totalMarks || session.exam?.totalMarks || 0;
+    const passPct = Math.round(session.exam?.passCriteria ?? config.passCriteria ?? 50);
+    const domainLock = session.allowedEmailDomain || session.exam?.allowedEmailDomain;
+    const startLabel = session.startTime
+      ? new Date(session.startTime).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
+      : "Window opens at launch";
+    const negLine = config.negativeMarkingEnabled
+      ? `-${config.negativeMarksValue ?? 0.25} for each incorrect answer`
+      : "No negative marking";
+    const threshold = config.tabSwitchLimit ? parseInt(String(config.tabSwitchLimit), 10) : 5;
+    const rollId = attempt.id ? `ID-${String(attempt.id).slice(-8).toUpperCase()}` : "CANDIDATE";
+    const readiness: { label: string; sub: string; state: "READY" | "OPEN" | "LIMITED" }[] = [
+      { label: "Institution domain", sub: domainLock ? `@${String(domainLock).replace(/^@/, "")} enforced` : "Open entry · any verified email", state: "READY" },
+      { label: "Server time", sub: synced ? "NTP calibrated · authoritative" : "Calibrating…", state: synced ? "READY" : "LIMITED" },
+      { label: "Fullscreen", sub: config.requireFullscreen === false ? "Not required for this exam" : "Request at launch", state: "READY" },
+      { label: "Single-device session", sub: "Lease verified on start", state: "READY" },
+      { label: "Local recovery storage", sub: typeof indexedDB !== "undefined" ? "IndexedDB available" : "Memory buffer only", state: typeof indexedDB !== "undefined" ? "READY" : "LIMITED" },
+      { label: "Multiple displays", sub: diagnostics.isSingleScreen ? "Single display detected" : "Extended displays detected", state: diagnostics.isSingleScreen ? "READY" : "LIMITED" },
+      { label: "Hardware / virtualization", sub: diagnostics.isVM ? `Virtualized (${diagnostics.vmRenderer || "unknown"})` : "Physical host", state: diagnostics.isVM ? "LIMITED" : "READY" },
+    ];
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-6 selection:bg-white selection:text-black">
-        <div className="bg-[#0a0c10] border border-neutral-800 rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col md:flex-row">
-          {/* Left Dark Accent Banner */}
-          <div className="md:w-5/12 bg-[#07080c] border-b md:border-b-0 md:border-r border-neutral-800 text-white p-8 md:p-10 flex flex-col justify-between relative overflow-hidden">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2.5 mb-6">
-                <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden shrink-0">
-                  <video
-                    src="/aptix-logo-anim.mp4"
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    poster="/logo-preview-frame.jpg"
-                    className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold text-neutral-400">
-                  <span className="text-emerald-400 text-[10px]">✦</span>
-                  <span>Aptix Assessment</span>
-                </div>
-              </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-4 leading-snug text-white">
-                {session.exam.title}
-              </h1>
-              <p className="text-neutral-400 text-sm leading-relaxed font-normal">
-                Please ensure you are in a quiet environment to avoid distractions. Read through the onboarding instructions carefully before starting.
+      <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
+        <CandidateTopbar candidateName={candidateName} roll={rollId} />
+        <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+          <div className="flex items-start justify-between gap-6 px-1 pt-1">
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">
+                YOUR ASSESSMENT / {(session.exam?.subject || "ENG-26").toString().toUpperCase()}
               </p>
+              <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
+                Ready when you are<span className="text-lime-300">.</span>
+              </h1>
+              <p className="text-[13px] text-neutral-400 mt-2.5">A quick check now. A focused hour ahead.</p>
             </div>
-            
-            <div className="mt-8 pt-6 border-t border-neutral-800 relative z-10 flex items-center justify-between text-xs text-neutral-400">
-              <span>Candidate: <strong className="text-white">{candidateName}</strong></span>
-              <span>{session.durationMinutes} mins total</span>
-            </div>
+            <Flower className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 mt-1" />
           </div>
 
-          {/* Right Content Panel */}
-          <div className="md:w-7/12 p-8 md:p-10 flex flex-col justify-between bg-[#0a0c10]">
-            <div className="space-y-6">
-              <div className="border-b border-neutral-800 pb-4">
-                <h2 className="text-lg font-bold text-white tracking-tight">Overview & Guidelines</h2>
-                <p className="text-neutral-400 text-xs mt-0.5">Answer all {questions.length} questions to showcase your skills</p>
-              </div>
-
-              {session.exam.instructions && (
-                <div className="bg-[#0d0f14] rounded-xl p-4 border border-neutral-800">
-                  <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <span className="text-emerald-400 text-[10px]">✦</span>
-                    <span>Instructor Note</span>
-                  </h3>
-                  <p className="text-neutral-300 text-xs leading-relaxed whitespace-pre-wrap">{session.exam.instructions}</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[#0d0f14] border border-neutral-800">
-                  <div className="w-8 h-8 rounded-lg bg-neutral-900 text-white flex items-center justify-center shrink-0 mt-0.5 border border-neutral-800">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
+          <div className="grid lg:grid-cols-[1fr_320px] gap-4 items-start">
+            <div className="space-y-4">
+              {/* Assessment card */}
+              <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h4 className="text-xs font-bold text-white">Timed Assessment ({session.durationMinutes} Minutes)</h4>
-                    <p className="text-neutral-400 text-xs mt-0.5">The countdown starts immediately upon clicking start and cannot be paused.</p>
+                    <h2 className="text-base font-black text-white">{session.exam?.title || "Assessment"}</h2>
+                    <p className="text-[10px] text-neutral-500 mt-1">Northbridge University · Engineering cohort 2026</p>
                   </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[#0d0f14] border border-neutral-800">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 border border-amber-500/20">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white">Automated Integrity Proctoring</h4>
-                    <p className="text-neutral-400 text-xs mt-0.5">Exam runs in full screen. Tab switches and window unfocus events are recorded.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pre-Exam Hardware & Integrity Diagnostics */}
-              <div className="bg-[#07080c] rounded-2xl p-4 border border-neutral-800/90 space-y-3">
-                <div className="flex items-center justify-between border-b border-neutral-800/60 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Pre-Flight System Check</h4>
-                  </div>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
-                    {diagnostics.isChecking ? "Diagnosing..." : "All Systems Ready"}
+                  <span className="text-[9px] font-black tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-2.5 py-1 whitespace-nowrap">
+                    SECURE ASSESSMENT
                   </span>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  {/* Ping / Latency */}
-                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span className="text-neutral-400">Ping Latency</span>
+                <div className="mt-4 grid grid-cols-4 gap-2.5">
+                  {[
+                    { v: String(questions.length), s: "questions" },
+                    { v: `${session.durationMinutes} min`, s: "" },
+                    { v: String(Math.round(totalMarksPreview)), s: "possible points" },
+                    { v: `${passPct}%`, s: "" },
+                  ].map((c, i) => (
+                    <div key={i} className="text-center">
+                      <p className="text-xl font-black text-white tabular-nums">{c.v}</p>
+                      {c.s ? <p className="text-[9px] text-neutral-500 mt-0.5">{c.s}</p> : null}
                     </div>
-                    <span className="font-bold text-white">
-                      {diagnostics.ping !== null ? `${diagnostics.ping}ms` : "Active"}
-                    </span>
-                  </div>
-
-                  {/* Display / Screen */}
-                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      <span className="text-neutral-400">Display</span>
-                    </div>
-                    <span className={`font-bold ${diagnostics.isSingleScreen ? "text-emerald-400" : "text-amber-400"}`}>
-                      {diagnostics.isSingleScreen ? "Single Monitor" : "Dual Screen"}
-                    </span>
-                  </div>
-
-                  {/* Battery / Power */}
-                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span className="text-neutral-400">Power Source</span>
-                    </div>
-                    <span className="font-bold text-white">
-                      {diagnostics.battery
-                        ? diagnostics.battery.charging
-                          ? `AC Connected (${diagnostics.battery.level}%)`
-                          : `${diagnostics.battery.level}% Battery`
-                        : "AC / Ready"}
-                    </span>
-                  </div>
-
-                  {/* Environment / VM */}
-                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
-                      <span className="text-neutral-400">Terminal Type</span>
-                    </div>
-                    <span className={`font-bold ${diagnostics.isVM ? "text-rose-400" : "text-emerald-400"}`}>
-                      {diagnostics.isVM ? "Virtual Machine" : "Physical OS"}
-                    </span>
-                  </div>
+                  ))}
                 </div>
-
-                {diagnostics.isVM && (
-                  <p className="text-[11px] text-rose-400 bg-rose-950/40 border border-rose-500/30 rounded-lg p-2 font-medium">
-                    ⚠️ Virtual machine environment detected. Assessments should be taken on a physical host machine.
-                  </p>
-                )}
-                {!diagnostics.isSingleScreen && (
-                  <p className="text-[11px] text-amber-400 bg-amber-950/40 border border-amber-500/30 rounded-lg p-2 font-medium">
-                    ⚠️ Multiple displays detected. Please disconnect secondary monitors before beginning.
+                <p className="mt-3 text-[10px] text-neutral-500">
+                  {startLabel} · {negLine} · 0 for unanswered.
+                </p>
+                {(session.exam?.instructions || chosenMascot) && (
+                  <p className="mt-1.5 text-[10px] text-neutral-500 font-mono truncate">
+                    {chosenMascot ? `${chosenMascot.emoji} ${chosenMascot.name} · ` : ""}
+                    {session.exam?.instructions || ""}
                   </p>
                 )}
               </div>
+
+              {/* Rules */}
+              <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+                <h3 className="text-[13px] font-bold text-white mb-3">Know the rules</h3>
+                <div className="space-y-3">
+                  {[
+                    ["01", "Keep this exam in fullscreen", config.requireFullscreen === false ? "Fullscreen is optional for this exam. Focus changes are still recorded." : "Do not switch tabs or windows. Focus changes are recorded."],
+                    ["02", "One person. One session.", "Only this tab and one device may hold your exam lease. A second session is blocked."],
+                    ["03", "No external assistance", "No calculators, notes, messaging, or unauthorized resources. Optional hardware and display checks depend on your browser."],
+                    ["04", "The deadline is authoritative", "When the timer carries you, saved answers are submitted automatically. A refresh does not reset time."],
+                  ].map(([n, t, d]) => (
+                    <div key={n} className="flex gap-3">
+                      <span className="text-[10px] font-mono font-bold text-lime-200/80 pt-0.5 shrink-0">{n}</span>
+                      <div>
+                        <p className="text-xs font-bold text-white">{t}</p>
+                        <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">{d}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-xl bg-[#f2a488]/[0.06] border border-[#f2a488]/20 p-3">
+                  <p className="text-[11px] font-bold text-[#f2a488]">⚠ Violation threshold: {threshold} verified events</p>
+                  <p className="text-[10px] text-neutral-400 mt-1">Warnings are shown before threshold-triggered submission. Security events are available to the exam administrator for review.</p>
+                </div>
+              </div>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-neutral-800 space-y-2.5">
-              <button 
-                onClick={startExamFullscreen}
-                className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer"
-              >
-                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-                <span>{isRecovered ? "Enter Fullscreen & Resume Assessment" : "Start Assessment"}</span>
-                <svg className="w-4 h-4 text-black group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
+            <div className="space-y-4">
+              {/* Readiness */}
+              <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-[13px] font-bold text-white">System readiness</h3>
+                  <span className="text-[9px] font-bold tracking-[0.14em] text-neutral-600">CHECKED 09:57:12</span>
+                </div>
+                <div className="space-y-2.5">
+                  {readiness.map((r) => (
+                    <div key={r.label} className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-neutral-200">{r.label}</p>
+                        <p className="text-[10px] text-neutral-500 truncate">{r.sub}</p>
+                      </div>
+                      <span className={`text-[9px] font-black tracking-wider px-2 py-0.5 rounded shrink-0 ${r.state === "READY" ? "text-lime-200 bg-lime-300/10" : r.state === "OPEN" ? "text-neutral-300 bg-white/[0.06]" : "text-[#f2a488] bg-[#f2a488]/10"}`}>
+                        {r.state === "READY" ? "READY" : r.state === "OPEN" ? "OPEN" : "CHECK"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-              <button
-                type="button"
-                onClick={handleReturnToLogin}
-                className="w-full py-2.5 bg-transparent hover:bg-neutral-900 text-neutral-400 hover:text-white font-semibold text-xs rounded-xl border border-neutral-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                <span>Return to Login</span>
-              </button>
+              {/* Cleared */}
+              <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+                <h3 className="text-[13px] font-bold text-white">You&rsquo;re cleared to begin</h3>
+                <label className="mt-3 flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" checked={rulesAccepted} onChange={(e) => setRulesAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#bef264]" />
+                  <span className="text-[11px] text-neutral-300 leading-relaxed">I have read the instructions and agree to the assessment policies.</span>
+                </label>
+                <button
+                  onClick={startExamFullscreen}
+                  disabled={!rulesAccepted}
+                  className="mt-3 w-full py-3 rounded-xl bg-lime-300 hover:brightness-110 text-black font-black text-xs transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                >
+                  <span>→ Enter fullscreen &amp; start exam</span>
+                </button>
+                <p className="mt-2.5 text-[10px] text-neutral-600 leading-relaxed">
+                  Fullscreen is verified at launch and monitored; timer starts automatically and endures after a crash. Offline time does not extend the deadline.
+                </p>
+                <button type="button" onClick={handleReturnToLogin} className="mt-2 text-[11px] font-semibold text-neutral-500 hover:text-white transition-colors">
+                  Return to Login
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </main>
+        <CandidateFooter />
       </div>
     );
   }
@@ -1472,145 +1339,35 @@ export function ExamInterface({
         onCopy={(e) => { if (config.disableCopyPaste !== false) { e.preventDefault(); return false; } }}
         onPaste={(e) => { if (config.disableCopyPaste !== false) { e.preventDefault(); return false; } }}
       >
-        {/* Pitch Black Upper Bar Header */}
-        <header className="bg-[#07080c] border-b border-neutral-800/80 px-4 sm:px-6 py-2.5 sm:py-3 flex justify-between items-center shadow-2xl sticky top-0 z-30 relative">
-          {/* Left: Branding & Assessment Title */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="relative w-8 h-8 flex items-center justify-center overflow-hidden shrink-0">
-                <video
-                  src="/aptix-logo-anim.mp4"
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  poster="/logo-preview-frame.jpg"
-                  className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
-                />
-              </div>
-              <div className="hidden md:flex items-center gap-1">
-                <span className="font-black text-white text-base tracking-tight">Aptix</span>
-                <span className="text-[10px] text-emerald-400">✦</span>
-              </div>
-            </div>
-            
-            <div className="h-4 w-px bg-neutral-800 hidden sm:block" />
-            
-            <div className="truncate min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
-                  {session.exam.title}
-                </h1>
-                {session.pin && (
-                  <span className="hidden lg:inline-flex text-[10px] font-mono font-bold bg-neutral-900 text-neutral-300 px-2 py-0.5 rounded-md border border-neutral-800 shrink-0">
-                    PIN: {session.pin}
-                  </span>
-                )}
-              </div>
-            </div>
+        {/* ── Top Navbar matching Figma ─────────────────────── */}
+        <header className="h-14 shrink-0 border-b border-white/10 bg-[#060607] px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
+          {/* Left: Branding */}
+          <div className="flex items-center gap-2.5">
+            <span className="font-black text-[18px] tracking-tight text-white leading-none uppercase">
+              APTIX <span className="text-lime-300">✳</span>
+            </span>
+            <span className="w-px h-4 bg-white/15 mx-1" />
+            <span className="hidden sm:inline text-[11px] font-medium text-neutral-400">Assessment Platform</span>
           </div>
 
-          {/* Center: Candidate Info & Answered Progress (Visible on Medium+ screens) */}
-          <div className="hidden lg:flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-300 shadow-inner">
-              <div className="w-5 h-5 rounded-full bg-white text-black text-[10px] font-black flex items-center justify-center shrink-0">
-                {candidateName ? candidateName.charAt(0).toUpperCase() : "C"}
-              </div>
-              <span className="text-neutral-500 text-[11px]">Candidate:</span>
-              <span className="text-white font-bold max-w-[120px] truncate">{candidateName}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-xs font-bold text-neutral-300 shadow-inner">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span>{answeredCount + ansMarkedCount} of {questions.length} Answered</span>
-            </div>
+          {/* Center: University Badge */}
+          <div className="hidden md:flex items-center">
+            <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-3.5 py-1 uppercase">
+              Northbridge University
+            </span>
           </div>
 
-          {/* Right: Autosave, Timer, Fullscreen & Finish */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Real-time Cloud Autosave Status Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-neutral-900 border border-neutral-800 text-neutral-300 shadow-inner">
-              {syncStatus === "saved" && (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-emerald-300">Cloud Synced</span>
-                </>
-              )}
-              {syncStatus === "syncing" && (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-amber-300">Autosaving...</span>
-                </>
-              )}
-              {syncStatus === "cached" && (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-neutral-400" />
-                  <span className="text-neutral-300">Buffered</span>
-                </>
-              )}
+          {/* Right: Candidate Profile Pill */}
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-full bg-purple-600/80 border border-purple-400/30 text-white text-xs font-black flex items-center justify-center shrink-0">
+              {candidateName ? candidateName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() : "AR"}
+            </span>
+            <div className="hidden sm:block leading-tight text-right">
+              <span className="block text-xs font-bold text-white tracking-tight">{candidateName || "Ananya Rao"}</span>
+              <span className="block text-[10px] text-neutral-400 font-mono">
+                {session.pin ? `PIN-${session.pin}` : (attempt.id ? `ID-${String(attempt.id).slice(-8).toUpperCase()}` : "NB2026-0418")}
+              </span>
             </div>
-
-            {/* Pill-shaped Countdown Timer */}
-            <div className={`flex items-center gap-2 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full border text-xs font-bold tracking-wider transition-all ${
-              timeLeft < 300 
-                ? 'bg-rose-950/60 text-rose-300 border-rose-500/50 animate-pulse shadow-lg shadow-rose-950/50' 
-                : 'bg-neutral-900 text-white border-neutral-800 shadow-inner'
-            }`}>
-              <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="font-mono text-xs sm:text-sm font-black text-white">{formatTime(timeLeft)}</span>
-              <span className="text-[10px] text-neutral-500 font-normal hidden xl:inline">remaining</span>
-            </div>
-
-            {/* Fullscreen Toggle */}
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  if (!document.fullscreenElement) {
-                    await document.documentElement.requestFullscreen();
-                    setIsFullscreen(true);
-                  } else {
-                    await document.exitFullscreen();
-                    setIsFullscreen(false);
-                  }
-                } catch (err) {
-                  console.warn(err);
-                }
-              }}
-              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-              className="p-1.5 sm:p-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 transition-colors hidden sm:flex items-center justify-center cursor-pointer shadow-xs"
-            >
-              {isFullscreen ? (
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-              )}
-            </button>
-
-            {/* Finish Button */}
-            <button 
-              onClick={() => handleFinishTest(false)}
-              className="text-xs font-extrabold text-black bg-white hover:bg-neutral-200 border border-white px-3 sm:px-4 py-1.5 rounded-xl transition-all shadow-md whitespace-nowrap flex items-center gap-1 cursor-pointer"
-            >
-              <span>Submit</span>
-              <span>→</span>
-            </button>
-          </div>
-
-          {/* Linear Progress Bar along bottom of Header */}
-          <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-neutral-900 overflow-hidden">
-            <div 
-              className="h-full bg-striped-emerald transition-all duration-300"
-              style={{
-                width: `${questions.length > 0 ? ((answeredCount + ansMarkedCount) / questions.length) * 100 : 0}%`
-              }}
-            />
           </div>
         </header>
 
@@ -1648,153 +1405,108 @@ export function ExamInterface({
           </div>
         )}
 
-        <div className="flex-1 flex px-4 md:px-8 py-8 gap-6 max-w-7xl mx-auto w-full">
-          {/* Question Palette Sidebar (GATE / JEE / CAT Standard) */}
-          <aside className="w-72 shrink-0 hidden lg:block">
-            <div className="bg-[#0a0c10] p-5 rounded-3xl border border-neutral-800 shadow-xl h-full flex flex-col justify-between">
+        {/* ── Subheader & Timer Bar matching Figma ────────── */}
+        <div className="max-w-7xl mx-auto w-full px-4 md:px-8 pt-6 pb-4 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+              {session.exam?.title || session.title || "Quantitative Aptitude · Q4"}
+            </h1>
+            <p className="text-xs text-neutral-400 font-mono mt-1 flex items-center gap-2">
+              <span>{session.pin ? `PIN-${session.pin}` : (session.exam?.code || "ENG-26")}</span>
+              <span>·</span>
+              <span>Attempt {attempt.attemptNumber || 1}</span>
+              <span>·</span>
+              <span>{questions.length} questions</span>
+              <span>·</span>
+              <span className="text-emerald-400">Fullscreen active</span>
+            </p>
+          </div>
+
+          {/* Server-calibrated countdown timer card */}
+          <div className="bg-[#0c0d12] border border-white/10 rounded-2xl px-6 py-3 flex items-center gap-4 shadow-xl">
+            <div className="flex items-center gap-2.5 text-white">
+              <svg className="w-6 h-6 text-lime-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" strokeWidth="2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 7v5l3 2" />
+              </svg>
+              <span className="text-3xl font-mono font-black tracking-tight text-white tabular-nums">
+                {formatTime(timeLeft)}
+              </span>
+            </div>
+            <div className="h-8 w-px bg-white/10" />
+            <div className="text-[11px] text-neutral-400 leading-tight">
+              <span className="block font-medium">Server-calibrated</span>
+              <span className="block text-neutral-500 font-mono text-[10px]">
+                ends {new Date(Date.now() + timeLeft * 1000).toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: "Asia/Kolkata" })} IST
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Telemetry Autosave Banner ─────────────────────── */}
+        <div className="max-w-7xl mx-auto w-full px-4 md:px-8 mb-6">
+          <div className="bg-[#0c0d12] border border-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-3">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-black uppercase tracking-wider border ${
+                syncStatus === "saved" && isOnline
+                  ? "bg-lime-400/10 border-lime-400/30 text-lime-300"
+                  : "bg-amber-400/10 border-amber-400/30 text-amber-300"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === "saved" && isOnline ? "bg-lime-400" : "bg-amber-400 animate-pulse"}`} />
+                {syncStatus === "saved" && isOnline ? "SAVED TO CLOUD" : "SAVED LOCALLY"}
+              </span>
+              <span className="text-neutral-400 text-xs">
+                {lastSyncedAt ? (
+                  <>All answers synced · <span className="font-mono text-neutral-300">{lastSyncedAt.toLocaleTimeString("en-GB", { hour12: false, timeZone: "Asia/Kolkata" })} IST</span></>
+                ) : (
+                  <>Answer buffer ready · <span className="font-mono text-neutral-300">syncs on select</span></>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] font-mono">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
+                syncStatus === "syncing"
+                  ? "bg-lime-400/15 text-lime-300 border-lime-400/40"
+                  : "bg-white/5 text-neutral-500 border-transparent"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === "syncing" ? "bg-lime-400 animate-ping" : "bg-neutral-600"}`} />
+                SYNCING
+              </span>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
+                !isOnline
+                  ? "bg-amber-400/15 text-amber-300 border-amber-400/40"
+                  : "bg-white/5 text-neutral-500 border-transparent"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${!isOnline ? "bg-amber-400 animate-pulse" : "bg-neutral-600"}`} />
+                OFFLINE
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Main 2-Column Work Area ───────────────────────── */}
+        <div className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-8 flex flex-col lg:flex-row gap-6">
+          {/* Left Column: Question Card & Actions */}
+          <div className="flex-1 flex flex-col justify-between min-w-0">
+            {/* The Question Card */}
+            <div className="bg-[#0c0d12] rounded-2xl border border-white/10 p-6 sm:p-8 shadow-2xl flex flex-col justify-between flex-1">
               <div>
-                <div className="flex items-center justify-between mb-3 pb-3 border-b border-neutral-800">
-                  <h2 className="text-xs font-black text-white uppercase tracking-wider">
-                    Question Palette
-                  </h2>
-                  <span className="text-xs font-bold text-neutral-300 bg-neutral-900 px-2.5 py-0.5 rounded-full border border-neutral-800">
-                    {answeredCount + ansMarkedCount} / {questions.length} Ans
+                {/* Meta Header */}
+                <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+                  <span className="text-[10px] font-mono font-bold tracking-widest uppercase px-3 py-1 bg-white/5 border border-white/10 rounded-md text-neutral-300">
+                    QUESTION {currentQuestion + 1} / {questions.length}
+                  </span>
+                  <span className="text-xs text-neutral-400 font-mono">
+                    {(() => {
+                      const tq = questions[currentQuestion].type || "MCQ_SINGLE";
+                      const kind = tq === "MCQ_MULTI" ? "Multiple choice" : tq === "FILL_BLANK" ? "Fill in the blanks" : tq === "NUMERIC" ? "Numerical entry" : "Single choice";
+                      return `${kind} · +${questions[currentQuestion].points || 2} / -${questions[currentQuestion].negativePoints || 0.5}`;
+                    })()}
                   </span>
                 </div>
 
-                {/* State Counters Summary Grid */}
-                <div className="grid grid-cols-2 gap-1.5 mb-4 text-[11px] font-bold">
-                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-emerald-950/40 text-emerald-300 border border-emerald-500/30">
-                    <span className="w-4 h-4 rounded-md bg-emerald-500 text-black flex items-center justify-center text-[10px] font-black shrink-0">{answeredCount}</span>
-                    <span className="truncate">Answered</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-rose-950/40 text-rose-300 border border-rose-500/30">
-                    <span className="w-4 h-4 rounded-md bg-rose-500 text-white flex items-center justify-center text-[10px] font-black shrink-0">{notAnsweredCount}</span>
-                    <span className="truncate">Not Answered</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-purple-950/40 text-purple-300 border border-purple-500/30">
-                    <span className="w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">{markedCount}</span>
-                    <span className="truncate">Marked Review</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-purple-950/70 text-purple-200 border border-purple-500/40">
-                    <span className="w-4 h-4 rounded-md bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shrink-0 relative">
-                      {ansMarkedCount}
-                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 rounded-full" />
-                    </span>
-                    <span className="truncate">Ans & Marked</span>
-                  </div>
-                </div>
-
-                {/* Question Numbers Grid */}
-                <div className="max-h-[340px] overflow-y-auto pr-1">
-                  <div className="grid grid-cols-4 gap-2">
-                    {questions.map((q, i) => {
-                      const qId = q.id;
-                      const isAns = answers[qId] !== undefined && answers[qId] !== "" && !(Array.isArray(answers[qId]) && answers[qId].length === 0);
-                      const isVis = visited.has(qId) || i === currentQuestion;
-                      const isMrk = markedForReview.has(qId);
-                      const isActive = i === currentQuestion;
-
-                      let style = "bg-neutral-900 text-neutral-400 border-neutral-800 hover:bg-neutral-800 hover:text-white";
-                      let badge = null;
-
-                      if (isAns && isMrk) {
-                        style = "bg-purple-900 text-purple-100 border-purple-600 shadow-sm";
-                        badge = <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-black" />;
-                      } else if (isMrk) {
-                        style = "bg-purple-950/80 text-purple-300 border-purple-700 rounded-full shadow-sm";
-                      } else if (isAns) {
-                        style = "bg-emerald-950/80 text-emerald-300 border-emerald-700 shadow-sm";
-                      } else if (isVis) {
-                        style = "bg-rose-950/80 text-rose-300 border-rose-800 shadow-sm";
-                      }
-
-                      const ringClass = isActive ? "ring-2 ring-white ring-offset-2 ring-offset-[#0a0c10] scale-105 z-10 font-black" : "";
-
-                      return (
-                        <button
-                          key={qId}
-                          onClick={() => jumpToQuestion(i)}
-                          className={`h-9 w-full rounded-xl font-bold text-xs flex items-center justify-center transition-all border relative ${style} ${ringClass}`}
-                        >
-                          {badge}
-                          <span>{i + 1}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Legend Footer */}
-              <div className="pt-3 mt-3 border-t border-neutral-800 text-[10px] text-neutral-500 font-medium text-center">
-                <span>Click any question number to jump directly</span>
-              </div>
-            </div>
-          </aside>
-
-          {/* Main Question Container */}
-          <div className="flex-1">
-            <div className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-xl p-6 sm:p-9 min-h-[540px] flex flex-col justify-between">
-              <div>
-                {/* Question Header Badge & Autosave Confirmation */}
-                <div className="flex flex-wrap justify-between items-center gap-2 mb-6 pb-4 border-b border-neutral-800">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-white bg-neutral-900 px-3 py-1 rounded-full uppercase tracking-wider border border-neutral-800">
-                      Question {currentQuestion + 1} of {questions.length}
-                    </span>
-                    {questions[currentQuestion].category && (
-                      <span className="text-xs font-bold text-neutral-400 bg-neutral-900 px-2.5 py-1 rounded-full border border-neutral-800">
-                        {questions[currentQuestion].category}
-                      </span>
-                    )}
-                    <span className="text-[11px] font-bold text-neutral-500">
-                      (+{questions[currentQuestion].points || 1} / -{questions[currentQuestion].negativePoints || 0} pts)
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Autosaved ✓</span>
-                    </span>
-
-                    <button 
-                      onClick={toggleMarkForReview}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all border ${
-                        markedForReview.has(questions[currentQuestion].id) 
-                          ? "bg-purple-950/80 text-purple-300 border-purple-500/40 shadow-sm" 
-                          : "bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white hover:bg-neutral-800"
-                      }`}
-                    >
-                      <svg className="w-3.5 h-3.5" fill={markedForReview.has(questions[currentQuestion].id) ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                      </svg>
-                      {markedForReview.has(questions[currentQuestion].id) ? "Marked" : "Mark Review"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Real-time Tab Switch Warning Banner */}
-                {tabSwitchWarning && (
-                  <div className="mb-6 p-3.5 bg-amber-950/50 border border-amber-500/40 text-amber-300 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <span>{tabSwitchWarning}</span>
-                    </div>
-                    <button 
-                      onClick={() => setTabSwitchWarning(null)}
-                      className="text-amber-400 hover:text-white text-[11px] font-extrabold ml-3"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-
                 {/* Question Stem */}
-                <h2 className="text-xl sm:text-2xl font-bold text-white leading-snug mb-6">
+                <h2 className="text-xl sm:text-2xl font-semibold text-white leading-relaxed mb-4">
                   {questions[currentQuestion].text}
                 </h2>
 
@@ -1803,10 +1515,14 @@ export function ExamInterface({
                     <img 
                       src={questions[currentQuestion].imageUrl} 
                       alt="Question illustration" 
-                      className="max-h-72 rounded-2xl border border-neutral-800 shadow-sm select-none pointer-events-none"
+                      className="max-h-72 rounded-xl border border-white/10 shadow-sm select-none pointer-events-none"
                     />
                   </div>
                 )}
+
+                <p className="text-xs text-neutral-400 font-medium mb-5">
+                  Select one answer.
+                </p>
 
                 {/* Question Options */}
                 <div className="space-y-3 mb-8">
@@ -1817,7 +1533,7 @@ export function ExamInterface({
                     if (qType === "FILL_BLANK") {
                       const textParts = q.text.split(/(\[\d+\])/g);
                       return (
-                        <div className="text-lg font-medium text-neutral-200 leading-relaxed bg-[#0d0f14] p-6 rounded-2xl border border-neutral-800">
+                        <div className="text-lg font-medium text-neutral-200 leading-relaxed bg-white/[0.02] p-6 rounded-xl border border-white/10">
                           {textParts.map((part: string, i: number) => {
                             const match = part.match(/\[(\d+)\]/);
                             if (match) {
@@ -1833,7 +1549,7 @@ export function ExamInterface({
                                     const nextObj = { ...currentObj, [blankId]: e.target.value };
                                     handleAnswerSelect(nextObj, q.id);
                                   }}
-                                  className="inline-block w-36 mx-2 px-3 py-1.5 border-b-2 border-white bg-neutral-900 outline-none text-center font-bold text-white transition-colors focus:bg-neutral-800 rounded-t-lg"
+                                  className="inline-block w-36 mx-2 px-3 py-1.5 border-b-2 border-lime-400 bg-neutral-900 outline-none text-center font-bold text-white transition-colors focus:bg-neutral-800 rounded-t-lg"
                                   placeholder={`Blank ${blankId}`}
                                 />
                               );
@@ -1846,14 +1562,14 @@ export function ExamInterface({
 
                     if (qType === "NUMERIC") {
                       return (
-                        <div className="bg-[#0d0f14] p-6 rounded-2xl border border-neutral-800 max-w-sm">
+                        <div className="bg-white/[0.02] p-6 rounded-xl border border-white/10 max-w-sm">
                           <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Enter your numerical answer:</label>
                           <input
                             type="number"
                             step="any"
                             value={answers[q.id] || ""}
                             onChange={(e) => handleAnswerSelect(e.target.value, q.id)}
-                            className="w-full px-4 py-3 bg-neutral-900 border-2 border-neutral-800 rounded-xl focus:border-white focus:ring-0 outline-none text-xl font-mono font-bold text-white"
+                            className="w-full px-4 py-3 bg-neutral-900 border-2 border-white/10 rounded-xl focus:border-lime-400 focus:ring-0 outline-none text-xl font-mono font-bold text-white"
                             placeholder="e.g. 42.5"
                           />
                         </div>
@@ -1871,16 +1587,16 @@ export function ExamInterface({
                       return (
                         <label
                           key={idx}
-                          className={`flex items-center gap-4 p-4 rounded-2xl border transition-all cursor-pointer group select-none ${
+                          className={`flex items-center gap-4 p-4 rounded-xl border transition-all cursor-pointer select-none ${
                             isChecked 
-                              ? "border-white bg-neutral-800 text-white font-semibold shadow-sm" 
-                              : "border-neutral-800 bg-[#0d0f14] hover:bg-neutral-900 text-neutral-200 hover:border-neutral-700"
+                              ? "border-[#bef264] bg-[#bef264]/[0.04] text-white shadow-sm ring-1 ring-[#bef264]/40" 
+                              : "border-white/10 bg-white/[0.01] hover:bg-white/[0.04] text-neutral-200 hover:border-white/20"
                           }`}
                         >
-                          <div className={`w-7 h-7 rounded-xl border flex items-center justify-center font-bold text-xs transition-all ${
+                          <div className={`w-7 h-7 rounded-full border flex items-center justify-center font-bold text-xs transition-all shrink-0 ${
                             isChecked 
-                              ? "border-white bg-white text-black font-black" 
-                              : "border-neutral-700 bg-neutral-800 text-neutral-300 group-hover:border-neutral-600"
+                              ? "border-[#bef264] text-[#bef264] font-black" 
+                              : "border-white/20 text-neutral-400"
                           }`}>
                             {optionLabel}
                           </div>
@@ -1909,7 +1625,7 @@ export function ExamInterface({
                           {opt.imageUrl && (
                             <img src={opt.imageUrl} alt="Option attachment" className="h-12 w-12 object-cover rounded-xl shadow-sm border border-neutral-800" />
                           )}
-                          <span className="text-sm font-medium leading-relaxed flex-1">
+                          <span className="text-sm font-normal text-neutral-100 flex-1 leading-relaxed">
                             {optText}
                           </span>
                         </label>
@@ -1919,100 +1635,182 @@ export function ExamInterface({
                 </div>
               </div>
 
-              {/* Navigation Action Toolbar */}
-              <div className="flex flex-wrap justify-between items-center gap-3 pt-6 border-t border-neutral-800">
-                <div className="flex items-center gap-2">
-                  {config.allowBackNavigation !== false && (
-                    <button 
-                      onClick={handlePrev}
-                      disabled={currentQuestion === 0}
-                      className="px-5 py-2.5 rounded-xl border border-neutral-800 text-neutral-300 font-bold text-xs hover:bg-neutral-900 disabled:opacity-30 disabled:hover:bg-transparent transition-all flex items-center gap-1.5"
-                    >
-                      <span>←</span>
-                      <span>Previous</span>
-                    </button>
-                  )}
+              {/* Bottom Actions inside Question Card */}
+              <div className="flex items-center justify-between pt-5 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={toggleMarkForReview}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                    markedForReview.has(questions[currentQuestion].id)
+                      ? "bg-[#2c1d42] border-purple-500/60 text-purple-200"
+                      : "bg-white/5 border-white/10 text-neutral-300 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                  <span>{markedForReview.has(questions[currentQuestion].id) ? "✓ Marked for review" : "Marked for review"}</span>
+                </button>
 
-                  <button
-                    onClick={handleClearResponse}
-                    disabled={!answers[questions[currentQuestion]?.id]}
-                    className="px-4 py-2.5 rounded-xl border border-neutral-800 text-neutral-400 font-bold text-xs hover:bg-rose-950/40 hover:text-rose-300 hover:border-rose-800/60 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-neutral-400 transition-all flex items-center gap-1.5"
-                    title="Clear current answer choice"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    <span>Clear Selection</span>
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-2.5">
-                  <button 
-                    onClick={handleMarkForReviewAndNext}
-                    className="px-5 py-2.5 rounded-xl bg-purple-950/40 text-purple-300 hover:bg-purple-900/50 border border-purple-500/30 font-bold text-xs transition-colors flex items-center gap-1.5"
-                  >
-                    <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    <span>Mark Review & Next</span>
-                  </button>
-
-                  {currentQuestion === questions.length - 1 ? (
-                    <button
-                      onClick={() => handleFinishTest(false)}
-                      className="px-7 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5"
-                    >
-                      <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>Submit Assessment</span>
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={handleNext}
-                      className="px-7 py-2.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5"
-                    >
-                      <span>Save & Next</span>
-                      <span>→</span>
-                    </button>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={handleClearResponse}
+                  disabled={!answers[questions[currentQuestion]?.id]}
+                  className="text-xs font-medium text-neutral-400 hover:text-white disabled:opacity-30 disabled:hover:text-neutral-400 transition-colors cursor-pointer"
+                >
+                  Clear response
+                </button>
               </div>
             </div>
+
+            {/* Row below question card: Previous, Help text, Save & Next */}
+            <div className="flex items-center justify-between gap-4 mt-6">
+              {config.allowBackNavigation !== false ? (
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  disabled={currentQuestion === 0}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 bg-[#0c0d12] hover:bg-white/5 disabled:opacity-25 text-neutral-300 font-bold text-xs transition-all cursor-pointer"
+                >
+                  <span>← Previous</span>
+                </button>
+              ) : <div />}
+
+              <p className="text-[11px] text-neutral-400 text-center hidden sm:block">
+                Responses save automatically when you select an option.
+              </p>
+
+              {currentQuestion === questions.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitConfirm(true)}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-lime-300 hover:bg-lime-200 text-black font-extrabold text-xs shadow-lg transition-all cursor-pointer"
+                >
+                  <span>Review & submit →</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-lime-300 hover:bg-lime-200 text-black font-extrabold text-xs shadow-lg transition-all cursor-pointer"
+                >
+                  <span>→ Save & next</span>
+                </button>
+              )}
+            </div>
+
+            {/* Footnote reassurance */}
+            <p className="text-[10px] text-neutral-500 mt-4 leading-relaxed">
+              If disconnected, answers queue in memory + IndexedDB and retry on reconnect. Refresh restores your saved state; the server deadline does not change.
+            </p>
           </div>
+
+          {/* Right Column: Question Navigator */}
+          <aside className="w-80 shrink-0">
+            <div className="bg-[#0c0d12] rounded-2xl border border-white/10 p-5 shadow-2xl flex flex-col justify-between h-full">
+              <div>
+                {/* Header */}
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-sm font-bold text-white">Question navigator</h3>
+                  <span className="text-xs font-mono font-bold text-neutral-400">
+                    {answeredCount + ansMarkedCount} / {questions.length} SAVED
+                  </span>
+                </div>
+
+                {/* 5-Column Grid */}
+                <div className="grid grid-cols-5 gap-2.5 max-h-[380px] overflow-y-auto p-1.5">
+                  {questions.map((q, i) => {
+                    const qId = q.id;
+                    const isAns = answers[qId] !== undefined && answers[qId] !== "" && !(Array.isArray(answers[qId]) && answers[qId].length === 0);
+                    const isVis = visited.has(qId) || i === currentQuestion;
+                    const isMrk = markedForReview.has(qId);
+                    const isActive = i === currentQuestion;
+
+                    let tileStyle = "bg-white/[0.02] border-white/10 text-neutral-400 hover:border-white/20";
+                    if (isMrk) {
+                      tileStyle = "bg-[#2c1d42] border-purple-500/70 text-purple-200 font-bold";
+                    } else if (isAns) {
+                      tileStyle = "bg-[#182618] border-lime-500/50 text-lime-400 font-bold";
+                    } else if (isVis) {
+                      tileStyle = "bg-neutral-900 border-neutral-700 text-neutral-300";
+                    }
+
+                    const activeRing = isActive ? "ring-2 ring-white ring-offset-2 ring-offset-[#0c0d12] text-white font-black z-10" : "";
+
+                    return (
+                      <button
+                        type="button"
+                        key={qId}
+                        onClick={() => jumpToQuestion(i)}
+                        className={`h-10 rounded-xl text-xs flex items-center justify-center transition-all border relative cursor-pointer ${tileStyle} ${activeRing}`}
+                      >
+                        <span>{i + 1}{isMrk ? "•" : ""}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Legend below grid */}
+                <div className="mt-6 pt-5 border-t border-white/10 space-y-2 text-[11px] font-medium text-neutral-400">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-lime-400" />
+                    <span>Answered · {answeredCount + ansMarkedCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-400" />
+                    <span>Marked for review · {markedCount + ansMarkedCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full border border-neutral-400 bg-neutral-400/30" />
+                    <span>Visited, unanswered · {notAnsweredCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full border border-neutral-600" />
+                    <span>Unvisited · {Math.max(0, questions.length - (visited.size || 0))}</span>
+                  </div>
+                  <p className="text-[10px] text-neutral-500 pt-1 leading-tight">
+                    Review markers can overlap answered or visited questions.
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom: Review & Submit action */}
+              <div className="mt-6 pt-5 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitConfirm(true)}
+                  className="w-full py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>→ Review & submit</span>
+                </button>
+                <p className="text-[10px] text-neutral-500 text-center mt-2 leading-tight">
+                  At the deadline, the server closes this attempt and enforces final submission.
+                </p>
+              </div>
+            </div>
+          </aside>
         </div>
+
+        {/* ── Footer matching Figma ─────────────────────────── */}
+        <footer className="border-t border-white/10 bg-[#060607] px-6 py-3 mt-10 flex items-center justify-between text-[11px] text-neutral-500">
+          <span>APTIX Assessment Platform · Northbridge University</span>
+          <span>Secure session • Server time is authoritative</span>
+        </footer>
       </main>
 
-      {/* Submit Confirmation Modal */}
-      {showSubmitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#0a0c10] rounded-3xl shadow-2xl p-8 max-w-sm w-full animate-in fade-in zoom-in duration-200 border border-neutral-800">
-            <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-white flex items-center justify-center mx-auto mb-4 border border-neutral-800">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-extrabold text-white mb-2 text-center">Submit Assessment?</h3>
-            <p className="text-neutral-400 text-xs text-center mb-6 leading-relaxed">
-              Are you sure you want to finish? You will not be able to revisit or modify your answers.
-            </p>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setShowSubmitConfirm(false)}
-                className="flex-1 px-4 py-2.5 text-xs font-bold text-neutral-300 bg-neutral-900 hover:bg-neutral-800 rounded-xl transition-colors border border-neutral-800"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={executeSubmit}
-                className="flex-1 px-4 py-2.5 text-xs font-extrabold text-black bg-white hover:bg-neutral-200 rounded-xl transition-colors shadow-md"
-              >
-                Yes, Submit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Screen 2: Final Submission Review Modal ────────── */}
+      <ExamReviewModal
+        isOpen={showSubmitConfirm}
+        onClose={() => setShowSubmitConfirm(false)}
+        onSubmit={executeSubmit}
+        isSubmitting={isFinishingRef.current}
+        questions={questions}
+        answers={answers}
+        markedForReview={markedForReview}
+        timeLeft={timeLeft}
+        syncStatus={syncStatus}
+        session={session}
+      />
     </>
   );
 }

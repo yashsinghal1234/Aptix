@@ -39,7 +39,7 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
 
   const handleCopy = () => {
     if (!result) return;
-    const text = `Aptix Password Reset:\nEmail: ${result.email}\nTemporary Password: ${result.temporaryPassword}\nPortal URL: ${window.location.origin}/admin/login\n(You will be required to set your own secret password upon sign-in.)`;
+    const text = `APTIX Password Reset:\nEmail: ${result.email}\nTemporary Password: ${result.temporaryPassword}\nPortal URL: ${window.location.origin}/admin/login\n(You will be required to set your own secret password upon sign-in.)`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);

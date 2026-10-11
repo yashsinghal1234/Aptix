@@ -5,6 +5,7 @@ import { createScheduledExamAction } from "@/app/actions/schedule";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FIXED_TOPICS } from "@/lib/ai-question-analyzer";
+import { SubjectSelector } from "@/components/SubjectSelector";
 
 export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
   const router = useRouter();
@@ -119,13 +120,13 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Subject</label>
-            <input 
-              type="text" 
-              name="subject" 
-              required 
-              placeholder="e.g. Computer Science"
-              className="w-full px-4 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 focus:outline-none text-xs"
+            <SubjectSelector
+              name="subject"
+              value={filterTopic}
+              onChange={(s) => setFilterTopic(s)}
+              required
+              label="Subject"
+              placeholder="Choose or Add Subject..."
             />
           </div>
 

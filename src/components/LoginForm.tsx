@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { candidateLoginAction, staffLoginAction } from "@/app/actions/auth";
 import Link from "next/link";
 import { ChunkedVideo } from "@/components/ChunkedVideo";
@@ -47,17 +48,51 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [rememberStaff, setRememberStaff] = useState(true);
   const [rememberCandidate, setRememberCandidate] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const router = useRouter();
+
+  // Instant route prefetching for seamless post-login navigation
+  useEffect(() => {
+    try {
+      router.prefetch("/dashboard/owner");
+      router.prefetch("/dashboard/setter");
+      router.prefetch("/admin/login");
+    } catch {}
+  }, [router]);
+
+  const formatClientAuthError = (msg: string): string => {
+    if (!msg) return "An unexpected error occurred. Please try again.";
+    const lower = msg.toLowerCase();
+    if (
+      lower.includes("prisma") ||
+      lower.includes("database connection") ||
+      lower.includes("can't reach database") ||
+      lower.includes("cannot reach database") ||
+      lower.includes("enotfound") ||
+      lower.includes("etimedout") ||
+      lower.includes("econnrefused") ||
+      lower.includes("econnreset") ||
+      lower.includes("getaddrinfo") ||
+      lower.includes("fetch failed") ||
+      lower.includes("network connection interrupted") ||
+      lower.includes("network connection") ||
+      lower.includes("network error") ||
+      (typeof navigator !== "undefined" && !navigator.onLine)
+    ) {
+      return "Internet is not connected. Please check your internet connection and try again.";
+    }
+    return msg;
+  };
 
   // Trigger smooth error animation and set active error field
   const triggerCandidateError = (msg: string, field: string | null = null) => {
-    setCandidateError(msg);
+    setCandidateError(formatClientAuthError(msg));
     setErrorField(field);
     setShake(true);
     setTimeout(() => setShake(false), 450);
   };
 
   const triggerStaffError = (msg: string, field: string | null = null) => {
-    setStaffError(msg);
+    setStaffError(formatClientAuthError(msg));
     setErrorField(field);
     setShake(true);
     setTimeout(() => setShake(false), 450);
@@ -70,6 +105,31 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     }, 6500);
     return () => clearInterval(timer);
   }, []);
+
+  // Real-time network connectivity monitoring
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const handleOffline = () => {
+        const errorMsg = "Internet is not connected. Please check your internet connection and try again.";
+        if (mode === "candidate") {
+          triggerCandidateError(errorMsg);
+        } else {
+          triggerStaffError(errorMsg);
+        }
+      };
+      const handleOnline = () => {
+        setCandidateError((prev) => (prev?.includes("Internet is not connected") ? null : prev));
+        setStaffError((prev) => (prev?.includes("Internet is not connected") ? null : prev));
+      };
+
+      window.addEventListener("offline", handleOffline);
+      window.addEventListener("online", handleOnline);
+      return () => {
+        window.removeEventListener("offline", handleOffline);
+        window.removeEventListener("online", handleOnline);
+      };
+    }
+  }, [mode]);
 
   // Restore saved credentials from localStorage on mount & mode changes
   useEffect(() => {
@@ -178,6 +238,11 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       } catch {}
     }
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      triggerCandidateError("Internet is not connected. Please check your internet connection and try again.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await candidateLoginAction(formData);
@@ -186,7 +251,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         setLoading(false);
       }
     } catch {
-      triggerCandidateError("Network connection interrupted. Please try again.", null);
+      triggerCandidateError("Internet is not connected. Please check your internet connection and try again.", null);
       setLoading(false);
     }
   };
@@ -228,6 +293,11 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       } catch {}
     }
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      triggerStaffError("Internet is not connected. Please check your internet connection and try again.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await staffLoginAction(formData);
@@ -236,7 +306,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         setLoading(false);
       }
     } catch {
-      triggerStaffError("Network connection interrupted. Please try again.", null);
+      triggerStaffError("Internet is not connected. Please check your internet connection and try again.", null);
       setLoading(false);
     }
   };
@@ -263,8 +333,8 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
               />
             </div>
             <div>
-              <span className="font-extrabold text-3xl sm:text-[32px] tracking-tight text-white leading-none block">
-                Aptix
+              <span className="font-extrabold text-3xl sm:text-[32px] tracking-tight text-white leading-none block uppercase">
+                APTIX
               </span>
               <span className="text-xs sm:text-[13px] text-neutral-400 font-medium tracking-wide mt-1.5 block">
                 Digital Examination Platform

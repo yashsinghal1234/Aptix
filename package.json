@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "clean": "node -e \"try { fs.rmSync('.next', { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch(e){}\"",
+    "clean": "node -e \"try { if(process.platform==='win32'){ require('child_process').execSync('if exist .next rmdir /s /q .next'); } else { fs.rmSync('.next', { recursive: true, force: true }); } } catch(e){}\"",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
@@ -26,7 +26,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

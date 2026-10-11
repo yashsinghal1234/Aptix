@@ -4,8 +4,23 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
+import { getSessionMascotsMap } from "@/app/actions/mascot";
+import { getMascotById } from "@/lib/mascots";
+import { Flower } from "@/components/owner/OpsPanels";
 
 export const dynamic = "force-dynamic";
+
+const istDate = (d: Date | string) =>
+  new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
+const istTime = (d: Date | string) =>
+  new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
+
+function verdict(p: number, d: number): { label: string; cls: string } {
+  if (d < 0 || p < 0.25) return { label: "Review wording", cls: "text-[#f2a488] bg-[#f2a488]/10 border-[#f2a488]/30" };
+  if (p >= 0.75) return { label: "Easy Pass", cls: "text-neutral-300 bg-white/[0.05] border-white/10" };
+  if (d >= 0.2) return { label: "Good separation", cls: "text-lime-200 bg-lime-300/10 border-lime-300/30" };
+  return { label: "Fair", cls: "text-neutral-300 bg-white/[0.05] border-white/10" };
+}
 
 export default async function SessionAnalyticsPage({ params }: { params: { sessionId: string } }) {
   const token = cookies().get("token")?.value;
@@ -18,295 +33,330 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
     include: {
       exam: true,
       sessionStats: true,
-      questionStats: {
-        include: { question: true },
-        orderBy: { discrimination: "asc" } // Worst performing questions first
-      },
-      attempts: {
-        include: { user: true },
-        orderBy: { createdAt: "asc" }
-      }
-    }
+      questionStats: { include: { question: true }, orderBy: { discrimination: "asc" } },
+      attempts: { include: { user: true }, orderBy: { createdAt: "asc" } },
+    },
   });
 
-  if (!session) return <div>Session not found</div>;
+  if (!session) return <div className="text-white p-8">Session not found</div>;
 
-  // Re-calculate basic candidate scores for display
   const attemptsWithScores = await prisma.candidateAttempt.findMany({
     where: { examSessionId: params.sessionId },
     include: { user: true, responses: true },
   });
 
-  const rankedAttempts = attemptsWithScores.map(attempt => ({
-    ...attempt,
-    score: attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0)
-  })).sort((a, b) => b.score - a.score);
+  const sessionMascots = await getSessionMascotsMap(params.sessionId);
 
-  // Compute totalMarks dynamically
   const sessionQuestions = await prisma.question.findMany({
-    where: { examSessions: { some: { id: params.sessionId } } }
+    where: { examSessions: { some: { id: params.sessionId } } },
   });
   const totalMarks = sessionQuestions.reduce((sum, q) => sum + q.points, 0) || session.exam.totalMarks || 1;
 
-  // Compute category/skill breakdown for the cohort (matching reference design bottom-center)
-  const categoryStats: Record<string, { totalEarned: number; totalPossible: number; count: number }> = {};
-  
-  sessionQuestions.forEach(q => {
-    const cat = q.category || "General";
-    if (!categoryStats[cat]) {
-      categoryStats[cat] = { totalEarned: 0, totalPossible: 0, count: 0 };
+  const responseCounts = await prisma.candidateResponse.groupBy({
+    by: ["questionId"],
+    _count: { id: true },
+    where: { attempt: { examSessionId: params.sessionId } },
+  });
+  const attemptsByQ: Record<string, number> = {};
+  for (const r of responseCounts) attemptsByQ[r.questionId] = r._count.id;
+
+  const ranked = attemptsWithScores
+    .map((a) => ({ ...a, score: a.responses.reduce((s, r) => s + r.earnedPoints, 0) }))
+    .sort((a, b) => b.score - a.score);
+
+  // Dense ranks (ties share a rank: 1-2-2-3)
+  let denseRank = 0;
+  let prevScore: number | null = null;
+  const rankedDense = ranked.map((a) => {
+    if (prevScore === null || a.score !== prevScore) {
+      denseRank += 1;
+      prevScore = a.score;
     }
-    categoryStats[cat].totalPossible += (q.points * (attemptsWithScores.length || 1));
+    return { ...a, rank: denseRank };
+  });
+
+  const passPct = session.exam.passCriteria ?? 50;
+  const passed = ranked.filter((a) => (a.score / totalMarks) * 100 >= passPct).length;
+
+  // Category mastery
+  const categoryStats: Record<string, { totalEarned: number; totalPossible: number; count: number }> = {};
+  sessionQuestions.forEach((q) => {
+    const cat = q.category || "General";
+    if (!categoryStats[cat]) categoryStats[cat] = { totalEarned: 0, totalPossible: 0, count: 0 };
+    categoryStats[cat].totalPossible += q.points * (attemptsWithScores.length || 1);
     categoryStats[cat].count += 1;
   });
-
-  attemptsWithScores.forEach(attempt => {
-    attempt.responses.forEach(r => {
-      const q = sessionQuestions.find(sq => sq.id === r.questionId);
+  attemptsWithScores.forEach((a) => {
+    a.responses.forEach((r) => {
+      const q = sessionQuestions.find((sq) => sq.id === r.questionId);
       const cat = q?.category || "General";
-      if (categoryStats[cat]) {
-        categoryStats[cat].totalEarned += r.earnedPoints;
-      }
+      if (categoryStats[cat]) categoryStats[cat].totalEarned += r.earnedPoints;
     });
   });
+  const categoryList = Object.entries(categoryStats)
+    .map(([name, d]) => ({
+      name,
+      pct: d.totalPossible > 0 ? Math.round((d.totalEarned / d.totalPossible) * 100) : 0,
+      count: d.count,
+    }))
+    .sort((a, b) => b.pct - a.pct);
 
-  const categoryList = Object.entries(categoryStats).map(([name, data]) => {
-    const pct = data.totalPossible > 0 ? Math.round((data.totalEarned / data.totalPossible) * 100) : 0;
-    return { name, pct, count: data.count };
-  });
+  // Deciles
+  let deciles: number[] = [];
+  try {
+    const parsed = JSON.parse(session.sessionStats?.scoreDistribution || "[]");
+    if (Array.isArray(parsed) && parsed.length === 10) deciles = parsed;
+  } catch {}
+  const decMax = Math.max(...deciles, 1);
+  const peakBucket = deciles.indexOf(Math.max(...deciles, 0));
+  const bucketLabel = (i: number) => `${i * 10}–${(i + 1) * 10}`;
+
+  const stats = session.sessionStats;
+  const finalized = stats ? istDate(stats.computedAt) : istDate(session.createdAt);
+  const finalizedTime = stats ? istTime(stats.computedAt) : "";
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+      {/* Heading */}
+      <div className="flex items-start justify-between gap-6 px-1 pt-1">
         <div>
-          <Link href="/dashboard/owner/results" className="text-xs font-bold text-neutral-400 hover:text-white mb-2 inline-flex items-center gap-1 transition-colors">
-            &larr; Back to Results Directory
-          </Link>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight capitalize">{session.exam.title}</h1>
-          <p className="text-neutral-400 text-xs mt-0.5">Cohort Analytics & Item Psychometrics Report</p>
+          <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">ANALYTICS / COMPLETED ASSESSMENT</p>
+          <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
+            Beyond the score<span className="text-lime-300">.</span>
+          </h1>
+          <p className="text-xs text-neutral-400 mt-2.5">
+            {session.exam.title} · Q4 · {session.exam.subject || "ENG-26"} · {finalized}
+            {finalizedTime ? ` · Finalized at ${finalizedTime} IST` : ""}
+          </p>
         </div>
-        <a 
-          href={`/api/export?sessionId=${session.id}`}
-          target="_blank"
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-200 text-black rounded-xl text-xs font-bold transition-all shadow-md w-fit"
-        >
-          <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-          Export CSV Report
-        </a>
+        <div className="flex flex-col items-end gap-3 shrink-0">
+          <Flower className="w-14 h-14 sm:w-16 sm:h-16" />
+          <a
+            href={`/api/export?sessionId=${session.id}`}
+            target="_blank"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-lime-300 hover:brightness-110 text-black rounded-xl text-xs font-black transition-all whitespace-nowrap"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Export report
+          </a>
+        </div>
       </div>
 
-      {/* 4 Metric Cards */}
-      {session.sessionStats ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 shadow-2xl flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-neutral-200 flex items-center justify-center border border-neutral-800 shrink-0">
-              <svg className="w-6 h-6 text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Mean Score</p>
-              <p className="text-2xl font-black text-white mt-0.5">{session.sessionStats.meanScore.toFixed(1)} <span className="text-xs text-neutral-500 font-normal">/ {totalMarks}</span></p>
-            </div>
-          </div>
+      {/* Scope pills */}
+      <div className="flex flex-wrap gap-1.5 px-1">
+        {[session.exam.subject || "ENG-26", "All categories", `ALL SUBMISSIONS / ${ranked.length} VALIDATED`, "LIVE COHORT DATA"].map((p) => (
+          <span key={p} className="text-[9px] font-black tracking-[0.12em] text-neutral-300 bg-white/[0.05] border border-white/10 rounded-md px-2 py-1">
+            {p}
+          </span>
+        ))}
+      </div>
 
-          <div className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 shadow-2xl flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-neutral-300 flex items-center justify-center border border-neutral-800 shrink-0">
-              <svg className="w-6 h-6 text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+      {/* Copied analytics + export */}
+      <div className="grid lg:grid-cols-[1fr_280px] gap-4 items-stretch">
+        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+          <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500">COPIED ANALYTICS</p>
+          <p className="mt-2 text-sm font-black text-white">
+            {session.exam.title} · Q4 · {session.exam.subject || "ENG-26"}
+          </p>
+          <p className="text-[10px] text-neutral-500 mt-0.5">Finalized {finalized}{finalizedTime ? ` at ${finalizedTime} IST` : ""}</p>
+          {stats ? (
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {[
+                { l: "Mean", v: stats.meanScore.toFixed(1), s: ` / ${Math.round(totalMarks)}` },
+                { l: "Median", v: stats.medianScore.toFixed(1), s: " midpoint of submitted" },
+                { l: "Pass Rate", v: `${stats.passRate.toFixed(1)}%`, s: ` cutoff ${passPct}%`, lime: true },
+                { l: "Highest", v: stats.highestScore.toFixed(1), s: " top score in the cohort" },
+                { l: "Lowest", v: stats.lowestScore.toFixed(1), s: " minimum score in the cohort" },
+              ].map((c) => (
+                <div key={c.l} className="rounded-xl border border-white/10 bg-black/40 p-3">
+                  <p className="text-[9px] font-bold tracking-[0.14em] text-neutral-500">{c.l.toUpperCase()}</p>
+                  <p className={`mt-1 text-xl font-black tabular-nums ${c.lime ? "text-lime-300" : "text-white"}`}>
+                    {c.v}
+                    <span className="text-[9px] font-medium text-neutral-500">{c.s}</span>
+                  </p>
+                </div>
+              ))}
             </div>
-            <div>
-              <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Median Score</p>
-              <p className="text-2xl font-black text-neutral-200 mt-0.5">{session.sessionStats.medianScore.toFixed(1)}</p>
-            </div>
-          </div>
+          ) : (
+            <p className="mt-4 text-xs text-neutral-500">Metrics are finalizing for this session.</p>
+          )}
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5 flex flex-col">
+          <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500">READ-ONLY REPORT</p>
+          <a
+            href={`/api/export?sessionId=${session.id}`}
+            target="_blank"
+            className="mt-3 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-bold text-white rounded-xl transition-colors"
+          >
+            Export CSV Report
+          </a>
+          <p className="mt-2.5 text-[10px] text-neutral-500 leading-relaxed">
+            Snapshot of means, pass rate, item flags and the ranked roll. Re-export any time; numbers always reflect finalized scoring.
+          </p>
+        </div>
+      </div>
 
-          <div className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 shadow-2xl flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-950/40 text-emerald-400 flex items-center justify-center border border-emerald-800/60 shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      {/* Decile distribution */}
+      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[15px] font-bold text-white">Decile distribution 0–100%</h2>
+          <span className="text-[9px] font-black tracking-[0.14em] text-neutral-400 tabular-nums">DECILES n={ranked.length}</span>
+        </div>
+        {deciles.length === 10 ? (
+          <>
+            <div className="grid grid-cols-10 gap-1.5 items-end">
+              {deciles.map((c, i) => {
+                const peak = i === peakBucket && c > 0;
+                return (
+                  <div key={i} className="flex flex-col items-center gap-1">
+                    <span className="text-[9px] font-bold text-neutral-400 tabular-nums">{c}</span>
+                    <div
+                      className="w-full rounded-md"
+                      style={{ height: `${Math.max(10, Math.round((c / decMax) * 110))}px`, background: peak ? "#bef264" : "#8b7bc7" }}
+                    />
+                  </div>
+                );
+              })}
             </div>
-            <div>
-              <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Pass Rate</p>
-              <p className={`text-2xl font-black mt-0.5 ${session.sessionStats.passRate >= 50 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {session.sessionStats.passRate.toFixed(1)}%
-              </p>
+            <div className="grid grid-cols-10 gap-1.5 mt-1.5">
+              {deciles.map((_, i) => (
+                <p key={i} className="text-center text-[8px] font-semibold text-neutral-600">{i * 10}</p>
+              ))}
             </div>
-          </div>
+            <p className="mt-3 text-[10px] text-neutral-500">
+              Peak at {bucketLabel(peakBucket)} · {passed} passing at {passPct}% cutoff · {ranked.length} validated submissions.
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-neutral-500">Distribution finalizes with the cohort metrics.</p>
+        )}
+      </div>
 
-          <div className="bg-[#0a0c10] p-5 rounded-2xl border border-neutral-800 shadow-2xl flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-white flex items-center justify-center border border-neutral-800 shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Top Score</p>
-              <p className="text-2xl font-black text-white mt-0.5">{session.sessionStats.highestScore.toFixed(1)}</p>
-            </div>
+      {/* Psychometric item table */}
+      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+        <h2 className="text-[15px] font-bold text-white">Psychometric item table</h2>
+        <p className="text-[10px] text-neutral-500 mt-1 mb-4">
+          Diff(p) = share correct · Disc(D) = top-vs-bottom spread · Any D below 0 flags rewording · All D categories use (A/B/C/D) percentages.
+        </p>
+        <div className="overflow-x-auto -mx-1 px-1">
+          <div className="grid grid-cols-[1.4fr_repeat(5,auto)] gap-x-5 gap-y-1 items-center min-w-[760px]">
+            {(["Q", "DIFF (P)", "DISC (D)", "VERDICT", "ATTEMPTS", "CHOICE SPLIT"] as const).map((h, i) => (
+              <p key={h} className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${i > 0 ? "text-center" : ""}`}>{h}</p>
+            ))}
+            {session.questionStats.length === 0 && (
+              <p className="col-span-6 text-xs text-neutral-500 py-4">Item statistics compute after evaluation.</p>
+            )}
+            {session.questionStats.map((st, qi) => {
+              const v = verdict(st.pValue, st.discrimination);
+              let dist: [string, number][] = [];
+              try {
+                dist = Object.entries(JSON.parse(st.distractors || "{}")) as [string, number][];
+              } catch {}
+              const distTotal = dist.reduce((a, [, n]) => a + (Number(n) || 0), 0) || 1;
+              const letters = ["A", "B", "C", "D"];
+              return (
+                <React.Fragment key={st.id}>
+                  <p className="py-2.5 border-t border-white/[0.06] text-[11px] text-neutral-200 truncate pr-2">
+                    Q{String(qi + 1).padStart(2, "0")} · {st.question.text.slice(0, 42)}{st.question.text.length > 42 ? "…" : ""}
+                  </p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-[11px] font-mono text-neutral-300 tabular-nums text-center">{st.pValue.toFixed(2)}</p>
+                  <p className={`py-2.5 border-t border-white/[0.06] text-[11px] font-mono font-bold tabular-nums text-center ${st.discrimination < 0 ? "text-[#f2a488]" : "text-neutral-200"}`}>
+                    {st.discrimination.toFixed(2)}
+                  </p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-center">
+                    <span className={`text-[9px] font-black border rounded px-1.5 py-0.5 whitespace-nowrap ${v.cls}`}>{v.label}</span>
+                  </p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-[11px] text-neutral-300 tabular-nums text-center">
+                    {(attemptsByQ[st.question.id] ?? ranked.length).toLocaleString()}
+                  </p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-[10px] font-mono text-neutral-400 tabular-nums text-center whitespace-nowrap">
+                    {dist.length > 0
+                      ? dist.slice(0, 4).map(([, n], di) => `${letters[di] || "?"} ${Math.round((Number(n) / distTotal) * 100)}%`).join(" / ")
+                      : "—"}
+                  </p>
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
-      ) : (
-        <div className="p-6 bg-neutral-900 text-neutral-300 rounded-2xl border border-neutral-800 text-xs font-semibold">
-          Assessment session metrics are finalizing.
-        </div>
-      )}
+      </div>
 
-      {/* Category Performance Progress Bars */}
-      {categoryList.length > 0 && (
-        <div className="bg-[#0a0c10] rounded-3xl p-6 sm:p-8 border border-neutral-800 shadow-2xl">
-          <div className="mb-6 pb-4 border-b border-neutral-800">
-            <h2 className="text-base font-bold text-white tracking-tight">Category & Skill Breakdown</h2>
-            <p className="text-xs text-neutral-400 mt-0.5">Average cohort accuracy across tested knowledge domains</p>
+      {/* Leaderboard */}
+      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+        <h2 className="text-[15px] font-bold text-white">Ranked leaderboard</h2>
+        <p className="text-[10px] text-neutral-500 mt-1 mb-4">Rank 1 = best score. Ties share a rank. Failed is below {passPct}%.</p>
+        <div className="overflow-x-auto -mx-1 px-1">
+          <div className="grid grid-cols-[auto_1.4fr_auto_auto_auto_auto_auto] gap-x-4 gap-y-1 items-center min-w-[780px]">
+            {(["RANK", "NAME", "EMAIL", "MASCOT", "SCORE", "PASS%", "STATUS", "AUDIT"] as const).map((h, i) => (
+              <p key={h} className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${i >= 3 ? "text-center" : ""} ${i === 7 ? "text-right" : ""}`}>{h}</p>
+            ))}
+            {rankedDense.length === 0 && (
+              <p className="col-span-8 text-xs text-neutral-500 py-4 text-center">No submissions yet.</p>
+            )}
+            {rankedDense.map((a) => {
+              const pct = (a.score / totalMarks) * 100;
+              const passedRow = pct >= passPct;
+              const mId = sessionMascots[a.userId];
+              const m = mId ? getMascotById(mId) : null;
+              return (
+                <React.Fragment key={a.id}>
+                  <p className="py-2.5 border-t border-white/[0.06] text-xs font-black text-neutral-400 tabular-nums">{a.rank}</p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-xs font-bold text-white truncate pr-2">{a.user.name}</p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-[10px] text-neutral-500 truncate pr-2">{a.user.email}</p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-center text-base">{m ? m.emoji : <span className="text-neutral-700">—</span>}</p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-xs font-bold text-white tabular-nums text-center">{a.score.toFixed(0)}</p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-[11px] tabular-nums text-center text-neutral-300">{pct.toFixed(1)}%</p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-center">
+                    <span className={`text-[9px] font-black rounded px-1.5 py-0.5 ${passedRow ? "text-lime-200 bg-lime-300/10 border border-lime-300/25" : "text-[#f2a488] bg-[#f2a488]/10 border border-[#f2a488]/25"}`}>
+                      {passedRow ? "Passed" : "Failed"}
+                    </span>
+                  </p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-right">
+                    <Link
+                      href={`/dashboard/owner/results/${session.id}/candidate/${a.id}`}
+                      className="text-[10px] font-bold text-neutral-300 bg-white/[0.06] hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 transition-colors whitespace-nowrap"
+                    >
+                      Audit
+                    </Link>
+                  </p>
+                </React.Fragment>
+              );
+            })}
           </div>
+        </div>
+      </div>
 
-          <div className="space-y-4">
-            {categoryList.map(cat => (
-              <div key={cat.name} className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-bold text-neutral-200">{cat.name} <span className="text-neutral-500 font-normal">({cat.count} Questions)</span></span>
-                  <span className="font-extrabold text-neutral-100 bg-neutral-900 px-2 py-0.5 rounded-md border border-neutral-700">{cat.pct}%</span>
+      {/* Topic mastery */}
+      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[15px] font-bold text-white">Topic mastery</h2>
+          <span className="text-[9px] font-bold tracking-[0.14em] text-neutral-500">COHORT ACCURACY</span>
+        </div>
+        {categoryList.length === 0 ? (
+          <p className="text-xs text-neutral-500">Mastery computes with the cohort metrics.</p>
+        ) : (
+          <div className="space-y-2.5">
+            {categoryList.map((c) => (
+              <div key={c.name} className="grid grid-cols-[130px_1fr_auto] gap-3 items-center">
+                <p className="text-[11px] text-neutral-300 truncate">{c.name}</p>
+                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div className="h-full rounded-full bg-lime-300" style={{ width: `${Math.max(2, Math.min(100, c.pct))}%` }} />
                 </div>
-                <div className="h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      cat.pct >= 75
-                        ? "bg-striped-emerald"
-                        : cat.pct >= 50
-                        ? "bg-striped-blue"
-                        : "bg-striped-pink"
-                    }`}
-                    style={{
-                      width: `${Math.max(5, cat.pct)}%`,
-                      background: cat.pct >= 75
-                        ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #10b981"
-                        : cat.pct >= 50
-                        ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #3b82f6"
-                        : "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #ec4899",
-                    }}
-                  />
-                </div>
+                <p className="text-[11px] font-bold text-neutral-200 tabular-nums w-10 text-right">{c.pct}%</p>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Cohort Leaderboard / Candidates */}
-      <div className="bg-[#0a0c10] rounded-3xl shadow-2xl border border-neutral-800 overflow-hidden">
-        <div className="p-6 border-b border-neutral-800 flex justify-between items-center">
-          <div>
-            <h2 className="text-base font-bold text-white tracking-tight">Candidate Results & Rankings</h2>
-            <p className="text-xs text-neutral-400 mt-0.5">Individual candidate submissions and question breakdown</p>
-          </div>
-          <span className="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-3 py-1 rounded-full border border-emerald-500/30">
-            {rankedAttempts.length} Total Submissions
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#07080c] text-neutral-400 uppercase tracking-wider font-bold border-b border-neutral-800">
-              <tr>
-                <th className="px-6 py-4">Rank</th>
-                <th className="px-6 py-4">Candidate</th>
-                <th className="px-6 py-4">Total Score</th>
-                <th className="px-6 py-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-800">
-              {rankedAttempts.map((attempt, idx) => (
-                <tr key={attempt.id} className="hover:bg-neutral-900/50 transition-colors">
-                  <td className="px-6 py-4 font-black text-neutral-500 text-sm">
-                    #{idx + 1}
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-white text-sm">{attempt.user.name}</p>
-                    <p className="text-[11px] text-neutral-500">{attempt.user.email}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-white text-sm">
-                      {attempt.score.toFixed(1)} <span className="text-neutral-500 font-normal text-xs">/ {totalMarks}</span>
-                    </div>
-                    <span className="text-[11px] font-bold text-emerald-400">
-                      {((attempt.score / totalMarks) * 100).toFixed(1)}% Accuracy
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link 
-                      href={`/dashboard/owner/results/${session.id}/candidate/${attempt.id}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 px-4 py-2 rounded-xl transition-all shadow-md"
-                    >
-                      <span>View Results</span>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        )}
       </div>
 
-      {/* Item Analysis */}
-      <div className="bg-[#0a0c10] rounded-3xl shadow-2xl border border-neutral-800 overflow-hidden">
-        <div className="p-6 border-b border-neutral-800">
-          <h2 className="text-base font-bold text-white tracking-tight">Item Psychometrics & Discrimination</h2>
-          <p className="text-xs text-neutral-400 mt-0.5">
-            Questions with p-value &lt; 0.25 (excessively difficult) or discrimination &lt; 0 (inverse validity) are highlighted.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#07080c] text-neutral-400 uppercase tracking-wider font-bold border-b border-neutral-800">
-              <tr>
-                <th className="px-6 py-4">Question Stem</th>
-                <th className="px-6 py-4">Difficulty (p-value)</th>
-                <th className="px-6 py-4">Discrimination</th>
-                <th className="px-6 py-4">Avg Time Spent</th>
-                <th className="px-6 py-4">Distractor Distribution</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-800">
-              {session.questionStats.map(stat => {
-                const isFlagged = stat.pValue < 0.25 || stat.discrimination <= 0;
-                let distractors = {};
-                try { distractors = JSON.parse(stat.distractors); } catch(e) {}
-                const distractorEntries = Object.entries(distractors).sort((a: any, b: any) => b[1] - a[1]);
-
-                return (
-                  <tr key={stat.id} className={isFlagged ? "bg-rose-950/20" : "hover:bg-neutral-900/50 transition-colors"}>
-                    <td className="px-6 py-4">
-                      <div className="max-w-[320px] truncate font-bold text-neutral-200 text-xs" title={stat.question.text}>
-                        {stat.question.text}
-                      </div>
-                      {isFlagged && (
-                        <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-950/60 text-rose-400 border border-rose-800/60 uppercase tracking-wider">
-                          Review Recommended
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 font-mono font-bold text-neutral-200">
-                      {stat.pValue.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 font-mono">
-                      <span className={`font-bold ${stat.discrimination <= 0 ? "text-rose-400" : "text-emerald-400"}`}>
-                        {stat.discrimination.toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-neutral-400 font-medium">
-                      {stat.avgTimeSpent.toFixed(1)}s
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-1.5 flex-wrap max-w-[220px]">
-                        {distractorEntries.map(([opt, count]: any) => (
-                          <span key={opt} className="text-[11px] bg-neutral-900 border border-neutral-800 text-neutral-300 px-2 py-0.5 rounded-md font-medium" title={opt}>
-                            {opt}: {count}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {/* Supporting context */}
+      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+        <h2 className="text-[13px] font-bold text-white mb-2">Supporting context</h2>
+        <p className="text-[11px] text-neutral-400 leading-relaxed">
+          Tied scores share a rank. Pass standing uses a {passPct}% cutoff on {Math.round(totalMarks)} marks.
+          Attempts counts reflect recorded responses per question; auto-picked variants may differ across candidates.
+          Distractor splits are response shares per option. Export the CSV for audit-grade records.
+        </p>
       </div>
     </div>
   );

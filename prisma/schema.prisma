@@ -14,6 +14,7 @@ model User {
   role         String   // 'OWNER' | 'SETTER' | 'CANDIDATE'
   passwordHash       String?
   mustChangePassword Boolean  @default(false)
+  assignedSubject    String?  // Department/Subject e.g. "Machine Learning", "Mathematics"
   createdAt          DateTime @default(now())
 
   candidateResponses CandidateResponse[]
@@ -238,5 +239,13 @@ model CheatFlag {
   session       ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
 
   @@index([examSessionId, userId])
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String?
+  description String?
+  createdAt   DateTime @default(now())
 }
 

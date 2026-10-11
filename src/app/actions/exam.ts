@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 
 import { gradeResponse } from "@/lib/scoring";
+import {
+  getCachedQuestionForGrading,
+  getCachedAttemptStatus,
+  setCachedAttemptStatus,
+  markCachedAttemptSubmitted
+} from "@/lib/exam-cache";
 
 /**
  * Real-time Debounced Autosave for Individual Question Selection.
@@ -24,39 +30,59 @@ export async function saveDraftAnswerAction(
 
   const userId = payload.userId as string;
 
-  // Check-on-Access (Lazy Evaluation): Auto-submit if deadline has passed
-  const attempt = await prisma.candidateAttempt.findUnique({
-    where: { id: attemptId },
-    include: { session: true }
-  });
-
-  if (!attempt || attempt.userId !== userId) return { error: "Attempt not found" };
-
-  if (attempt.status === "SUBMITTED") {
-    return { error: "Assessment already submitted", isSubmitted: true };
-  }
-
-  const sessionStart = attempt.session.startTime || attempt.session.createdAt;
-  const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
-  const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
-  const now = new Date();
-
-  if (now > effectiveEnd) {
-    // Deadline passed: Auto-submit immediately
-    await prisma.candidateAttempt.update({
+  // Check in-memory attempt deadline cache first (0ms)
+  const cachedAttempt = getCachedAttemptStatus(attemptId);
+  if (cachedAttempt) {
+    if (cachedAttempt.userId !== userId) return { error: "Attempt not found" };
+    if (cachedAttempt.isSubmitted) return { error: "Assessment already submitted", isSubmitted: true };
+    if (Date.now() > cachedAttempt.effectiveEndMs) {
+      await prisma.candidateAttempt.update({
+        where: { id: attemptId },
+        data: { status: "SUBMITTED", submittedAt: new Date() }
+      });
+      markCachedAttemptSubmitted(attemptId);
+      return { error: "Assessment time expired", isSubmitted: true };
+    }
+  } else {
+    // Check-on-Access: Auto-submit if deadline has passed
+    const attempt = await prisma.candidateAttempt.findUnique({
       where: { id: attemptId },
-      data: { status: "SUBMITTED", submittedAt: now }
+      include: { session: true }
     });
-    return { error: "Assessment time expired", isSubmitted: true };
+
+    if (!attempt || attempt.userId !== userId) return { error: "Attempt not found" };
+
+    if (attempt.status === "SUBMITTED") {
+      markCachedAttemptSubmitted(attemptId);
+      return { error: "Assessment already submitted", isSubmitted: true };
+    }
+
+    const sessionStart = attempt.session.startTime || attempt.session.createdAt;
+    const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
+    const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
+    const now = new Date();
+
+    if (now > effectiveEnd) {
+      await prisma.candidateAttempt.update({
+        where: { id: attemptId },
+        data: { status: "SUBMITTED", submittedAt: now }
+      });
+      markCachedAttemptSubmitted(attemptId);
+      return { error: "Assessment time expired", isSubmitted: true };
+    }
+
+    setCachedAttemptStatus(attemptId, {
+      userId,
+      effectiveEndMs: effectiveEnd.getTime(),
+      isSubmitted: false
+    });
   }
 
-  const q = await prisma.question.findUnique({
-    where: { id: questionId }
-  });
-
+  const q = await getCachedQuestionForGrading(questionId);
   if (!q) return { error: "Question not found" };
 
   const { isCorrect, earnedPoints } = gradeResponse(q, selectedOption);
+
 
   await prisma.candidateResponse.upsert({
     where: {
@@ -257,6 +283,7 @@ export async function submitExamAction(
     where: { id: attemptId },
     data: { status: "SUBMITTED", submittedAt: finalSubmittedAt }
   });
+  markCachedAttemptSubmitted(attemptId);
 
   // Clear device lock session
   const { clearAttemptSession } = await import("./attempt");

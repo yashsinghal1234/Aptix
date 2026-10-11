@@ -21,7 +21,7 @@ export function SetterForm() {
 
   const handleCopy = () => {
     if (!createdCredentials) return;
-    const text = `Aptix Staff Portal Activation:\nEmail: ${createdCredentials.email}\nTemporary Password: ${createdCredentials.password}\nPortal URL: ${window.location.origin}/admin/login\n(You will be prompted to choose your own private permanent password upon first sign-in.)`;
+    const text = `APTIX Staff Portal Activation:\nEmail: ${createdCredentials.email}\nTemporary Password: ${createdCredentials.password}\nPortal URL: ${window.location.origin}/admin/login\n(You will be prompted to choose your own private permanent password upon first sign-in.)`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);

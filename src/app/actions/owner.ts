@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { invalidateSettersCache } from "@/lib/dashboard-cache";
 
 async function getAuthPayload() {
   const token = cookies().get("token")?.value;
@@ -37,6 +38,10 @@ export async function createSetterAction(formData: FormData) {
 
   const normalizedEmail = email.toLowerCase().trim();
   const passwordHash = hashPassword(password);
+  const rcField = formData.get("requireChange");
+  const mustChange = rcField === null ? true : rcField === "on" || rcField === "true";
+
+  const assignedSubject = (formData.get("assignedSubject") as string)?.trim() || null;
 
   await prisma.user.upsert({
     where: { email: normalizedEmail },
@@ -44,24 +49,28 @@ export async function createSetterAction(formData: FormData) {
       role: "SETTER", 
       name: name.trim(),
       passwordHash: passwordHash,
-      mustChangePassword: true
+      mustChangePassword: mustChange,
+      assignedSubject: assignedSubject || undefined,
     },
     create: { 
       email: normalizedEmail, 
       name: name.trim(), 
       role: "SETTER",
       passwordHash: passwordHash,
-      mustChangePassword: true
+      mustChangePassword: mustChange,
+      assignedSubject: assignedSubject,
     }
   });
 
   revalidatePath("/dashboard/owner");
+  revalidatePath("/dashboard/owner/setters");
+  invalidateSettersCache();
   return { 
     success: true, 
     email: normalizedEmail, 
     name: name.trim(), 
     password,
-    mustChangePassword: true
+    mustChangePassword: mustChange
   };
 }
 
@@ -74,6 +83,8 @@ export async function removeSetterAction(id: string) {
   });
 
   revalidatePath("/dashboard/owner");
+  revalidatePath("/dashboard/owner/setters");
+  invalidateSettersCache();
   return { success: true };
 }
 
@@ -132,7 +143,7 @@ export async function changePasswordAction(formData: FormData) {
 /**
  * Allows the Owner to reset the password for any staff member
  */
-export async function adminResetUserPasswordAction(userId: string, customPassword?: string) {
+export async function adminResetUserPasswordAction(userId: string, customPassword?: string, requireChange: boolean = true) {
   if (!(await isOwner())) return { error: "Unauthorized" };
 
   const user = await prisma.user.findUnique({
@@ -153,7 +164,7 @@ export async function adminResetUserPasswordAction(userId: string, customPasswor
     where: { id: userId },
     data: {
       passwordHash: passwordHash,
-      mustChangePassword: true
+      mustChangePassword: requireChange
     }
   });
 

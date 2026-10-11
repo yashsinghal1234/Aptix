@@ -7,6 +7,7 @@ import { verifyToken } from "@/lib/auth";
 import { z } from "zod";
 
 import { uploadImageAction } from "@/app/actions/upload";
+import { invalidateOwnerDashboardCache, invalidateQuestionBankCache } from "@/lib/dashboard-cache";
 
 const optionSchema = z.object({
   text: z.string(),
@@ -28,6 +29,51 @@ async function getAuthorizedUser() {
   const payload = await verifyToken(token);
   if (!payload || (payload.role !== "OWNER" && payload.role !== "SETTER")) return null;
   return payload;
+}
+
+/** Lightweight pre-save duplicate signal (same non-AI Jaccard engine as submit-time enforcement). */
+export async function checkDuplicateAction(stem: string, category: string) {
+  const user = await getAuthorizedUser();
+  if (!user) return { error: "Unauthorized" };
+  const text = (stem || "").trim();
+  if (text.length < 10) return { match: null };
+  const { findDuplicateInQuestionList } = await import("@/lib/question-duplicate-checker");
+  const existing = await prisma.question.findMany({
+    where: category ? { category } : {},
+    select: { id: true, text: true },
+  });
+  const match = findDuplicateInQuestionList(text, existing);
+  if (!match.isDuplicate) return { match: null };
+  return {
+    match: {
+      similarity: Math.round(match.similarity * 100),
+      isExact: match.isExact,
+      matchedId: match.matchedId || null,
+      matchedStem: (match.matchedStem || "").substring(0, 120),
+    },
+  };
+}
+
+/** Batch pre-save duplicate signals for CSV/paste imports (one bank read, many stems). */
+export async function checkDuplicatesAction(stems: string[]) {
+  const user = await getAuthorizedUser();
+  if (!user) return { error: "Unauthorized" };
+  const { findDuplicateInQuestionList } = await import("@/lib/question-duplicate-checker");
+  const existing = await prisma.question.findMany({ select: { id: true, text: true } });
+  return {
+    matches: stems.map((stem) => {
+      const text = (stem || "").trim();
+      if (text.length < 10) return null;
+      const match = findDuplicateInQuestionList(text, existing);
+      if (!match.isDuplicate) return null;
+      return {
+        similarity: Math.round(match.similarity * 100),
+        isExact: match.isExact,
+        matchedId: match.matchedId || null,
+        matchedStem: (match.matchedStem || "").substring(0, 120),
+      };
+    }),
+  };
 }
 
 export async function createQuestionAction(formData: FormData) {
@@ -147,6 +193,8 @@ export async function createQuestionAction(formData: FormData) {
 
   revalidatePath("/dashboard/setter");
   revalidatePath("/dashboard/setter/bank");
+  invalidateOwnerDashboardCache();
+  invalidateQuestionBankCache();
   return { success: true };
 }
 
@@ -180,6 +228,8 @@ export async function deleteQuestionAction(id: string) {
 
     revalidatePath("/dashboard/setter");
     revalidatePath("/dashboard/setter/bank");
+    invalidateOwnerDashboardCache();
+    invalidateQuestionBankCache();
     return { success: true };
   } catch (error: any) {
     console.error("Failed to delete question:", error);

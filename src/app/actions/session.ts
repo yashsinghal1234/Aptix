@@ -153,6 +153,7 @@ export async function createSessionAction(formData: FormData) {
         webcamRequired: template.webcamRequired,
         randomizeQuestionOrder: template.randomizeQuestionOrder,
         randomizeOptionOrder: template.randomizeOptionOrder,
+        isGamified: template.description?.includes("[MODE:GAMIFIED]") || formData.get("isGamified") === "on",
       }),
       questions: {
         connect: snapshottedQuestions.map(q => ({ id: q.id }))

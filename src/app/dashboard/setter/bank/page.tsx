@@ -1,107 +1,156 @@
 import React from "react";
-import { prisma } from "@/lib/prisma";
-import { DeleteQuestionButton } from "@/components/DeleteQuestionButton";
+import Link from "next/link";
+import { getCachedQuestionBankData } from "@/lib/dashboard-cache";
+import { BankOps } from "@/components/owner/BankOps";
+import { Flower } from "@/components/owner/OpsPanels";
 
 export const dynamic = "force-dynamic";
 
-export default async function QuestionBankDashboard() {
-  const [questions, lockedSessions] = await Promise.all([
-    prisma.question.findMany({
-      orderBy: { category: "asc" }
-    }),
-    prisma.examSession.findMany({
-      where: { status: { in: ["LIVE", "COMPLETED"] } },
-      select: { questions: { select: { id: true } } }
-    })
-  ]);
+const TYPE_LABELS: Record<string, string> = {
+  MCQ_SINGLE: "Single choice",
+  MCQ_MULTI: "Multiple correct",
+  FILL_BLANK: "Fill blanks",
+  NUMERIC: "Numerical",
+  TRUE_FALSE: "True / False",
+};
 
-  const lockedQuestionIds = new Set(
-    lockedSessions.flatMap((s) => s.questions.map((q) => q.id))
-  );
+const WORKFLOW_LABELS: Record<string, string> = {
+  APPROVED: "Approved",
+  SUBMITTED: "In review",
+  DRAFT: "Draft",
+  REJECTED: "Changes requested",
+};
+
+export default async function QuestionBankDashboard() {
+  const [questions, lockedSessions] = await getCachedQuestionBankData();
+
+  const liveIds = new Set<string>();
+  const doneIds = new Set<string>();
+  for (const s of lockedSessions as any[]) {
+    for (const q of s.questions) {
+      if (s.status === "LIVE") liveIds.add(q.id);
+      else doneIds.add(q.id);
+    }
+  }
+
+  const rows = (questions as any[]).map((q: any) => {
+    const locked = liveIds.has(q.id) || doneIds.has(q.id);
+    const integrity = locked
+      ? `Locked · ${liveIds.has(q.id) ? "LIVE" : "COMPLETED"}`
+      : q.status === "SUBMITTED"
+        ? "In review"
+        : q.status === "REJECTED"
+          ? "Review required"
+          : "Editable";
+    const tone = locked ? ("lime" as const) : q.status === "REJECTED" ? ("peach" as const) : ("neutral" as const);
+    let options: string[] = [];
+    try {
+      const parsed = JSON.parse(q.options || "[]");
+      options = parsed.map((o: any) => (typeof o === "string" ? o : o.text));
+    } catch {}
+    return {
+      id: q.id,
+      qcode: `Q-${q.id.slice(-4).toUpperCase()}`,
+      text: q.text,
+      category: q.category || "General",
+      typeLabel: TYPE_LABELS[q.type] || q.type,
+      level: q.difficultyLevel === "MEDIUM" ? "Medium" : q.difficultyLevel === "EASY" ? "Easy" : q.difficultyLevel === "HARD" ? "Hard" : q.difficultyLevel,
+      workflow: q.status,
+      workflowLabel: WORKFLOW_LABELS[q.status] || q.status,
+      integrity,
+      integrityTone: tone,
+      points: q.points ?? 1,
+      options,
+      locked,
+    };
+  });
+
+  const approved = rows.filter((r) => r.workflow === "APPROVED").length;
+  const drafts = rows.filter((r) => r.workflow === "DRAFT").length;
+  const pending = rows.filter((r) => r.workflow === "SUBMITTED").length;
+
+  const queue = rows
+    .filter((r) => r.workflow === "SUBMITTED")
+    .map((r) => ({ id: r.id, qcode: r.qcode, text: r.text, category: r.category }));
+
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  const withDates = (questions as any[])
+    .map((q: any) => ({ q, t: new Date(q.createdAt).getTime() }))
+    .sort((a, b) => b.t - a.t);
+  const latest = {
+    count24h: withDates.filter((x) => x.t >= dayAgo).length,
+    items: withDates.slice(0, 5).map(({ q }) => ({
+      qcode: `Q-${String(q.id).slice(-4).toUpperCase()}`,
+      text: q.text,
+      createdLabel: new Date(q.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }),
+    })),
+  };
+
+  const categories = Array.from(new Set(rows.map((r) => r.category))).sort();
+  const types = Array.from(new Set(rows.map((r) => r.typeLabel))).sort();
+  const levels = Array.from(new Set(rows.map((r) => r.level))).sort();
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-12">
-      <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+      <div className="flex items-start justify-between gap-6 px-1 pt-1">
         <div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">Question Bank</h2>
-          <p className="text-neutral-400 mt-1 text-xs">Review and manage all authored questions.</p>
+          <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">CONTENT LIBRARY / FACULTY &amp; SETTERS</p>
+          <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
+            Total questions<span className="text-lime-300">.</span>
+          </h1>
+          <p className="text-[13px] text-neutral-400 mt-2.5">
+            Add questions, review protected items, and manage quality states without exposing master permissions to faculty.
+          </p>
         </div>
-        <a 
-          href="/dashboard/setter"
-          className="px-4 py-2 bg-white hover:bg-neutral-200 text-black text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
-        >
-          <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-          <span>Add Questions</span>
-        </a>
+        <div className="flex flex-col items-end gap-3 shrink-0">
+          <Flower className="w-14 h-14 sm:w-16 sm:h-16" />
+          <Link
+            href="/dashboard/setter"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-lime-300 hover:brightness-110 text-black rounded-xl text-xs font-black transition-all whitespace-nowrap"
+          >
+            <span className="text-sm leading-none font-black">+</span> Add questions
+          </Link>
+        </div>
       </div>
-      
-      <div className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-md overflow-hidden">
-        <div className="p-6 border-b border-neutral-800 flex justify-between items-center bg-[#07080c]">
-          <h3 className="font-bold text-white text-sm">All Questions ({questions.length})</h3>
-        </div>
-        
-        <div className="divide-y divide-neutral-800/80 max-h-[700px] overflow-y-auto">
-          {questions.length === 0 ? (
-            <div className="p-12 text-center text-neutral-500 text-xs">
-              No questions found. Click "Add Questions" to create some.
-            </div>
-          ) : (
-            questions.map((q) => {
-              return (
-                <div key={q.id} className="p-6 hover:bg-neutral-900/30 transition-colors">
-                  <div className="flex justify-between items-start mb-3 gap-4">
-                    <div className="flex-1">
-                      <span className="inline-block px-2.5 py-0.5 bg-neutral-900 text-neutral-300 border border-neutral-800 text-xs font-semibold rounded-full mb-2">
-                        {q.category}
-                      </span>
-                      <p className="font-bold text-white text-base leading-relaxed">
-                        {q.text}
-                      </p>
-                      {q.imageUrl && (
-                        <div className="mt-3">
-                          <img src={q.imageUrl} alt="Question figure" className="max-h-48 rounded-xl border border-neutral-800 shadow-sm bg-black p-1 object-contain" />
-                        </div>
-                      )}
-                    </div>
-                    <DeleteQuestionButton id={q.id} isLocked={lockedQuestionIds.has(q.id)} />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs max-w-3xl">
-                    {(() => {
-                      let options: any[] = [];
-                      try {
-                        options = JSON.parse(q.options);
-                      } catch(e) {}
-                      return options.map((opt: any, idx: number) => {
-                        const optText = typeof opt === "string" ? opt : opt.text;
-                        let isCorrect = false;
-                        try {
-                          const parsedAns = JSON.parse(q.answerData);
-                          isCorrect = parsedAns.correctAnswer === optText || (parsedAns.correctAnswers && parsedAns.correctAnswers.includes(optText));
-                        } catch(e) {}
 
-                        return (
-                          <div 
-                            key={idx} 
-                            className={`p-3 rounded-xl border transition-all ${
-                              isCorrect 
-                                ? 'bg-emerald-950/20 border-emerald-500/30 font-bold text-emerald-300' 
-                                : 'bg-neutral-900/50 border-neutral-800 text-neutral-300'
-                            }`}
-                          >
-                            <span className="text-neutral-500 mr-2 font-mono font-bold">{String.fromCharCode(65 + idx)}.</span>
-                            {optText}
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
-              );
-            })
-          )}
+      <div className="flex flex-wrap gap-1.5 px-1">
+        {[
+          `Question bank · ${rows.length}`,
+          `Quality queue · ${pending}`,
+          `Locked · ${liveIds.size + doneIds.size}`,
+        ].map((p) => (
+          <span key={p} className="text-[9px] font-black tracking-[0.12em] text-neutral-300 bg-white/[0.05] border border-white/10 rounded-md px-2 py-1 tabular-nums">
+            {p}
+          </span>
+        ))}
+        <span className="ml-auto flex gap-2">
+          <span className="text-[9px] font-black tracking-[0.12em] text-neutral-400 bg-white/[0.04] border border-white/10 rounded-md px-2 py-1">CSV IMPORT</span>
+          <span className="text-[9px] font-black tracking-[0.12em] text-neutral-400 bg-white/[0.04] border border-white/10 rounded-md px-2 py-1">PASTE &amp; PARSE</span>
+        </span>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] px-5 py-3.5 flex gap-3 items-start">
+        <span className="text-lime-300 text-sm mt-0.5">🛡</span>
+        <div>
+          <p className="text-[11px] font-black text-white">Locked means protected</p>
+          <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
+            Questions linked to LIVE or COMPLETED assessments cannot be edited or deleted. Their cached snapshots and response history stay intact. Duplicate a blueprint instead.
+          </p>
         </div>
       </div>
+
+      <BankOps
+        rows={rows}
+        queue={queue}
+        latest={latest}
+        categories={categories}
+        types={types}
+        levels={levels}
+      />
+
+      <p className="px-1 text-[10px] text-neutral-600">
+        {approved} approved · {drafts} drafts · {pending} in review · {liveIds.size + doneIds.size} locked by live or completed sessions.
+      </p>
     </div>
   );
 }

@@ -4,12 +4,43 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { changePasswordAction } from "@/app/actions/owner";
 
-export function ChangePasswordModal() {
-  const [isOpen, setIsOpen] = useState(false);
+interface ChangePasswordModalProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  trigger?: (open: () => void) => React.ReactNode;
+}
+
+export function ChangePasswordModal({
+  isOpen: controlledIsOpen,
+  onClose: controlledOnClose,
+  trigger,
+}: ChangePasswordModalProps = {}) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const isControlled = controlledIsOpen !== undefined;
+  const isOpen = isControlled ? controlledIsOpen : internalIsOpen;
+
+  const closeModal = () => {
+    if (isControlled && controlledOnClose) {
+      controlledOnClose();
+    } else {
+      setInternalIsOpen(false);
+    }
+    setError(null);
+    setSuccessMsg(null);
+  };
+
+  const openModal = () => {
+    if (!isControlled) {
+      setInternalIsOpen(true);
+    }
+    setError(null);
+    setSuccessMsg(null);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -30,28 +61,27 @@ export function ChangePasswordModal() {
     } else if (res.success) {
       setSuccessMsg(res.message || "Password updated successfully!");
       setTimeout(() => {
-        setIsOpen(false);
-        setSuccessMsg(null);
+        closeModal();
       }, 1800);
     }
   };
 
   return (
     <>
-      <button
-        onClick={() => {
-          setIsOpen(true);
-          setError(null);
-          setSuccessMsg(null);
-        }}
-        className="px-4 py-2 sm:px-4.5 sm:py-2.5 text-xs sm:text-sm font-semibold text-neutral-200 bg-neutral-900 hover:bg-neutral-800 hover:text-white rounded-xl transition-all border border-neutral-800 flex items-center gap-2 cursor-pointer shadow-xs"
-        title="Change your account password"
-      >
-        <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-        </svg>
-        <span>Change Password</span>
-      </button>
+      {trigger ? (
+        trigger(openModal)
+      ) : !isControlled ? (
+        <button
+          onClick={openModal}
+          className="px-4 py-2 sm:px-4.5 sm:py-2.5 text-xs sm:text-sm font-semibold text-neutral-200 bg-neutral-900 hover:bg-neutral-800 hover:text-white rounded-xl transition-all border border-neutral-800 flex items-center gap-2 cursor-pointer shadow-xs"
+          title="Change your account password"
+        >
+          <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+          </svg>
+          <span>Change Password</span>
+        </button>
+      ) : null}
 
       {isOpen && mounted && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
@@ -63,7 +93,7 @@ export function ChangePasswordModal() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={closeModal}
                 className="w-7 h-7 rounded-full bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 border border-neutral-800 flex items-center justify-center text-xs font-bold transition-colors"
               >
                 ✕
@@ -130,7 +160,7 @@ export function ChangePasswordModal() {
               <div className="pt-2 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={closeModal}
                   className="flex-1 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 rounded-xl text-xs font-bold transition-colors"
                 >
                   Cancel

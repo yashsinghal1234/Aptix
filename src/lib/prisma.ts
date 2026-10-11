@@ -10,7 +10,7 @@ const createPrismaClient = () => {
   return baseClient.$extends({
     query: {
       $allOperations({ model, operation, args, query }) {
-        const executeWithRetry = async (retries = 2, delay = 1200): Promise<any> => {
+        const executeWithRetry = async (retries = 2, delay = 250): Promise<any> => {
           try {
             return await query(args)
           } catch (error: any) {

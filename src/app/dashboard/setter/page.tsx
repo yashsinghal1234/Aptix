@@ -3,51 +3,51 @@ import React, { useState } from "react";
 import { AddQuestionForm } from "@/components/AddQuestionForm";
 import { BulkUploadCSV } from "@/components/BulkUploadCSV";
 import { BulkUploadText } from "@/components/BulkUploadText";
+import { Flower } from "@/components/owner/OpsPanels";
 
 export default function SetterDashboard() {
   const [activeTab, setActiveTab] = useState<"MANUAL" | "PASTE" | "CSV">("MANUAL");
 
+  const tabs = [
+    { k: "MANUAL" as const, label: "MANUAL ENTRY" },
+    { k: "PASTE" as const, label: "PASTE & PARSE" },
+    { k: "CSV" as const, label: "BULK UPLOAD" },
+  ];
+
   return (
-    <div className="space-y-8 max-w-4xl mx-auto pb-12">
-      <div className="flex justify-between items-end border-b border-neutral-800 pb-4">
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+      <div className="flex items-start justify-between gap-6 px-1 pt-1">
         <div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">Question Adder</h2>
-          <p className="text-neutral-400 text-xs mt-1">Author new questions manually, parse text, or bulk upload CSV.</p>
+          <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">QUESTION STUDIO / Q-DRAFT</p>
+          <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
+            Make every question count<span className="text-lime-300">.</span>
+          </h1>
+          <p className="text-[13px] text-neutral-400 mt-2.5">
+            Author, validate, review. Sending an item queues it for approval.
+          </p>
         </div>
-        <a href="/dashboard/setter/bank" className="text-neutral-200 font-bold hover:text-white bg-neutral-900 hover:bg-neutral-800 px-4 py-2 rounded-xl transition-all border border-neutral-800 flex items-center gap-2 text-xs">
-          <span>Question Bank</span>
-          <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-        </a>
+        <Flower className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 mt-1" />
       </div>
-      
-      <div className="bg-[#0a0c10] rounded-3xl shadow-md border border-neutral-800 overflow-hidden">
-        <div className="flex border-b border-neutral-800 bg-[#07080c]">
-          <button 
-            onClick={() => setActiveTab("MANUAL")}
-            className={`flex-1 py-4 px-6 text-xs sm:text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${activeTab === "MANUAL" ? "border-white text-white bg-neutral-900/60" : "border-transparent text-neutral-400 hover:text-white hover:bg-neutral-900/30"}`}
+
+      <div className="flex flex-wrap gap-1.5 px-1">
+        {tabs.map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setActiveTab(t.k)}
+            className={`text-[10px] font-black tracking-[0.12em] rounded-lg px-3.5 py-2 border transition-all ${
+              activeTab === t.k
+                ? "text-black bg-lime-300 border-lime-300"
+                : "text-neutral-400 bg-white/[0.04] border-white/10 hover:text-white"
+            }`}
           >
-            Manual Authoring
+            {t.label}
           </button>
-          <button 
-            onClick={() => setActiveTab("PASTE")}
-            className={`flex-1 py-4 px-6 text-xs sm:text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${activeTab === "PASTE" ? "border-white text-white bg-neutral-900/60" : "border-transparent text-neutral-400 hover:text-white hover:bg-neutral-900/30"}`}
-          >
-            Paste & Parse
-          </button>
-          <button 
-            onClick={() => setActiveTab("CSV")}
-            className={`flex-1 py-4 px-6 text-xs sm:text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${activeTab === "CSV" ? "border-white text-white bg-neutral-900/60" : "border-transparent text-neutral-400 hover:text-white hover:bg-neutral-900/30"}`}
-          >
-            CSV Upload
-          </button>
-        </div>
-        
-        <div className="p-8">
-          {activeTab === "MANUAL" && <AddQuestionForm />}
-          {activeTab === "PASTE" && <BulkUploadText />}
-          {activeTab === "CSV" && <BulkUploadCSV />}
-        </div>
+        ))}
       </div>
+
+      {activeTab === "MANUAL" && <AddQuestionForm />}
+      {activeTab === "PASTE" && <BulkUploadText />}
+      {activeTab === "CSV" && <BulkUploadCSV />}
     </div>
   );
 }

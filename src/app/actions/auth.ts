@@ -10,6 +10,43 @@ import { checkRateLimit, recordFailedAttempt, resetRateLimit } from "@/lib/rate-
 const OWNER_EMAILS = ["admin@aptix.com", "singhalyash307@gmail.com"];
 const DEFAULT_OWNER_PASSWORD = "282007@aA";
 
+function formatAuthError(error: any, fallbackMessage: string): string {
+  if (!error) return fallbackMessage;
+  const msg = String(error?.message || error || "").toLowerCase();
+  const code = String(error?.code || "").toUpperCase();
+  const name = String(error?.name || "").toLowerCase();
+
+  // Prisma connection error codes & network / DNS / socket errors
+  if (
+    ["P1001", "P1002", "P1008", "P1017"].includes(code) ||
+    name.includes("prismaclientinitializationerror") ||
+    name.includes("prismaclientrustpanicerror") ||
+    msg.includes("can't reach database server") ||
+    msg.includes("cannot reach database server") ||
+    msg.includes("please make sure your database server is running") ||
+    msg.includes("getaddrinfo") ||
+    msg.includes("enotfound") ||
+    msg.includes("etimedout") ||
+    msg.includes("econnrefused") ||
+    msg.includes("econnreset") ||
+    msg.includes("eai_again") ||
+    msg.includes("socket hang up") ||
+    msg.includes("fetch failed") ||
+    msg.includes("connection closed") ||
+    msg.includes("connection terminated") ||
+    msg.includes("connection timeout") ||
+    msg.includes("connection timed out") ||
+    msg.includes("database connection") ||
+    msg.includes("unable to connect to prisma") ||
+    msg.includes("prisma") ||
+    msg.includes("network error")
+  ) {
+    return "Internet is not connected. Please check your internet connection and try again.";
+  }
+
+  return error?.message || fallbackMessage;
+}
+
 /**
  * Candidate Login Action (Zero-password, validated by Exam PIN and optional domain requirements)
  */
@@ -153,7 +190,7 @@ export async function candidateLoginAction(formData: FormData) {
       throw error;
     }
     console.error("Candidate login error:", error);
-    return { error: error?.message || "Failed to start assessment. Please check database connection." };
+    return { error: formatAuthError(error, "Failed to start assessment. Please try again.") };
   }
 }
 
@@ -317,7 +354,7 @@ export async function staffLoginAction(formData: FormData) {
       throw error;
     }
     console.error("Staff login error:", error);
-    return { error: error?.message || "Authentication error occurred. Please check database connection." };
+    return { error: formatAuthError(error, "Authentication error occurred. Please try again.") };
   }
 }
 

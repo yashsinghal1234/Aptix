@@ -290,6 +290,11 @@ export function OwnerTemplatesManager({
                               {activeSessionsCount} Scheduled/Live
                             </span>
                           )}
+                          {template.description?.includes("[MODE:GAMIFIED]") && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/40">
+                              ⚡ Gamified Mode
+                            </span>
+                          )}
                         </div>
                         {template.instructions && (
                           <p className="text-xs text-neutral-500 mt-0.5 max-w-[280px] truncate">

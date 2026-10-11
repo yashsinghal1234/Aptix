@@ -1,123 +1,136 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { logoutAction } from "@/app/actions/auth";
+import { usePathname, useRouter } from "next/navigation";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 
 interface DashboardNavProps {
   isOwner: boolean;
+  userName?: string;
   children: React.ReactNode;
 }
 
-export function DashboardNav({ isOwner, children }: DashboardNavProps) {
+const ownerItems = [
+  {
+    label: "Dashboard", href: "/dashboard/owner", exact: true, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>),
+  },
+  {
+    label: "Schedule Exam", href: "/dashboard/owner/templates", exact: false, hash: "",
+    section: ["/dashboard/owner/templates", "/dashboard/owner/template/", "/dashboard/owner/schedule"],
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>),
+  },
+  {
+    label: "Live Monitoring", href: "/dashboard/owner", exact: false, hash: "#live",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" /></svg>),
+  },
+  {
+    label: "History & Analytics", href: "/dashboard/owner/results", exact: false, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>),
+  },
+  {
+    label: "Question authoring", href: "/dashboard/setter", exact: true, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>),
+  },
+  {
+    label: "Question Bank", href: "/dashboard/setter/bank", exact: false, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>),
+  },
+  {
+    label: "Candidate Records", href: "/dashboard/owner/candidates", exact: false, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>),
+  },
+  {
+    label: "Manage Setters", href: "/dashboard/owner/setters", exact: false, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>),
+  },
+];
+
+const governanceItems = [
+  { label: "Members & roles", href: "/dashboard/owner/setters" },
+  { label: "Security & audit", href: "/dashboard/owner/results" },
+  { label: "Institution settings", href: "/dashboard/owner/setters" },
+];
+
+const setterItems = [
+  {
+    label: "Question authoring", href: "/dashboard/setter", exact: true, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>),
+  },
+  {
+    label: "Question Bank", href: "/dashboard/setter/bank", exact: false, hash: "",
+    icon: (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>),
+  },
+];
+
+function initials(name: string) {
+  return name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "AD";
+}
+
+export function DashboardNav({ isOwner, userName = "Administrator", children }: DashboardNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const [hash, setHash] = useState("");
 
-  const navItems = isOwner
-    ? [
-        {
-          label: "Dashboard",
-          href: "/dashboard/owner",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-          ),
-          exact: true,
-        },
-        {
-          label: "Schedule Exam",
-          href: "/dashboard/owner/template/new",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          ),
-        },
-        {
-          label: "History & Analytics",
-          href: "/dashboard/owner/results",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          ),
-        },
-        {
-          label: "Question Adder",
-          href: "/dashboard/setter",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          ),
-          exact: true,
-        },
-        {
-          label: "Question Bank",
-          href: "/dashboard/setter/bank",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          ),
-        },
-        {
-          label: "Candidate Records",
-          href: "/dashboard/owner/candidates",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          ),
-        },
-        {
-          label: "Manage Setters",
-          href: "/dashboard/owner/setters",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-          ),
-        },
-      ]
-    : [
-        {
-          label: "Question Adder",
-          href: "/dashboard/setter",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          ),
-          exact: true,
-        },
-        {
-          label: "Question Bank",
-          href: "/dashboard/setter/bank",
-          icon: (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          ),
-        },
-      ];
+  const navItems = isOwner ? ownerItems : setterItems;
 
-  const isActive = (href: string, exact?: boolean) => {
-    if (exact) {
-      return pathname === href;
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setUserMenuOpen(false);
+      }
+    };
+    if (userMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
     }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    setHash(window.location.hash);
+  }, [pathname]);
+
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  useEffect(() => {
+    navItems.forEach((item) => {
+      try { router.prefetch(item.href); } catch {}
+    });
+  }, [router, navItems]);
+
+  const isActive = (href: string, exact?: boolean, h?: string, section?: string[]) => {
+    if (h) return pathname === href && hash === h;
+    if (section && section.some((p) => pathname === p || pathname.startsWith(p.endsWith("/") ? p : p + "/"))) return true;
+    if (exact) return pathname === href && (hash === "" || (hash !== "#live" && hash !== "#templates"));
     return pathname === href || pathname.startsWith(href + "/");
   };
 
+  const displayName = userName || "Administrator";
+
   return (
-    <div className="min-h-screen bg-[#000000] text-neutral-100 flex flex-col md:flex-row font-sans selection:bg-white selection:text-black">
-      {/* Mobile Top Navbar */}
-      <div className="md:hidden bg-[#000000]/95 backdrop-blur-md text-white px-4 py-3 flex items-center justify-between border-b border-neutral-800/80 shadow-md z-40">
-        <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
+    <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans selection:bg-lime-300 selection:text-black" suppressHydrationWarning>
+      {/* ── Topbar ─────────────────────────────────── */}
+      <header className="h-16 shrink-0 border-b border-white/10 bg-[#060607] px-4 sm:px-6 flex items-center gap-3 sticky top-0 z-40">
+        <Link href={isOwner ? "/dashboard/owner" : "/dashboard/setter"} className="flex items-center gap-3 shrink-0 group">
+          <div className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-black/40 ring-1 ring-white/10 group-hover:ring-lime-400/30 transition-all">
             <video
               src="/aptix-logo-anim.mp4"
               autoPlay
@@ -125,121 +138,240 @@ export function DashboardNav({ isOwner, children }: DashboardNavProps) {
               muted
               playsInline
               poster="/logo-preview-frame.jpg"
-              className="w-full h-full object-cover mix-blend-screen scale-130 pointer-events-none"
+              className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
             />
           </div>
-          <div>
-            <span className="font-black text-lg text-white tracking-tight leading-none block">Aptix</span>
-            <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mt-0.5">Control Center</span>
+          <span className="font-black text-[22px] sm:text-[23px] tracking-tight text-white leading-none group-hover:text-lime-300 transition-colors uppercase">
+            APTIX
+          </span>
+          <span className="hidden sm:block w-px h-5.5 bg-white/15" />
+          <span className="hidden sm:block text-xs font-medium text-neutral-400">Assessment Platform</span>
+        </Link>
+
+        {isOwner && (
+          <div className="hidden md:flex items-center gap-2.5 absolute left-1/2 -translate-x-1/2">
+            <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-3 py-1.5">
+              ILLUSTRATIVE WORKSPACE
+            </span>
+            <span className="text-xs font-semibold text-neutral-200">Northbridge University.</span>
           </div>
-        </div>
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-xl bg-neutral-900 text-neutral-300 hover:text-white border border-neutral-800 focus:outline-none transition-colors"
-          aria-label="Toggle Navigation Menu"
-        >
-          {mobileMenuOpen ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+        )}
+
+        <div className="ml-auto flex items-center gap-2.5">
+          <button
+            className="hidden sm:flex w-8 h-8 rounded-lg bg-white/[0.05] border border-white/10 items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Notifications"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+          </button>
+
+          {/* ── Combined User Profile & Actions Dropdown ── */}
+          <div className="relative" ref={userMenuRef}>
+            <button
+              onClick={() => setUserMenuOpen((prev) => !prev)}
+              className={`flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full sm:rounded-xl border transition-all select-none text-left cursor-pointer ${
+                userMenuOpen
+                  ? "bg-white/[0.08] border-white/25 shadow-lg shadow-black/50"
+                  : "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-white/20"
+              }`}
+              aria-expanded={userMenuOpen}
+              aria-haspopup="true"
+              aria-label="Account options menu"
+            >
+              <span className="w-7 h-7 rounded-full bg-lime-300 text-black text-[11px] font-black flex items-center justify-center shrink-0 shadow-xs">
+                {initials(displayName)}
+              </span>
+              <span className="hidden sm:block leading-tight pr-1">
+                <span className="block text-xs font-bold text-white tracking-tight leading-none mb-0.5">
+                  {displayName}
+                </span>
+                <span className="block text-[10px] text-neutral-400 font-medium leading-none">
+                  {isOwner ? "Administrator" : "Setter"}
+                </span>
+              </span>
+              <svg
+                className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-200 ${
+                  userMenuOpen ? "rotate-180 text-white" : ""
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {userMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-[#0b0d13] border border-white/15 shadow-2xl shadow-black/90 p-1.5 z-50 backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-2.5 border-b border-white/[0.08] mb-1">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-full bg-lime-300 text-black text-xs font-black flex items-center justify-center shrink-0 shadow-xs">
+                      {initials(displayName)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate">{displayName}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse" />
+                        <span className="text-[10px] font-semibold text-lime-300 uppercase tracking-wider">
+                          {isOwner ? "Administrator" : "Setter"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-0.5">
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setPasswordModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-neutral-200 hover:text-white hover:bg-white/[0.08] rounded-xl transition-colors text-left cursor-pointer group"
+                  >
+                    <svg className="w-4 h-4 text-neutral-400 group-hover:text-lime-300 shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                    <span className="flex-1">
+                      <span>Change Password</span>
+                    </span>
+                  </button>
+
+                  <div className="h-px bg-white/[0.08] my-1" />
+
+                  <a
+                    href="/api/auth/logout"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 rounded-xl transition-colors group"
+                  >
+                    <svg className="w-4 h-4 text-rose-400 group-hover:text-rose-300 shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Logout</span>
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {passwordModalOpen && (
+            <ChangePasswordModal
+              isOpen={passwordModalOpen}
+              onClose={() => setPasswordModalOpen(false)}
+            />
           )}
-        </button>
+
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 rounded-lg bg-white/[0.05] text-neutral-300 hover:text-white border border-white/10"
+            aria-label="Toggle Navigation Menu"
+          >
+            {mobileMenuOpen ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            )}
+          </button>
+        </div>
+      </header>
+
+      <div className="flex flex-1 flex-col md:flex-row min-h-0" suppressHydrationWarning>
+        {/* ── Sidebar ─────────────────────────────── */}
+        <aside className={`${mobileMenuOpen ? "flex" : "hidden"} md:flex w-full md:w-[228px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-white/10 bg-[#060607] z-30 md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:overflow-y-auto`}>
+          <div className="p-4 flex-1 md:overflow-y-auto">
+            <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-600 px-2 mb-2">WORKSPACE · 2026–27</p>
+            <nav className="space-y-1">
+              {navItems.map((item) => {
+                const active = isActive(item.href, item.exact, item.hash, (item as any).section);
+                const fullHref = item.href + (item.hash || "");
+                return (
+                  <Link
+                    key={item.label}
+                    href={fullHref}
+                    prefetch={true}
+                    onMouseEnter={() => { try { router.prefetch(item.href); } catch {} }}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg font-semibold text-[13px] transition-all ${
+                      active
+                        ? "bg-lime-300/15 text-lime-200"
+                        : "text-neutral-400 hover:bg-white/[0.05] hover:text-white"
+                    }`}
+                  >
+                    <span className={active ? "text-lime-300" : "text-neutral-500"}>
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {isOwner && (
+              <div className="mt-6">
+                <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-600 px-2 mb-2">GOVERNANCE</p>
+                <nav className="space-y-1">
+                  {governanceItems.map((g) => (
+                    <Link
+                      key={g.label}
+                      href={g.href}
+                      prefetch={true}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-[13px] text-neutral-500 hover:bg-white/[0.05] hover:text-white transition-all"
+                    >
+                      <span>{g.label}</span>
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+            )}
+            {/* Mobile-only account actions */}
+            <div className="md:hidden mt-6 pt-4 border-t border-white/10 space-y-1">
+              <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-600 px-2 mb-2">ACCOUNT</p>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setPasswordModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-[13px] text-neutral-400 hover:bg-white/[0.05] hover:text-white transition-all text-left"
+              >
+                <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <span>Change Password</span>
+              </button>
+              <a
+                href="/api/auth/logout"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-[13px] text-rose-400 hover:bg-rose-500/10 transition-all"
+              >
+                <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Logout</span>
+              </a>
+            </div>
+          </div>
+
+          {isOwner && (
+            <div className="hidden md:block p-4 pt-2">
+              <p className="text-[10px] leading-relaxed text-neutral-600 px-1">
+                Enterprise-Grade Digital Examination, Live Proctoring &amp; Concurrency-Resilient Assessment Engine
+                <span className="block mt-1.5 text-neutral-700">APTIX • Proprietary License</span>
+              </p>
+            </div>
+          )}
+        </aside>
+
+        {/* ── Content ─────────────────────────────── */}
+        <main className="flex-1 min-w-0">
+          <div className="p-4 sm:p-6">{children}</div>
+        </main>
       </div>
 
-      {/* Sidebar for Desktop & Mobile Overlay */}
-      <aside
-        className={`${
-          mobileMenuOpen ? "flex" : "hidden"
-        } md:flex w-full md:w-64 bg-[#07080c] text-white shrink-0 flex-col border-r border-neutral-800/80 z-40 fixed md:static inset-0 md:inset-auto top-[53px] md:top-0 h-[calc(100vh-53px)] md:h-screen transition-all`}
-      >
-        <div className="p-6 flex-1 overflow-y-auto">
-          {/* Logo Header (Desktop) */}
-          <div className="hidden md:flex items-center gap-3.5 mb-8">
-            <div className="relative w-14 h-14 flex items-center justify-center overflow-hidden shrink-0">
-              <video
-                src="/aptix-logo-anim.mp4"
-                autoPlay
-                loop
-                muted
-                playsInline
-                poster="/logo-preview-frame.jpg"
-                className="w-full h-full object-cover mix-blend-screen scale-135 pointer-events-none"
-              />
-            </div>
-            <div>
-              <span className="font-black text-2xl tracking-tight text-white block leading-none">Aptix</span>
-              <span className="text-xs text-neutral-400 font-bold uppercase tracking-wider block mt-1">Control Center</span>
-            </div>
-          </div>
-
-          <nav className="space-y-1.5">
-            {navItems.map((item) => {
-              const active = isActive(item.href, item.exact);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-sm tracking-wide transition-all ${
-                    active
-                      ? "bg-white text-black shadow-md border border-white"
-                      : "text-neutral-400 hover:bg-neutral-900/80 hover:text-white"
-                  }`}
-                >
-                  <span className={active ? "text-black" : "text-neutral-400"}>{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* User profile footer */}
-        <div className="p-5 border-t border-neutral-800/80 mt-auto">
-          <div className="flex items-center gap-3 text-xs bg-[#0d0f14] p-3 rounded-2xl border border-neutral-800">
-            <div className="w-9 h-9 rounded-xl bg-neutral-800 text-white font-black flex items-center justify-center shrink-0 border border-neutral-700 text-xs">
-              {isOwner ? "OW" : "ST"}
-            </div>
-            <div className="truncate">
-              <p className="font-bold text-white text-xs flex items-center gap-1.5">
-                <span>{isOwner ? "Administrator" : "Question Setter"}</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-              </p>
-              <p className="text-neutral-400 text-[11px] truncate font-medium">{isOwner ? "Full Permissions" : "Content Author"}</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-[calc(100vh-53px)] md:h-screen overflow-hidden bg-[#000000]">
-        <header className="bg-[#000000]/80 backdrop-blur-md border-b border-neutral-800/80 px-6 md:px-8 py-3.5 flex justify-between items-center shrink-0">
-          <div className="flex items-center">
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-white">
-              {isOwner ? "Executive Admin Portal" : "Authoring Setter Portal"}
-            </h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <ChangePasswordModal />
-            <a
-              href="/api/auth/logout"
-              className="px-4 py-2 sm:px-4.5 sm:py-2.5 text-xs sm:text-sm font-bold text-neutral-200 bg-neutral-900 hover:bg-rose-950/40 hover:text-rose-400 hover:border-rose-900/50 rounded-xl transition-all border border-neutral-800 flex items-center gap-2 cursor-pointer shadow-xs"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span>Logout</span>
-            </a>
-          </div>
-        </header>
-        <div className="flex-1 overflow-auto bg-[#000000] p-4 sm:p-6 md:p-8 text-neutral-100">
-          {children}
-        </div>
-      </main>
+      {/* ── Footer strip ──────────────────────────── */}
+      <footer className="shrink-0 border-t border-white/10 px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-1 text-[10px] font-medium text-neutral-600">
+        <span>APTIX Assessment Platform · Northbridge University</span>
+        <span>Illustrative assessment data · <span suppressHydrationWarning>{new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}</span> · IST (UTC+05:30)</span>
+      </footer>
     </div>
   );
 }

@@ -156,6 +156,73 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
     }
   }
 
+  let cohort = null;
+  if (currentStatus === "SUBMITTED" || attempt.session.status === "COMPLETED") {
+    try {
+      const allAttempts = await prisma.candidateAttempt.findMany({
+        where: { examSessionId: attempt.examSessionId },
+        include: { responses: true, user: { select: { id: true, name: true } } }
+      });
+
+      const ranked = allAttempts.map(a => ({
+        userId: a.userId,
+        name: (a as any).user?.name || "Candidate",
+        score: a.responses.reduce((sum, r) => sum + r.earnedPoints, 0)
+      }));
+      const scoresList = ranked.map(r => r.score);
+      const totalCandidates = Math.max(1, scoresList.length);
+      scoresList.sort((a, b) => b - a);
+      ranked.sort((a, b) => b.score - a.score);
+
+      // Mascot emblems for the podium (best-effort; falls back to defaults)
+      let mascotByUser: Record<string, string> = {};
+      try {
+        const mascotLogs = await prisma.auditLog.findMany({
+          where: { action: "CHOSEN_MASCOT", details: { contains: attempt.examSessionId } },
+          orderBy: { timestamp: "desc" }
+        });
+        for (const log of mascotLogs) {
+          if (log.details && !mascotByUser[log.userId]) {
+            try {
+              const parsed = JSON.parse(log.details);
+              if (parsed.mascotId) mascotByUser[log.userId] = parsed.mascotId;
+            } catch {}
+          }
+        }
+      } catch {}
+
+      const { getMascotById } = await import("@/lib/mascots");
+      const podium = ranked.slice(0, 3).map(r => ({
+        name: r.name.split(" ")[0] || "Candidate",
+        score: Math.round(r.score * 10) / 10,
+        mascot: getMascotById(mascotByUser[r.userId]).emoji
+      }));
+
+      const rank = scoresList.filter(s => s > score).length + 1;
+      const percentile = totalCandidates > 1
+        ? Math.max(1, Math.min(100, Math.round(((totalCandidates - rank) / (totalCandidates - 1)) * 100)))
+        : 100;
+
+      const mean = Math.round((scoresList.reduce((sum, s) => sum + s, 0) / totalCandidates) * 10) / 10;
+      const mid = Math.floor(scoresList.length / 2);
+      const median = scoresList.length % 2 !== 0
+        ? scoresList[mid]
+        : Math.round(((scoresList[mid - 1] + scoresList[mid]) / 2) * 10) / 10;
+
+      cohort = {
+        rank,
+        totalCandidates,
+        percentile,
+        mean,
+        median,
+        topScores: scoresList.slice(0, 3),
+        podium
+      };
+    } catch (e) {
+      console.warn("Cohort calculation error:", e);
+    }
+  }
+
   return {
     status: attempt.status,
     sessionStatus: attempt.session.status,
@@ -164,6 +231,13 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
     totalMarks: totalMarks || 1,
     startTime: attempt.session.startTime,
     durationMinutes: attempt.session.durationMinutes,
+    timeTakenSeconds: attempt.submittedAt && attempt.createdAt
+      ? Math.min(
+          attempt.session.durationMinutes * 60,
+          Math.max(1, Math.round((new Date(attempt.submittedAt).getTime() - new Date(attempt.createdAt).getTime()) / 1000))
+        )
+      : null,
+    cohort,
     detailedResults,
     concurrentSessionDetected
   };

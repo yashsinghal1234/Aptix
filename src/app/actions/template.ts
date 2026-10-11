@@ -53,9 +53,15 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
   const rawTitle = (formData.get("title") as string)?.trim() || "";
   const title = rawTitle ? rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1) : "";
 
+  const isGamified = formData.get("isGamified") === "on";
+  let rawDesc = (formData.get("description") as string)?.trim() || "";
+  if (isGamified && !rawDesc.includes("[MODE:GAMIFIED]")) {
+    rawDesc = rawDesc ? `${rawDesc} [MODE:GAMIFIED]` : "[MODE:GAMIFIED]";
+  }
+
   const parsed = templateSchema.safeParse({
     title,
-    description: formData.get("description") || undefined,
+    description: rawDesc || undefined,
     instructions: formData.get("instructions") || undefined,
     subject: formData.get("subject") || undefined,
     allowedEmailDomain: (formData.get("allowedEmailDomain") as string)?.trim() || null,

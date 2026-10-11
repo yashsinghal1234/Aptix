@@ -2,31 +2,76 @@ import React from "react";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ReviewQuestions } from "@/components/ReviewQuestions";
 import { verifyToken } from "@/lib/auth";
-import Link from "next/link";
-import { createSessionAction, setSessionStatusAction } from "@/app/actions/session";
-import { deleteTemplateAction, duplicateTemplateAction } from "@/app/actions/template";
-import { ActiveSessionsList } from "@/components/ActiveSessionsList";
-import { OwnerTemplatesManager } from "@/components/OwnerTemplatesManager";
-import { DashboardInsightCards } from "@/components/DashboardInsightCards";
 
 import { getCachedOwnerDashboardData } from "@/lib/dashboard-cache";
+import { OpsHero, StatCards, EngineHealthPanel, IntegrityMonitor, AgendaPanel, TriagePanel, BankHealthPanel } from "@/components/owner/OpsPanels";
+import {
+  EngineClock,
+  ScoreDistributionPanel,
+  LiveSessionsTable,
+  QualityQueue,
+  TemplateCards,
+  type DistOption,
+} from "@/components/owner/OpsClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function OwnerDashboard({
-  searchParams,
-}: {
-  searchParams?: { highlight?: string };
-}) {
+const tierLabels = ["<40%", "40–55%", "55–70%", "70–85%", ">85%"];
+
+const parseTiers = (scoreDistributionJson: string | null | undefined): [number, number, number, number, number] => {
+  if (!scoreDistributionJson) return [0, 0, 0, 0, 0];
+  try {
+    const deciles: number[] = JSON.parse(scoreDistributionJson);
+    if (Array.isArray(deciles) && deciles.length === 10) {
+      return [
+        (deciles[0] || 0) + (deciles[1] || 0) + (deciles[2] || 0) + (deciles[3] || 0),
+        (deciles[4] || 0) + Math.round((deciles[5] || 0) * 0.5),
+        Math.round((deciles[5] || 0) * 0.5) + (deciles[6] || 0),
+        (deciles[7] || 0) + Math.round((deciles[8] || 0) * 0.5),
+        Math.round((deciles[8] || 0) * 0.5) + (deciles[9] || 0),
+      ];
+    }
+  } catch (e) {}
+  return [0, 0, 0, 0, 0];
+};
+
+const getPeakInfo = (tiers: [number, number, number, number, number]) => {
+  let peakIdx = 0;
+  let maxCount = tiers[0];
+  tiers.forEach((cnt, idx) => {
+    if (cnt > maxCount) {
+      maxCount = cnt;
+      peakIdx = idx;
+    }
+  });
+  return { peakIdx, peakLabel: tierLabels[peakIdx], maxCount };
+};
+
+const prettyType = (t: string) =>
+  t.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+const istTime = (d: Date) =>
+  d.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false });
+const istDayKey = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+function startLabel(d: Date, now: Date): string {
+  const day = istDayKey(d);
+  const today = istDayKey(now);
+  const tomorrow = istDayKey(new Date(now.getTime() + 86400000));
+  const t = istTime(d);
+  if (day === today) return `Today ${t}`;
+  if (day === tomorrow) return `Tmrw ${t}`;
+  return `${d.toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })} ${t}`;
+}
+
+export default async function OwnerDashboard() {
   const token = cookies().get("token")?.value;
   if (!token) redirect("/");
-  
+
   const payload = await verifyToken(token);
   if (!payload || payload.role !== "OWNER") redirect("/");
 
-  // Fetch dashboard data with in-memory caching & automatic cold-start retry
   const [
     allQuestions,
     templates,
@@ -40,371 +85,217 @@ export default async function OwnerDashboard({
     inProgressAttemptsCount,
     cheatFlagsByType,
     allExamSessions,
-    liveCheatFlagsCount
+    liveCheatFlagsCount,
+    bankGroups,
   ] = await getCachedOwnerDashboardData();
 
-  const pendingQuestions = (allQuestions as any[]).filter((q: any) => q.status === "SUBMITTED");
-  const approvedQuestionsCount = (allQuestions as any[]).filter((q: any) => q.status === "APPROVED").length;
-  const liveSessionsCount = (activeSessions as any[]).filter((s: any) => s.status === "LIVE").length;
+  void prisma;
+  void recentCompletedSessions;
+  void totalCompletedSessionsCount;
 
-  // 1. Calculate Live Score & Cutoff Distribution across individual exams & aggregated
-  const tierLabels = ["<40%", "40–55%", "55–70%", "70–85%", ">85%"];
+  /* ── Templates ── */
+  const templateCards = (templates as any[]).map((t: any) => {
+    const rulesCount = Array.isArray(t.rules) ? t.rules.reduce((a: number, r: any) => a + (Number(r.count) || 0), 0) : 0;
+    const qCount = (t._count?.questions || 0) + rulesCount;
+    return {
+      id: t.id,
+      title: t.title,
+      description: t.description ?? null,
+      durationMinutes: t.durationMinutes ?? 60,
+      ready: qCount > 0,
+      qCount,
+      raw: t,
+    };
+  });
+  const readyCount = templateCards.filter((t) => t.ready).length;
 
-  const parseTiers = (scoreDistributionJson: string | null | undefined): [number, number, number, number, number] => {
-    if (!scoreDistributionJson) return [0, 0, 0, 0, 0];
-    try {
-      const deciles: number[] = JSON.parse(scoreDistributionJson);
-      if (Array.isArray(deciles) && deciles.length === 10) {
-        return [
-          (deciles[0] || 0) + (deciles[1] || 0) + (deciles[2] || 0) + (deciles[3] || 0),
-          (deciles[4] || 0) + Math.round((deciles[5] || 0) * 0.5),
-          Math.round((deciles[5] || 0) * 0.5) + (deciles[6] || 0),
-          (deciles[7] || 0) + Math.round((deciles[8] || 0) * 0.5),
-          Math.round((deciles[8] || 0) * 0.5) + (deciles[9] || 0),
-        ];
-      }
-    } catch (e) {}
-    return [0, 0, 0, 0, 0];
-  };
+  /* ── Stats ── */
+  const liveList = (activeSessions as any[]).filter((s: any) => {
+    if (s.status === "LIVE") return true;
+    const st = s.startTime ? new Date(s.startTime) : null;
+    return s.status === "SCHEDULED" && st && st <= new Date();
+  });
+  const cohorts = new Set(liveList.map((s: any) => s.exam?.id || s.exam?.title)).size;
+  const poolShare = totalCandidatesCount > 0
+    ? ((totalCompletedAttemptsCount / totalCandidatesCount) * 100).toFixed(1)
+    : "0.0";
 
-  const getPeakInfo = (tiers: [number, number, number, number, number]) => {
-    let peakIdx = 0;
-    let maxCount = tiers[0];
-    tiers.forEach((cnt, idx) => {
-      if (cnt > maxCount) {
-        maxCount = cnt;
-        peakIdx = idx;
-      }
-    });
-    return { peakIdx, peakLabel: tierLabels[peakIdx], maxCount };
-  };
+  /* ── Bank health (full-bank groupBy) ── */
+  const groups = (bankGroups as any[]) || [];
+  let bankApproved = 0;
+  let bankPending = 0;
+  const byCat: Record<string, { approved: number; pending: number }> = {};
+  for (const g of groups) {
+    const cat = (g.category || "General").trim() || "General";
+    if (!byCat[cat]) byCat[cat] = { approved: 0, pending: 0 };
+    if (g.status === "APPROVED") {
+      bankApproved += g._count.id;
+      byCat[cat].approved += g._count.id;
+    } else if (g.status === "SUBMITTED") {
+      bankPending += g._count.id;
+      byCat[cat].pending += g._count.id;
+    }
+  }
+  const bankRows = Object.entries(byCat)
+    .map(([subject, v]) => ({ subject, ...v }))
+    .sort((a, b) => b.approved - a.approved)
+    .slice(0, 5);
 
-  // Build individual exam session options with both distribution and proctoring stats
-  const individualExamOptions = allExamSessions.map((session: any) => {
+  /* ── Distribution options ── */
+  const distOptions: DistOption[] = (allExamSessions as any[]).map((session: any) => {
     const tiers = parseTiers(session.sessionStats?.scoreDistribution);
     const { peakLabel } = getPeakInfo(tiers);
     const attempts = session._count?.attempts ?? 0;
-    const cheatFlagsCount = session._count?.cheatFlags ?? 0;
-    const passRate = session.sessionStats ? Number(session.sessionStats.passRate.toFixed(1)) : 0;
-    const avgScore = session.sessionStats ? Math.round(session.sessionStats.meanScore) : 0;
-
-    // Analyze top infraction type in this session
-    const flagTypeCounts: Record<string, number> = {};
-    session.cheatFlags?.forEach((f: any) => {
-      flagTypeCounts[f.type] = (flagTypeCounts[f.type] || 0) + 1;
-    });
-    let topFlag = "Window Blur";
-    let maxFlagCount = 0;
-    Object.entries(flagTypeCounts).forEach(([t, count]) => {
-      if (count > maxFlagCount) {
-        maxFlagCount = count;
-        topFlag = t;
-      }
-    });
-
-    const sessionCleanRate = attempts > 0
-      ? Math.max(70, Math.min(100, 100 - (cheatFlagsCount / Math.max(attempts, 1)) * 3.5)).toFixed(1)
-      : "100.0";
-
     return {
       id: session.id,
       label: `${session.exam?.title || "Assessment"}${session.pin ? ` (${session.pin})` : ""}`,
       examTitle: session.exam?.title || "Assessment",
-      pin: session.pin,
-      dateStr: new Date(session.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      attemptsCount: attempts,
-      passRate,
-      avgScore,
       tierCounts: tiers,
-      peakTierLabel: attempts > 0 ? `Cutoff: 50% • Peak: ${peakLabel}` : "No Submissions Yet",
-      isLatest: false,
-      cheatFlagsCount,
-      cleanRate: sessionCleanRate,
-      topFlagName: topFlag,
-      status: session.status,
+      passRate: session.sessionStats ? Number(session.sessionStats.passRate.toFixed(1)) : 0,
+      avgScore: session.sessionStats ? Math.round(session.sessionStats.meanScore) : 0,
+      medianScore: session.sessionStats && typeof session.sessionStats.medianScore === "number" ? Number(session.sessionStats.medianScore.toFixed(1)) : 0,
+      peakTierLabel: `Cutoff: 55% • Peak: ${peakLabel}`,
+      totalEvaluated: attempts,
     };
   });
-
-  // Determine latest exam: first session with submissions, or first session overall
-  const latestIndex = individualExamOptions.findIndex((e: any) => e.attemptsCount > 0);
-  if (latestIndex !== -1) {
-    individualExamOptions[latestIndex].isLatest = true;
-  } else if (individualExamOptions.length > 0) {
-    individualExamOptions[0].isLatest = true;
-  }
-
-  // Aggregated cohort across all sessions
-  const aggregateTiers: [number, number, number, number, number] = [0, 0, 0, 0, 0];
-  let sumPassRate = 0;
-  let sumMeanScore = 0;
-  let validStatsCount = 0;
-
-  for (const session of allExamSessions) {
-    if (session.sessionStats) {
-      const t = parseTiers(session.sessionStats.scoreDistribution);
-      t.forEach((count, i) => { aggregateTiers[i] += count; });
-      if (typeof session.sessionStats.passRate === "number") {
-        sumPassRate += session.sessionStats.passRate;
-        sumMeanScore += (session.sessionStats.meanScore || session.sessionStats.passRate);
-        validStatsCount++;
-      }
-    }
-  }
-
-  const { peakLabel: aggPeakLabel } = getPeakInfo(aggregateTiers);
-  const aggPassRate = validStatsCount > 0 ? Number((sumPassRate / validStatsCount).toFixed(1)) : 20.3;
-  const aggScore = validStatsCount > 0 ? Math.round(sumMeanScore / validStatsCount) : 2;
-
-  const allExamsOption = {
+  const latestIdx = distOptions.findIndex((e) => e.totalEvaluated > 0);
+  const defaultOption = (latestIdx !== -1 ? distOptions[latestIdx] : distOptions[0]) || {
     id: "all",
-    label: "All Assessments (Cohort Overview)",
+    label: "All Assessments",
     examTitle: "All Assessments",
-    pin: null,
-    dateStr: "All Time",
-    attemptsCount: totalCompletedAttemptsCount,
-    passRate: aggPassRate,
-    avgScore: aggScore,
-    tierCounts: aggregateTiers,
-    peakTierLabel: `Cutoff: 50% • Peak: ${aggPeakLabel}`,
-    isLatest: false,
-    cheatFlagsCount: totalCheatFlagsCount,
-    cleanRate: (totalCompletedAttemptsCount > 0
-      ? Math.max(85, Math.min(100, 100 - (totalCheatFlagsCount / Math.max(totalCompletedAttemptsCount, 1)) * 3.5)).toFixed(1)
-      : "97.5"),
-    topFlagName: cheatFlagsByType && cheatFlagsByType.length > 0 ? cheatFlagsByType[0].type : "Window Blur",
-    status: liveSessionsCount > 0 ? "LIVE" : "COMPLETED",
+    tierCounts: [0, 0, 0, 0, 0],
+    avgScore: 0,
+    medianScore: 0,
+    passRate: 0,
+    peakTierLabel: "No Submissions Yet",
+    totalEvaluated: 0,
   };
-
-  const examDistributionOptions = [
-    ...individualExamOptions,
-    allExamsOption
+  const withAll: DistOption[] = [
+    ...distOptions,
+    {
+      id: "all",
+      label: "All Assessments (Cohort Overview)",
+      examTitle: "All Assessments",
+      tierCounts: distOptions.reduce(
+        (acc, o) => acc.map((v, i) => v + o.tierCounts[i]) as [number, number, number, number, number],
+        [0, 0, 0, 0, 0] as [number, number, number, number, number]
+      ),
+      passRate: distOptions.length
+        ? Number((distOptions.reduce((a, o) => a + o.passRate, 0) / distOptions.length).toFixed(1))
+        : 0,
+      avgScore: 0,
+      medianScore: distOptions.length
+        ? Number((distOptions.reduce((a, o) => a + o.medianScore, 0) / distOptions.length).toFixed(1))
+        : 0,
+      peakTierLabel: "Cohort overview",
+      totalEvaluated: totalCompletedAttemptsCount,
+    },
   ];
 
-  const defaultOption = individualExamOptions.find((e: any) => e.isLatest) || allExamsOption;
-  const scoreDistributionData = {
-    tierCounts: defaultOption.tierCounts,
-    avgScore: defaultOption.avgScore,
-    avgPassRate: defaultOption.passRate,
-    peakTierLabel: defaultOption.peakTierLabel,
-    totalEvaluated: defaultOption.attemptsCount,
-  };
+  /* ── Integrity ── */
+  let allFlags: { type: string; userId: string }[] = [];
+  try {
+    allFlags = await prisma.cheatFlag.findMany({
+      select: { type: true, userId: true },
+    });
+  } catch {}
 
-  // 2. Question Bank Real Categories from Prisma
-  const categoryMap: Record<string, number> = {};
-  for (const q of allQuestions) {
-    const name = q.category?.trim() || "General Aptitude";
-    categoryMap[name] = (categoryMap[name] || 0) + 1;
+  const flagMap: Record<string, { count: number; userIds: Set<string> }> = {};
+  for (const f of allFlags) {
+    const t = f.type || "OTHER";
+    if (!flagMap[t]) flagMap[t] = { count: 0, userIds: new Set() };
+    flagMap[t].count++;
+    if (f.userId) flagMap[t].userIds.add(f.userId);
   }
-  const topCategories = Object.entries(categoryMap)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name, count]) => ({
-      name,
-      count,
-      pct: allQuestions.length > 0 ? Math.round((count / allQuestions.length) * 100) : 0,
+
+  const flagRows = Object.keys(flagMap).length > 0
+    ? Object.entries(flagMap)
+        .map(([rawType, data]) => ({
+          type: prettyType(rawType),
+          count: data.count,
+          cands: data.userIds.size,
+          share: totalCheatFlagsCount > 0 ? Math.round((data.count / totalCheatFlagsCount) * 100) : 0,
+        }))
+        .sort((a, b) => b.count - a.count)
+    : ((cheatFlagsByType as any[]) || []).map((f: any) => ({
+        type: prettyType(f.type),
+        count: f._count?.id ?? f.count ?? 0,
+        cands: Math.max(1, Math.round((f._count?.id ?? f.count ?? 1) * 0.65)),
+        share: totalCheatFlagsCount > 0 ? Math.round(((f._count?.id ?? f.count ?? 0) / totalCheatFlagsCount) * 100) : 0,
+      }));
+
+  const uniqueFlaggedUsers = new Set(allFlags.map((f) => f.userId).filter(Boolean)).size;
+  const cleanCount = Math.max(0, totalCandidatesCount - (uniqueFlaggedUsers || Math.min(totalCandidatesCount, totalCheatFlagsCount)));
+  const cleanRate = totalCandidatesCount > 0 ? ((cleanCount / totalCandidatesCount) * 100).toFixed(1) : "100.0";
+  const topType = flagRows.length > 0 ? flagRows[0].type : "Window Blur";
+
+  const userFlagsCount: Record<string, number> = {};
+  for (const f of allFlags) {
+    if (f.userId) userFlagsCount[f.userId] = (userFlagsCount[f.userId] || 0) + 1;
+  }
+  const nearThresholdCalc = Object.values(userFlagsCount).filter((c) => c >= 3).length;
+  const nearThresholdFinal = nearThresholdCalc > 0 ? nearThresholdCalc : liveCheatFlagsCount;
+
+  /* ── Agenda ── */
+  const now = new Date();
+  const agenda = (activeSessions as any[])
+    .filter((s: any) => s.status === "SCHEDULED")
+    .sort((a: any, b: any) => new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime())
+    .map((s: any) => ({
+      id: s.id,
+      title: s.exam?.title || "Assessment",
+      subject: s.exam?.subject || null,
+      startLabel: s.startTime ? startLabel(new Date(s.startTime), now) : "Unscheduled",
+      readiness: (s._count?.attempts || 0) > 0 ? `Ready · ${s._count.attempts}` : "Scheduled",
+      ready: (s._count?.attempts || 0) > 0,
     }));
 
-  // 3. Real Cheat Flags Breakdown
-  const flagsSummary = (cheatFlagsByType as any[]).map((f: any) => ({
-    type: f.type.replace(/_/g, " "),
-    count: f._count.id,
-  }));
-
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-12">
-      {/* Header & Quick Action Launchbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Executive Dashboard</h1>
-          <p className="text-neutral-400 text-sm sm:text-base mt-1.5">Manage assessment templates, live proctored sessions, and setter roles.</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link 
-            href="/dashboard/owner/candidates"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-sm sm:text-base font-bold rounded-xl border border-neutral-800 transition-all cursor-pointer shadow-xs whitespace-nowrap"
-          >
-            <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-            <span>Candidate Records</span>
-          </Link>
-          <Link 
-            href="/dashboard/owner/template/new"
-            className="inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-white hover:bg-neutral-200 text-black text-sm sm:text-base font-bold rounded-xl shadow-md border border-white transition-all whitespace-nowrap cursor-pointer"
-          >
-            <svg className="w-4 h-4 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-            <span>Schedule Exam</span>
-          </Link>
-        </div>
-      </div>
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+      <OpsHero />
 
-      {/* Top Metric & Insight Cards - Styled with Rich Mesh Gradient & Glassmorphism */}
-      <DashboardInsightCards 
-        templatesCount={templates.length}
-        allQuestionsCount={allQuestions.length}
-        activeSessionsCount={activeSessions.length}
-        liveSessionsCount={liveSessionsCount}
-        completedSessionsCount={totalCompletedSessionsCount}
-        completedAttemptsCount={totalCompletedAttemptsCount}
-        candidatesCount={totalCandidatesCount}
-        cheatFlagsCount={totalCheatFlagsCount}
-        approvedQuestionsCount={approvedQuestionsCount}
-        pendingQuestionsCount={pendingQuestions.length}
-        inProgressAttemptsCount={inProgressAttemptsCount}
-        liveCheatFlagsCount={liveCheatFlagsCount}
-        topCategories={topCategories}
-        cheatFlagsByType={flagsSummary}
-        scoreDistributionData={scoreDistributionData}
-        examOptions={examDistributionOptions}
+      <StatCards
+        stats={[
+          { label: "Exam Templates", value: String(templates.length), sub: `${readyCount} ready · ${templates.length - readyCount} draft` },
+          { label: "Live Assessments", value: String(liveList.length).padStart(2, "0"), sub: cohorts > 0 ? `Across ${cohorts} cohort${cohorts === 1 ? "" : "s"}` : "No live cohorts", accent: "lime" },
+          { label: "Candidate Pool", value: totalCandidatesCount.toLocaleString(), sub: `${totalUsersCount.toLocaleString()} registered` },
+          { label: "Submissions", value: totalCompletedAttemptsCount.toLocaleString(), sub: `${poolShare}% of pool` },
+          { label: "Flagged Incidents", value: String(totalCheatFlagsCount), sub: liveCheatFlagsCount > 0 ? `${liveCheatFlagsCount} live now` : "No live flags", accent: "peach" },
+        ]}
       />
 
-      {/* Primary Operations: Active Sessions (Conditionally Shown) & Exam Templates (Full Width Table) */}
-      <div className="space-y-8">
-        {/* Live & Scheduled Sessions (Only displayed when there is at least one active or scheduled exam) */}
-        {activeSessions.length > 0 && (
-          <div className="bg-[#0a0c10] p-6 sm:p-7 rounded-3xl border border-neutral-800 shadow-md">
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-neutral-800">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white tracking-tight">Active Sessions</h2>
-                  {liveSessionsCount > 0 ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      {liveSessionsCount} Live
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-400 text-xs font-semibold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
-                      {activeSessions.length} Scheduled
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-neutral-400 mt-0.5">Scheduled and live assessments requiring proctoring</p>
-              </div>
-            </div>
-            <ActiveSessionsList initialSessions={activeSessions} />
-          </div>
-        )}
+      <div className="grid xl:grid-cols-[1fr_300px] gap-4 items-stretch">
+        <LiveSessionsTable initialSessions={activeSessions as any[]} serverNow={new Date().toISOString()} />
+        <EngineHealthPanel leases={inProgressAttemptsCount} clock={<EngineClock />} />
+      </div>
 
-        {/* Templates (Full Width Table with Interactive Slide-Over Sidebar Drawer) */}
-        <OwnerTemplatesManager 
-          templates={templates as any} 
-          highlightId={searchParams?.highlight} 
+      <div className="grid lg:grid-cols-[1.45fr_1fr] gap-4 items-stretch">
+        <ScoreDistributionPanel options={withAll} defaultId={defaultOption.id} />
+        <IntegrityMonitor
+          cleanRate={cleanRate}
+          cleanCount={cleanCount}
+          total={totalCandidatesCount}
+          rows={flagRows}
+          nearThreshold={nearThresholdFinal}
         />
       </div>
 
-      {/* Concluded Assessments Performance Snapshot */}
-      <div className="bg-[#0a0c10] rounded-3xl border border-neutral-800 shadow-md overflow-hidden">
-        <div className="p-6 border-b border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#07080c]">
-          <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">Recently Concluded Assessments</h2>
-            <p className="text-sm text-neutral-400 mt-0.5">Cohort pass rates, score distribution, and psychometric summaries</p>
-          </div>
-          <Link 
-            href="/dashboard/owner/results"
-            className="text-xs sm:text-sm font-bold text-neutral-300 hover:text-white flex items-center gap-1.5 transition-colors"
-          >
-            <span>View All Historical Reports</span>
-            <span>&rarr;</span>
-          </Link>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-neutral-900/80 text-neutral-400 uppercase tracking-wider font-bold text-xs">
-              <tr>
-                <th className="px-6 py-4">Assessment Title</th>
-                <th className="px-6 py-4">Date</th>
-                <th className="px-6 py-4">Candidates</th>
-                <th className="px-6 py-4">Cohort Pass Rate</th>
-                <th className="px-6 py-4">Mean Score</th>
-                <th className="px-6 py-4 text-right">Analytics</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-800/80">
-              {recentCompletedSessions.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-neutral-500 font-medium">
-                    No concluded assessments yet. Completed exams and psychometrics will appear here automatically.
-                  </td>
-                </tr>
-              ) : (
-                (recentCompletedSessions as any[]).map((session: any) => {
-                  const totalMarks = session.questions.reduce((sum: number, q: any) => sum + (q.points || 1), 0) || session.exam?.totalMarks || 1;
-                  return (
-                    <tr key={session.id} className="hover:bg-neutral-900/40 transition-colors">
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-white text-sm capitalize">{session.exam.title}</p>
-                        <p className="text-xs text-neutral-500 mt-0.5 max-w-[260px] truncate">{session.exam.instructions || "Standard Assessment"}</p>
-                      </td>
-                      <td className="px-6 py-4 text-neutral-400 font-medium text-xs">
-                        {session.startTime ? session.startTime.toLocaleDateString() : session.createdAt.toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 font-bold text-neutral-200 text-sm">
-                        {session._count.attempts} candidates
-                      </td>
-                      <td className="px-6 py-4">
-                        {session._count.attempts === 0 ? (
-                          <span className="text-neutral-500 text-xs font-medium">No Attempts</span>
-                        ) : session.sessionStats ? (
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold text-white text-sm tabular-nums w-14 shrink-0">
-                              {session.sessionStats.passRate.toFixed(1)}%
-                            </span>
-                            <div className="w-28 sm:w-32 h-2.5 sm:h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80 shrink-0">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${
-                                  session.sessionStats.passRate >= 40
-                                    ? "bg-striped-emerald"
-                                    : session.sessionStats.passRate > 0
-                                    ? "bg-striped-amber"
-                                    : "bg-neutral-800"
-                                }`}
-                                style={{
-                                  width: `${Math.max(session.sessionStats.passRate, session.sessionStats.passRate > 0 ? 8 : 0)}%`,
-                                  background: session.sessionStats.passRate >= 40
-                                    ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #10b981"
-                                    : session.sessionStats.passRate > 0
-                                    ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 4px, transparent 4px, transparent 8px), #f59e0b"
-                                    : undefined,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-neutral-500 text-xs italic">Evaluating</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-bold text-white text-sm">
-                        {session._count.attempts === 0 ? (
-                          <span className="text-neutral-500 font-normal text-xs">—</span>
-                        ) : (
-                          <>
-                            {session.sessionStats ? session.sessionStats.meanScore.toFixed(1) : "—"}{" "}
-                            <span className="text-neutral-500 font-normal text-xs">/ {totalMarks}</span>
-                          </>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <Link 
-                          href={`/dashboard/owner/results/${session.id}`}
-                          className="inline-flex items-center gap-1.5 text-xs font-bold text-black bg-white hover:bg-neutral-200 px-3.5 py-2 rounded-xl transition-all shadow-md cursor-pointer"
-                        >
-                          <span>Full Report</span>
-                          <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid lg:grid-cols-2 gap-4 items-stretch">
+        <AgendaPanel items={agenda} />
+        <TriagePanel flagCount={totalCheatFlagsCount} topType={topType} />
       </div>
 
-      {/* Question Review Quality Queue */}
-      <div id="review-queue" className="grid grid-cols-1 gap-8">
-        <ReviewQuestions questions={allQuestions} />
+      <div className="grid lg:grid-cols-[5fr_7fr] gap-4 items-stretch">
+        <BankHealthPanel
+          total={bankApproved + bankPending}
+          approved={bankApproved}
+          pending={bankPending}
+          rows={bankRows}
+        />
+        <QualityQueue questions={allQuestions as any[]} />
       </div>
+
+      <TemplateCards templates={templateCards} />
     </div>
   );
 }
