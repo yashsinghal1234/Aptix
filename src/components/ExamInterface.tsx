@@ -639,10 +639,10 @@ export function ExamInterface({
       if (maxLimit > 0) {
         if (count >= maxLimit) {
           isFinishingRef.current = true;
-          setTabSwitchWarning(`Maximum allowed security limit (${maxLimit}) reached. Auto-submitting assessment now.`);
+          setTabSwitchWarning(`Maximum allowed security infractions exceeded. Auto-submitting assessment now.`);
           executeSubmit();
         } else {
-          setTabSwitchWarning(`Security Warning: Infraction #${count} of ${maxLimit} allowed logged (${description}). Exceeding will auto-submit.`);
+          setTabSwitchWarning(`Security Warning: Focus violation #${count} recorded (${description}). Continued infractions will result in automatic submission.`);
         }
       } else if (config.autoSubmitOnFullscreenExit && type === "FULLSCREEN_EXIT") {
         isFinishingRef.current = true;
@@ -1271,13 +1271,13 @@ export function ExamInterface({
     const totalMarksPreview = session.totalMarks || session.exam?.totalMarks || (questions.length * marksPerQ);
     const passPct = Math.round(session.exam?.passCriteria ?? config.passCriteria ?? 50);
     const domainLock = session.allowedEmailDomain || session.exam?.allowedEmailDomain;
+    const cleanDescription = (session.exam?.description || "").replace(/\[MODE:GAMIFIED\]/g, "").trim();
     const startLabel = session.startTime
       ? new Date(session.startTime).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
       : "Window opens at launch";
     const negLine = config.negativeMarkingEnabled
-      ? `-${config.negativeMarksValue ?? 0.25} for each incorrect answer`
+      ? `-${config.negativeMarksValue ?? 0.25} negative marking`
       : "No negative marking";
-    const threshold = config.tabSwitchLimit ? parseInt(String(config.tabSwitchLimit), 10) : 5;
     const rollId = attempt.id ? `ID-${String(attempt.id).slice(-8).toUpperCase()}` : "CANDIDATE";
     const readiness: { label: string; sub: string; state: "READY" | "OPEN" | "LIMITED" }[] = [
       { label: "Institution domain", sub: domainLock ? `@${String(domainLock).replace(/^@/, "")} enforced` : "Open entry · any verified email", state: "READY" },
@@ -1318,37 +1318,85 @@ export function ExamInterface({
                     SECURE ASSESSMENT
                   </span>
                 </div>
-                <div className="mt-4 grid grid-cols-4 gap-2.5">
+
+                {/* 4 Key Metrics */}
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {[
-                    { v: String(questions.length), s: "questions" },
-                    { v: `${session.durationMinutes} min`, s: "" },
-                    { v: String(Math.round(totalMarksPreview)), s: "possible points" },
-                    { v: `${passPct}%`, s: "" },
+                    { v: String(questions.length), s: "Questions" },
+                    { v: `${session.durationMinutes} min`, s: "Duration" },
+                    { v: String(Math.round(totalMarksPreview)), s: "Total Marks" },
+                    { v: `${passPct}%`, s: "Pass Criteria" },
                   ].map((c, i) => (
-                    <div key={i} className="text-center">
-                      <p className="text-xl font-black text-white tabular-nums">{c.v}</p>
-                      {c.s ? <p className="text-[9px] text-neutral-500 mt-0.5">{c.s}</p> : null}
+                    <div key={i} className="text-center p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                      <p className="text-xl sm:text-2xl font-black text-white tabular-nums">{c.v}</p>
+                      <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mt-1">{c.s}</p>
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-[10px] text-neutral-500">
-                  {startLabel} · {negLine} · 0 for unanswered.
-                </p>
-                {(session.exam?.instructions || chosenMascot) && (
-                  <p className="mt-1.5 text-[10px] text-neutral-500 font-mono flex items-center gap-1.5 truncate">
-                    {chosenMascot ? (
-                      <>
-                        {chosenMascot.gifUrl ? (
-                          <img src={chosenMascot.gifUrl} alt="" className="w-4 h-4 object-contain inline-block shrink-0" />
-                        ) : (
-                          <span>{chosenMascot.emoji}</span>
-                        )}
-                        <span>{chosenMascot.name} · </span>
-                      </>
-                    ) : null}
-                    <span>{session.exam?.instructions || ""}</span>
-                  </p>
-                )}
+
+                {/* Meta details strip */}
+                <div className="mt-4 pt-3.5 border-t border-white/[0.06] space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-neutral-400">
+                    <span className="text-neutral-300 font-medium">{startLabel}</span>
+                    <span className="text-neutral-600">·</span>
+                    <span className="text-neutral-300">{negLine}</span>
+                    <span className="text-neutral-600">·</span>
+                    <span>+{marksPerQ} pts per question (0 for unattempted)</span>
+                  </div>
+
+                  {cleanDescription ? (
+                    <p className="text-xs text-neutral-300 leading-relaxed bg-white/[0.02] border border-white/[0.06] rounded-xl p-3">
+                      {cleanDescription}
+                    </p>
+                  ) : null}
+
+                  {session.exam?.instructions ? (
+                    <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-3 space-y-1">
+                      <p className="text-[10px] font-black tracking-wider uppercase text-lime-300">
+                        Exam Instructions
+                      </p>
+                      <p className="text-xs text-neutral-200 leading-relaxed whitespace-pre-line">
+                        {session.exam.instructions}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {chosenMascot ? (
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-lime-400/[0.08] via-white/[0.02] to-transparent border border-lime-400/25">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-black/50 border border-lime-400/30 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+                          {chosenMascot.gifUrl ? (
+                            <img
+                              src={chosenMascot.gifUrl}
+                              alt={chosenMascot.name}
+                              className="w-8 h-8 object-contain filter drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]"
+                              style={{
+                                transform: chosenMascot.imgZoom ? `scale(${chosenMascot.imgZoom})` : undefined,
+                                transformOrigin: chosenMascot.imgOrigin || "center",
+                              }}
+                            />
+                          ) : (
+                            <span className="text-xl">{chosenMascot.emoji}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-lime-300 bg-lime-400/15 border border-lime-400/30 px-2 py-0.5 rounded-full">
+                              Spirit Companion
+                            </span>
+                            <span className="text-xs font-bold text-white truncate">{chosenMascot.name}</span>
+                          </div>
+                          <p className="text-[10px] text-neutral-400 mt-0.5 truncate">
+                            {chosenMascot.tagline || "Active companion for this examination session"}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono text-lime-200/80 px-2 py-1 rounded bg-lime-400/10 border border-lime-400/20 hidden sm:inline-block">
+                        {chosenMascot.emoji} Ready
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               {/* Rules */}
@@ -1371,8 +1419,10 @@ export function ExamInterface({
                   ))}
                 </div>
                 <div className="mt-4 rounded-xl bg-[#f2a488]/[0.06] border border-[#f2a488]/20 p-3">
-                  <p className="text-[11px] font-bold text-[#f2a488]">⚠ Violation threshold: {threshold} verified events</p>
-                  <p className="text-[10px] text-neutral-400 mt-1">Warnings are shown before threshold-triggered submission. Security events are available to the exam administrator for review.</p>
+                  <p className="text-[11px] font-bold text-[#f2a488]">⚠ Real-Time Anti-Cheat Proctoring Active</p>
+                  <p className="text-[10px] text-neutral-400 mt-1">
+                    Unapproved tab switching, window minimization, or unauthorized peripheral changes trigger security warnings and can result in automatic exam termination. All events are logged for faculty review.
+                  </p>
                 </div>
               </div>
             </div>
