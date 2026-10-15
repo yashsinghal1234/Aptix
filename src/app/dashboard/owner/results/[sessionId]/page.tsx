@@ -8,6 +8,7 @@ import { getSessionMascotsMap } from "@/app/actions/mascot";
 import { getMascotById } from "@/lib/mascots";
 import { Flower } from "@/components/owner/OpsPanels";
 import { ResultReleaseControl } from "@/components/owner/SessionMonitor";
+import { TeacherPodiumLeaderboard } from "@/components/owner/TeacherPodiumLeaderboard";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,38 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
 
   const passPct = session.exam.passCriteria ?? 50;
   const passed = ranked.filter((a) => (a.score / totalMarks) * 100 >= passPct).length;
+
+  const cheatFlags = await prisma.cheatFlag.findMany({
+    where: { examSessionId: params.sessionId },
+    select: { userId: true },
+  });
+  const flagCountByUser: Record<string, number> = {};
+  for (const f of cheatFlags) {
+    flagCountByUser[f.userId] = (flagCountByUser[f.userId] || 0) + 1;
+  }
+
+  const teacherCandidates = attemptsWithScores.map((a) => {
+    const score = a.responses.reduce((s, r) => s + r.earnedPoints, 0);
+    const mId = sessionMascots[a.userId];
+    const m = mId ? getMascotById(mId) : null;
+    return {
+      id: a.id,
+      userId: a.userId,
+      userName: a.user.name,
+      userEmail: a.user.email,
+      status: a.status,
+      score,
+      totalMarks,
+      answeredCount: a.responses.length,
+      totalQuestions: sessionQuestions.length,
+      mascotId: mId || null,
+      emoji: m ? m.emoji : null,
+      gifUrl: m ? m.gifUrl : null,
+      mascotName: m ? m.name : null,
+      flagsCount: flagCountByUser[a.userId] || 0,
+      passCriteria: passPct,
+    };
+  });
 
   let snap: any = {};
   if (session.configSnapshot) {
@@ -301,65 +334,14 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
         </div>
       </div>
 
-      {/* Leaderboard */}
-      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-        <h2 className="text-[15px] font-bold text-white">Ranked leaderboard</h2>
-        <p className="text-[10px] text-neutral-500 mt-1 mb-4">Rank 1 = best score. Ties share a rank. Failed is below {passPct}%.</p>
-        <div className="overflow-x-auto -mx-1 px-1">
-          <div className="grid grid-cols-[auto_1.4fr_auto_auto_auto_auto_auto] gap-x-4 gap-y-1 items-center min-w-[780px]">
-            {(["RANK", "NAME", "EMAIL", "MASCOT", "SCORE", "PASS%", "STATUS", "AUDIT"] as const).map((h, i) => (
-              <p key={h} className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${i >= 3 ? "text-center" : ""} ${i === 7 ? "text-right" : ""}`}>{h}</p>
-            ))}
-            {rankedDense.length === 0 && (
-              <p className="col-span-8 text-xs text-neutral-500 py-4 text-center">No submissions yet.</p>
-            )}
-            {rankedDense.map((a) => {
-              const pct = (a.score / totalMarks) * 100;
-              const passedRow = pct >= passPct;
-              const mId = sessionMascots[a.userId];
-              const m = mId ? getMascotById(mId) : null;
-              return (
-                <React.Fragment key={a.id}>
-                  <p className="py-2.5 border-t border-white/[0.06] text-xs font-black text-neutral-400 tabular-nums">{a.rank}</p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-xs font-bold text-white truncate pr-2">{a.user.name}</p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-[10px] text-neutral-500 truncate pr-2">{a.user.email}</p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-center text-base flex items-center justify-center">
-                    {m ? (
-                      m.gifUrl ? (
-                        <img
-                          src={m.gifUrl}
-                          alt={m.name}
-                          title={m.name}
-                          className="w-6 h-6 object-contain inline-block filter drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]"
-                        />
-                      ) : (
-                        <span>{m.emoji}</span>
-                      )
-                    ) : (
-                      <span className="text-neutral-700">—</span>
-                    )}
-                  </p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-xs font-bold text-white tabular-nums text-center">{a.score.toFixed(0)}</p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-[11px] tabular-nums text-center text-neutral-300">{pct.toFixed(1)}%</p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-center">
-                    <span className={`text-[9px] font-black rounded px-1.5 py-0.5 ${passedRow ? "text-lime-200 bg-lime-300/10 border border-lime-300/25" : "text-[#f2a488] bg-[#f2a488]/10 border border-[#f2a488]/25"}`}>
-                      {passedRow ? "Passed" : "Failed"}
-                    </span>
-                  </p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-right">
-                    <Link
-                      href={`/dashboard/owner/results/${session.id}/candidate/${a.id}`}
-                      className="text-[10px] font-bold text-neutral-300 bg-white/[0.06] hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 transition-colors whitespace-nowrap"
-                    >
-                      Audit
-                    </Link>
-                  </p>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {/* ── TEACHER EXCLUSIVE: Historical Cohort Podium & Leaderboard ── */}
+      <TeacherPodiumLeaderboard
+        sessionId={session.id}
+        candidates={teacherCandidates}
+        totalMarks={totalMarks}
+        passCriteria={passPct}
+        isLive={false}
+      />
 
       {/* Topic mastery */}
       <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">

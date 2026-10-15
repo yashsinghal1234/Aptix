@@ -101,6 +101,11 @@ graph TD
 * **Flexible Visibility Policies**: Support for `IMMEDIATE`, `AFTER_RELEASE`, and `NEVER` score visibility policies.
 * **On-Demand Results Release**: For `AFTER_RELEASE` exams, submitted candidates view a submission confirmation until the instructor clicks **"Release Results to Candidates"** in the Live Session Monitor.
 * **Animated Top-3 Podium Reveal**: Instructors control when the cohort top-3 podium snapshot is revealed to candidates, showing the top performers along with their animated mascot character avatars.
+* **Teacher-Exclusive Live Podium & Leaderboard**: Dedicated real-time podium and ranked leaderboard cockpit built exclusively for instructors. Available directly during **live exam monitoring** (updating dynamically as candidates progress and submit) and preserved permanently in **historical post-exam analytics**, completely independent of candidate-facing release toggles. Includes:
+  * Top-3 visual podium with dynamically scaled gold 👑, purple 🥈, and coral 🥉 pillars.
+  * Animated mascot GIF character avatars with smooth focus framing and glow effects.
+  * Search by candidate name, email, or mascot name, plus instant status filtering (`ALL`, `SUBMITTED`, `IN_PROGRESS`).
+  * Cohort summary metrics (Highest Score, Cohort Mean, Passing Rate %) and 1-click candidate audit links.
 * **Zero Data Leakage Invariant**: Strict server-side gatekeeping ensures answers, solutions, and podium snapshots are never sent over the wire until officially released.
 
 ---
@@ -109,6 +114,10 @@ graph TD
 
 ### 👑 Assessment Owner / Administrator
 * **Full-Width Operations Hub**: Real-time view of active live assessments, candidates in progress, and cheat flags.
+* **Teacher-Exclusive Live & Historical Podium Leaderboard**:
+  * Real-time top-3 visual podium with animated mascot GIF avatars, score percentages, and dense-ranked cohort leaderboard.
+  * Search by candidate name, email, or mascot name with multi-status filtering (`ALL`, `SUBMITTED`, `IN_PROGRESS`).
+  * Available directly inside the Live Session Cockpit and preserved permanently inside the Historical Exam Results view.
 * **Exam Template Management**:
   * Clean, tabular blueprint directory displaying test durations, fixed questions, auto-pick rule sets, and passing criteria.
   * **Interactive Slide-Over Drawer**: Click any template to inspect rules, question pools, and proctoring parameters.

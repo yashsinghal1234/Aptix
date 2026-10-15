@@ -17,6 +17,7 @@ import {
   IntegrityFeed,
   ResultReleaseControl,
 } from "@/components/owner/SessionMonitor";
+import { TeacherPodiumLeaderboard } from "@/components/owner/TeacherPodiumLeaderboard";
 
 export const dynamic = "force-dynamic";
 
@@ -179,6 +180,31 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
         initialGamified={Boolean(snap.isGamified || session.exam.description?.includes("[MODE:GAMIFIED]"))}
         resultVisibility={resultVisibility}
         submittedCount={submittedCount}
+      />
+
+      {/* ── TEACHER EXCLUSIVE: Live Podium & Leaderboard ── */}
+      <TeacherPodiumLeaderboard
+        sessionId={session.id}
+        candidates={attempts.map((a) => ({
+          id: a.id,
+          userId: a.userId,
+          userName: a.userName,
+          userEmail: a.userEmail,
+          status: a.status,
+          score: a.earned,
+          totalMarks: totalMarks,
+          answeredCount: a.answered,
+          totalQuestions: totalQuestions,
+          mascotId: (sessionMascots as Record<string, string>)[a.userId] || null,
+          emoji: a.emoji,
+          gifUrl: a.gifUrl,
+          flagsCount: a.flags,
+          lastActivity: a.lastActivity,
+          passCriteria: session.exam.passCriteria ?? 50,
+        }))}
+        totalMarks={totalMarks}
+        passCriteria={session.exam.passCriteria ?? 50}
+        isLive={!done}
       />
 
       {/* Global extension */}
