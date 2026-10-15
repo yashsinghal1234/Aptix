@@ -1,22 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { parseAndAnalyzeTextBlobAction, saveVerifiedQuestionsAction } from "@/app/actions/extract";
+import { getSubjectsAction, createSubjectAction } from "@/app/actions/subject";
 import {
   ParsedQuestionWithAI,
   FIXED_TOPICS,
   FIXED_DIFFICULTIES,
-  FixedTopic,
   FixedDifficulty
 } from "@/lib/ai-question-analyzer";
 
-const SAMPLE_TEXT = `Q: A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train?
+const SAMPLE_TEXT = `Category: Quantitative Aptitude
+Q: A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train?
 A) 120 metres
 B) 150 metres
 C) 180 metres
 D) 324 metres
 Answer: B
 
+Category: Computer Science & Tech
 Q: Which of the following data structures operates on a First-In-First-Out (FIFO) basis?
 A) Stack
 B) Queue
@@ -24,6 +26,7 @@ C) Binary Search Tree
 D) Priority Queue
 Answer: B
 
+Category: Logical Reasoning
 Q: If all Roses are Flowers and some Flowers fade quickly, which statement is definitively true?
 A) All roses fade quickly
 B) Some roses may fade quickly
@@ -40,6 +43,67 @@ export function BulkUploadText() {
   const [parsedQuestions, setParsedQuestions] = useState<ParsedQuestionWithAI[]>([]);
   const [lastSave, setLastSave] = useState<{ saved: number; skipped: number } | null>(null);
 
+  // Dynamic categories / subjects
+  const [categories, setCategories] = useState<string[]>([...FIXED_TOPICS]);
+  const [defaultCategory, setDefaultCategory] = useState<string>("");
+  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
+  const [newSubjectName, setNewSubjectName] = useState("");
+  const [newSubjectCode, setNewSubjectCode] = useState("");
+  const [addingSubject, setAddingSubject] = useState(false);
+  const [subjectModalError, setSubjectModalError] = useState<string | null>(null);
+  const [targetQuestionIndexForNewCategory, setTargetQuestionIndexForNewCategory] = useState<number | null>(null);
+
+  // Fetch subjects from database
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await getSubjectsAction();
+        if (mounted && list && list.length > 0) {
+          const names = list.map((s) => s.name.trim()).filter(Boolean);
+          const merged = Array.from(new Set([...names, ...FIXED_TOPICS])).sort((a, b) => a.localeCompare(b));
+          setCategories(merged);
+        }
+      } catch (err) {
+        console.error("Failed to load subjects:", err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleCreateSubject = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const clean = newSubjectName.trim();
+    if (!clean || clean.length < 2) {
+      setSubjectModalError("Subject name must be at least 2 characters long.");
+      return;
+    }
+
+    setAddingSubject(true);
+    setSubjectModalError(null);
+    const res = await createSubjectAction(clean, newSubjectCode.trim() || undefined);
+    setAddingSubject(false);
+
+    if (res.error) {
+      setSubjectModalError(res.error);
+    } else if (res.subject) {
+      const addedName = res.subject.name;
+      setCategories((prev) => Array.from(new Set([...prev, addedName])).sort((a, b) => a.localeCompare(b)));
+      if (targetQuestionIndexForNewCategory !== null) {
+        handleUpdateField(targetQuestionIndexForNewCategory, "category", addedName);
+      } else {
+        setDefaultCategory(addedName);
+      }
+      setShowAddSubjectModal(false);
+      setNewSubjectName("");
+      setNewSubjectCode("");
+      setSubjectModalError(null);
+      setTargetQuestionIndexForNewCategory(null);
+    }
+  };
+
   const handleParse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!textBlob.trim()) {
@@ -51,13 +115,15 @@ export function BulkUploadText() {
     setError(null);
     setSuccessMsg(null);
 
-    const res = await parseAndAnalyzeTextBlobAction(textBlob);
+    const res = await parseAndAnalyzeTextBlobAction(textBlob, defaultCategory || undefined);
     setLoading(false);
 
     if (res.error) {
       setError(res.error);
     } else if (res.questions && res.questions.length > 0) {
       setParsedQuestions(res.questions);
+      const parsedCats = res.questions.map((q) => q.category).filter(Boolean);
+      setCategories((prev) => Array.from(new Set([...prev, ...parsedCats])).sort((a, b) => a.localeCompare(b)));
       setSuccessMsg(`Extracted ${res.questions.length} questions. Review the AI tagging and quality feedback below before saving.`);
     }
   };
@@ -124,159 +190,208 @@ export function BulkUploadText() {
   return (
     <div className="space-y-4">
       <div className="grid xl:grid-cols-2 gap-4 items-start">
-      {/* Raw input */}
-      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-        <h3 className="text-[13px] font-bold text-white">Raw unformatted input</h3>
-        <p className="text-[10px] text-neutral-500 mt-0.5 mb-3">Paste text · source questions</p>
-        {error && (
-          <div className="mb-3 p-3 bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs font-bold rounded-xl">
-            {error}
-          </div>
-        )}
-        {successMsg && (
-          <div className="mb-3 p-3 bg-lime-300/[0.07] border border-lime-300/25 text-lime-200 text-xs font-bold rounded-xl">
-            {successMsg}
-          </div>
-        )}
-        <form onSubmit={handleParse} className="space-y-3">
-          <textarea
-            value={textBlob}
-            onChange={(e) => setTextBlob(e.target.value)}
-            rows={14}
-            className="w-full px-4 py-3 border border-white/10 rounded-xl outline-none font-mono text-[11px] text-neutral-200 bg-black/60 placeholder-neutral-600 leading-relaxed focus:border-lime-300/40"
-            placeholder={`Q: What is the output of 2 + 2?\nA) 3\nB) 4\nC) 5\nD) 6\nAnswer: B`}
-          />
-          <div className="flex items-center justify-between gap-2">
+        {/* Raw input */}
+        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+          <h3 className="text-[13px] font-bold text-white">Raw unformatted input</h3>
+          <p className="text-[10px] text-neutral-500 mt-0.5 mb-3">Paste text · source questions</p>
+
+          {/* Default category selector bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 bg-black/40 border border-white/5 p-2.5 rounded-xl">
+            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+              <span className="text-[10px] font-bold text-neutral-400 shrink-0">Default Category:</span>
+              <select
+                value={defaultCategory}
+                onChange={(e) => {
+                  if (e.target.value === "__ADD_NEW__") {
+                    setTargetQuestionIndexForNewCategory(null);
+                    setShowAddSubjectModal(true);
+                  } else {
+                    setDefaultCategory(e.target.value);
+                  }
+                }}
+                className="flex-1 px-2.5 py-1.5 text-[11px] font-bold text-neutral-200 bg-[#0e0f13] border border-white/10 rounded-lg outline-none cursor-pointer focus:border-lime-300/40"
+              >
+                <option value="">Auto-detect (AI Taxonomy / Text)</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                <option value="__ADD_NEW__" className="text-lime-300 font-bold bg-neutral-900">+ Add New Category...</option>
+              </select>
+            </div>
             <button
               type="button"
-              onClick={() => setTextBlob(SAMPLE_TEXT)}
-              className="text-[11px] font-bold text-neutral-400 hover:text-white transition-colors"
+              onClick={() => {
+                setTargetQuestionIndexForNewCategory(null);
+                setShowAddSubjectModal(true);
+              }}
+              className="text-[10px] font-bold text-lime-300 hover:text-lime-200 bg-lime-300/10 hover:bg-lime-300/20 border border-lime-300/20 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
             >
-              Load sample format
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2.5 bg-lime-300 hover:brightness-110 text-black text-xs font-black rounded-xl transition-all disabled:opacity-50"
-            >
-              {loading ? "Parsing…" : "Parse questions"}
+              + Add Category
             </button>
           </div>
-          <p className="text-[10px] text-neutral-600">Taxonomy: 8 Topics · 3 Difficulty Levels · Distractor Check</p>
-        </form>
-      </div>
 
-      {/* Parsed review list */}
-      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-        <h3 className="text-[13px] font-bold text-white">Parsed review list</h3>
-        <p className="text-[10px] text-neutral-500 mt-0.5 mb-3">
-          {parsedQuestions.length > 0
-            ? `${parsedQuestions.length} editable items · fields are pre-filled from the raw input · verify every answer before submitting for approval.`
-            : "Parsed items appear here for review."}
-        </p>
-        {parsedQuestions.length === 0 ? (
-          <p className="text-xs text-neutral-600 py-8 text-center">Nothing parsed yet.</p>
-        ) : (
-          <div className="space-y-3 max-h-[560px] overflow-y-auto pr-1">
-            {parsedQuestions.map((q, qIdx) => (
-              <div key={q.id} className="rounded-xl border border-white/10 bg-black/40 p-4">
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-[10px] font-mono font-black text-neutral-300">P-{String(qIdx + 1).padStart(2, "0")}</span>
-                  <span className="text-[9px] text-neutral-500">Draft candidate · editable</span>
-                </div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.12em] mb-1">Question stem</p>
-                <textarea
-                  value={q.text}
-                  onChange={(e) => handleUpdateField(qIdx, "text", e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-white/10 rounded-lg outline-none text-[11px] text-white bg-black/60 focus:border-lime-300/40"
-                />
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.12em] mt-2.5 mb-1.5">Options</p>
-                <div className="space-y-1.5">
-                  {q.options.map((opt, optIdx) => {
-                    const isCorrect = q.correctAnswerIndex === optIdx;
-                    return (
-                      <div key={optIdx} className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateField(qIdx, "correctAnswerIndex", optIdx)}
-                          title="Mark as correct answer"
-                          className={`w-4 h-4 rounded-full border-2 shrink-0 ${isCorrect ? "border-lime-300 bg-lime-300/30" : "border-neutral-600"}`}
-                        />
-                        <span className="text-[10px] font-mono text-neutral-500 shrink-0">{"ABCD"[optIdx] || optIdx + 1}</span>
-                        <input
-                          type="text"
-                          value={opt.text}
-                          onChange={(e) => handleUpdateOption(qIdx, optIdx, e.target.value)}
-                          className={`flex-1 min-w-0 px-2.5 py-1.5 text-[11px] border rounded-lg outline-none bg-black/60 text-white focus:border-lime-300/40 ${isCorrect ? "border-lime-300/40" : "border-white/10"}`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="grid grid-cols-3 gap-2 mt-2.5">
-                  <label className="block">
-                    <span className="block text-[9px] font-bold text-neutral-600 mb-1">ANSWER KEY</span>
-                    <span className="block px-2 py-1.5 text-[11px] font-mono font-bold text-lime-200 bg-lime-300/10 border border-lime-300/25 rounded-lg text-center">
-                      {"ABCD"[q.correctAnswerIndex] || "—"}
-                    </span>
-                  </label>
-                  <label className="block">
-                    <span className="block text-[9px] font-bold text-neutral-600 mb-1">CATEGORY</span>
-                    <select
-                      value={q.category}
-                      onChange={(e) => handleUpdateField(qIdx, "category", e.target.value as FixedTopic)}
-                      className="w-full px-2 py-1.5 text-[11px] font-bold text-neutral-200 bg-black/60 border border-white/10 rounded-lg outline-none cursor-pointer"
+          {error && (
+            <div className="mb-3 p-3 bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs font-bold rounded-xl">
+              {error}
+            </div>
+          )}
+          {successMsg && (
+            <div className="mb-3 p-3 bg-lime-300/[0.07] border border-lime-300/25 text-lime-200 text-xs font-bold rounded-xl">
+              {successMsg}
+            </div>
+          )}
+          <form onSubmit={handleParse} className="space-y-3">
+            <textarea
+              value={textBlob}
+              onChange={(e) => setTextBlob(e.target.value)}
+              rows={14}
+              className="w-full px-4 py-3 border border-white/10 rounded-xl outline-none font-mono text-[11px] text-neutral-200 bg-black/60 placeholder-neutral-600 leading-relaxed focus:border-lime-300/40"
+              placeholder={`Category: Machine Learning\nQ: What is the output of 2 + 2?\nA) 3\nB) 4\nC) 5\nD) 6\nAnswer: B`}
+            />
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setTextBlob(SAMPLE_TEXT)}
+                className="text-[11px] font-bold text-neutral-400 hover:text-white transition-colors"
+              >
+                Load sample format
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-5 py-2.5 bg-lime-300 hover:brightness-110 text-black text-xs font-black rounded-xl transition-all disabled:opacity-50"
+              >
+                {loading ? "Parsing…" : "Parse questions"}
+              </button>
+            </div>
+            <p className="text-[10px] text-neutral-600">Taxonomy: {categories.length} Categories · 3 Difficulty Levels · Distractor Check</p>
+          </form>
+        </div>
+
+        {/* Parsed review list */}
+        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+          <h3 className="text-[13px] font-bold text-white">Parsed review list</h3>
+          <p className="text-[10px] text-neutral-500 mt-0.5 mb-3">
+            {parsedQuestions.length > 0
+              ? `${parsedQuestions.length} editable items · fields are pre-filled from the raw input · verify every answer before submitting for approval.`
+              : "Parsed items appear here for review."}
+          </p>
+          {parsedQuestions.length === 0 ? (
+            <p className="text-xs text-neutral-600 py-8 text-center">Nothing parsed yet.</p>
+          ) : (
+            <div className="space-y-3 max-h-[560px] overflow-y-auto pr-1">
+              {parsedQuestions.map((q, qIdx) => (
+                <div key={q.id} className="rounded-xl border border-white/10 bg-black/40 p-4">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[10px] font-mono font-black text-neutral-300">P-{String(qIdx + 1).padStart(2, "0")}</span>
+                    <span className="text-[9px] text-neutral-500">Draft candidate · editable</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.12em] mb-1">Question stem</p>
+                  <textarea
+                    value={q.text}
+                    onChange={(e) => handleUpdateField(qIdx, "text", e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-white/10 rounded-lg outline-none text-[11px] text-white bg-black/60 focus:border-lime-300/40"
+                  />
+                  <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.12em] mt-2.5 mb-1.5">Options</p>
+                  <div className="space-y-1.5">
+                    {q.options.map((opt, optIdx) => {
+                      const isCorrect = q.correctAnswerIndex === optIdx;
+                      return (
+                        <div key={optIdx} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateField(qIdx, "correctAnswerIndex", optIdx)}
+                            title="Mark as correct answer"
+                            className={`w-4 h-4 rounded-full border-2 shrink-0 ${isCorrect ? "border-lime-300 bg-lime-300/30" : "border-neutral-600"}`}
+                          />
+                          <span className="text-[10px] font-mono text-neutral-500 shrink-0">{"ABCD"[optIdx] || optIdx + 1}</span>
+                          <input
+                            type="text"
+                            value={opt.text}
+                            onChange={(e) => handleUpdateOption(qIdx, optIdx, e.target.value)}
+                            className={`flex-1 min-w-0 px-2.5 py-1.5 text-[11px] border rounded-lg outline-none bg-black/60 text-white focus:border-lime-300/40 ${isCorrect ? "border-lime-300/40" : "border-white/10"}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2.5">
+                    <label className="block">
+                      <span className="block text-[9px] font-bold text-neutral-600 mb-1">ANSWER KEY</span>
+                      <span className="block px-2 py-1.5 text-[11px] font-mono font-bold text-lime-200 bg-lime-300/10 border border-lime-300/25 rounded-lg text-center">
+                        {"ABCD"[q.correctAnswerIndex] || "—"}
+                      </span>
+                    </label>
+                    <label className="block">
+                      <span className="block text-[9px] font-bold text-neutral-600 mb-1">CATEGORY</span>
+                      <select
+                        value={q.category}
+                        onChange={(e) => {
+                          if (e.target.value === "__ADD_NEW__") {
+                            setTargetQuestionIndexForNewCategory(qIdx);
+                            setShowAddSubjectModal(true);
+                          } else {
+                            handleUpdateField(qIdx, "category", e.target.value);
+                          }
+                        }}
+                        className="w-full px-2 py-1.5 text-[11px] font-bold text-neutral-200 bg-black/60 border border-white/10 rounded-lg outline-none cursor-pointer focus:border-lime-300/40"
+                      >
+                        {q.category && !categories.includes(q.category) && (
+                          <option value={q.category}>{q.category}</option>
+                        )}
+                        {categories.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                        <option value="__ADD_NEW__" className="text-lime-300 font-bold bg-neutral-900">
+                          + Add New Category...
+                        </option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="block text-[9px] font-bold text-neutral-600 mb-1">DIFFICULTY</span>
+                      <select
+                        value={q.difficultyLevel}
+                        onChange={(e) => handleUpdateField(qIdx, "difficultyLevel", e.target.value as FixedDifficulty)}
+                        className="w-full px-2 py-1.5 text-[11px] font-bold text-neutral-200 bg-black/60 border border-white/10 rounded-lg outline-none cursor-pointer focus:border-lime-300/40"
+                      >
+                        {FIXED_DIFFICULTIES.map((df) => (
+                          <option key={df} value={df}>{df}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="text-[9px] font-bold text-neutral-600 mt-2">AI CONFIDENCE {(q as any).confidence || 92}%</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleSaveSingle(qIdx, "DRAFT")}
+                      className="text-[10px] font-bold text-neutral-300 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50"
                     >
-                      {FIXED_TOPICS.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="block text-[9px] font-bold text-neutral-600 mb-1">DIFFICULTY</span>
-                    <select
-                      value={q.difficultyLevel}
-                      onChange={(e) => handleUpdateField(qIdx, "difficultyLevel", e.target.value as FixedDifficulty)}
-                      className="w-full px-2 py-1.5 text-[11px] font-bold text-neutral-200 bg-black/60 border border-white/10 rounded-lg outline-none cursor-pointer"
+                      Save as Draft
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleSaveSingle(qIdx, "SUBMITTED")}
+                      className="text-[10px] font-black text-black bg-lime-300 hover:brightness-110 rounded-lg px-2.5 py-1.5 transition-all disabled:opacity-50"
                     >
-                      {FIXED_DIFFICULTIES.map((df) => (
-                        <option key={df} value={df}>{df}</option>
-                      ))}
-                    </select>
-                  </label>
+                      Submit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveQuestion(qIdx)}
+                      className="ml-auto text-[10px] font-bold text-neutral-600 hover:text-rose-400 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[9px] font-bold text-neutral-600 mt-2">AI CONFIDENCE {(q as any).confidence || 92}%</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveSingle(qIdx, "DRAFT")}
-                    className="text-[10px] font-bold text-neutral-300 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50"
-                  >
-                    Save as Draft
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => handleSaveSingle(qIdx, "SUBMITTED")}
-                    className="text-[10px] font-black text-black bg-lime-300 hover:brightness-110 rounded-lg px-2.5 py-1.5 transition-all disabled:opacity-50"
-                  >
-                    Submit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveQuestion(qIdx)}
-                    className="ml-auto text-[10px] font-bold text-neutral-600 hover:text-rose-400 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Extraction report + save */}
@@ -328,6 +443,77 @@ export function BulkUploadText() {
           </p>
         </div>
       </div>
+
+      {/* Add Category Modal */}
+      {showAddSubjectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#12141a] p-6 shadow-2xl relative">
+            <h4 className="text-sm font-black text-white">Add New Subject / Category</h4>
+            <p className="text-[11px] text-neutral-400 mt-1 mb-4">
+              Create a custom category. It will be immediately available across the question bank, templates, and paste parser.
+            </p>
+
+            {subjectModalError && (
+              <div className="mb-3 p-2.5 bg-rose-950/50 border border-rose-800 text-rose-300 text-xs font-semibold rounded-xl">
+                {subjectModalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateSubject} className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                  Subject / Category Name *
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  placeholder="e.g. Operating Systems, Chemistry, ML"
+                  value={newSubjectName}
+                  onChange={(e) => setNewSubjectName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-black/60 border border-white/10 rounded-xl text-white outline-none focus:border-lime-300/40 placeholder-neutral-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                  Short Code (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. OS-101, CHEM"
+                  value={newSubjectCode}
+                  onChange={(e) => setNewSubjectCode(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-black/60 border border-white/10 rounded-xl text-white outline-none focus:border-lime-300/40 placeholder-neutral-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddSubjectModal(false);
+                    setNewSubjectName("");
+                    setNewSubjectCode("");
+                    setSubjectModalError(null);
+                    setTargetQuestionIndexForNewCategory(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl border border-white/10 text-neutral-400 hover:text-white text-xs font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingSubject}
+                  className="px-4 py-1.5 rounded-xl bg-lime-300 hover:brightness-110 text-black text-xs font-black transition-all disabled:opacity-50"
+                >
+                  {addingSubject ? "Adding..." : "Add Category"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

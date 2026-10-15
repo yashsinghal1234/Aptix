@@ -54,6 +54,10 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
   const [filterTopic, setFilterTopic] = useState("");
   const [filterDiff, setFilterDiff] = useState("");
 
+  const availableTopics = Array.from(
+    new Set([...FIXED_TOPICS, ...allQuestions.map((q) => q.category).filter(Boolean)])
+  ).sort((a, b) => a.localeCompare(b));
+
   const filteredQuestions = allQuestions.filter(q => {
     if (filterTopic && q.category !== filterTopic) return false;
     if (filterDiff && q.difficultyLevel !== filterDiff) return false;
@@ -192,7 +196,7 @@ export function ScheduleExamForm({ allQuestions }: { allQuestions: any[] }) {
               onChange={e => setFilterTopic(e.target.value)}
             >
               <option value="">All Topics</option>
-              {FIXED_TOPICS.map((topic) => (
+              {availableTopics.map((topic) => (
                 <option key={topic} value={topic}>{topic}</option>
               ))}
             </select>

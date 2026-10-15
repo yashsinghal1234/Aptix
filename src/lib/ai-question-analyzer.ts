@@ -39,7 +39,7 @@ export interface ParsedQuestionWithAI {
   text: string;
   options: ParsedOption[];
   correctAnswerIndex: number;
-  category: FixedTopic;
+  category: string;
   difficultyLevel: FixedDifficulty;
   confidence: number;
   draftExplanation: string;
@@ -69,9 +69,13 @@ function calculateTextSimilarity(str1: string, str2: string): number {
 }
 
 /**
- * Classifies question text and options into our strictly defined fixed taxonomy
+ * Classifies question text and options into our taxonomy (supports standard fixed topics & custom subjects)
  */
-export function classifyTaxonomy(text: string, options: string[]): { category: FixedTopic; difficulty: FixedDifficulty; confidence: number } {
+export function classifyTaxonomy(
+  text: string,
+  options: string[],
+  customTopics?: string[]
+): { category: string; difficulty: FixedDifficulty; confidence: number } {
   const content = (text + " " + options.join(" ")).toLowerCase();
 
   // Keyword rules for fixed taxonomy
@@ -83,7 +87,7 @@ export function classifyTaxonomy(text: string, options: string[]): { category: F
   const abstractKeywords = ["rotation", "mirror image", "water image", "figure", "matrix", "paper folding", "embedded figure", "shape", "diagram", "arrows", "pattern completion"];
   const gaKeywords = ["president", "prime minister", "capital of", "currency", "treaty", "nobel", "olympics", "headquarters", "constitution", "parliament", "amendment", "river", "mountain", "historical", "war of", "dynasty", "planet", "discovered", "invented by", "award"];
 
-  let scores: Record<FixedTopic, number> = {
+  let scores: Record<string, number> = {
     "Quantitative Aptitude": 0,
     "Logical Reasoning": 0,
     "Verbal Ability": 0,
@@ -102,15 +106,30 @@ export function classifyTaxonomy(text: string, options: string[]): { category: F
   abstractKeywords.forEach(k => { if (content.includes(k)) scores["Abstract Reasoning"] += 3; });
   gaKeywords.forEach(k => { if (content.includes(k)) scores["General Awareness"] += 3; });
 
+  // Custom subjects matching
+  if (customTopics && customTopics.length > 0) {
+    for (const ct of customTopics) {
+      const cleanCt = ct.trim();
+      if (!cleanCt) continue;
+      if (scores[cleanCt] === undefined) {
+        scores[cleanCt] = 0;
+      }
+      const ctLower = cleanCt.toLowerCase();
+      if (ctLower.length >= 3 && content.includes(ctLower)) {
+        scores[cleanCt] += 8;
+      }
+    }
+  }
+
   // Math symbol checks
   if (/[\d\+\-\*\/\=\%\^\√]/.test(text) && /\d+/.test(text)) {
     scores["Quantitative Aptitude"] += 2;
   }
 
-  let bestTopic: FixedTopic = "General Awareness";
+  let bestTopic: string = "General Awareness";
   let maxScore = -1;
 
-  for (const [topic, score] of Object.entries(scores) as [FixedTopic, number][]) {
+  for (const [topic, score] of Object.entries(scores)) {
     if (score > maxScore) {
       maxScore = score;
       bestTopic = topic;
@@ -242,7 +261,7 @@ export function generateDraftExplanation(
   questionText: string,
   options: string[],
   correctIndex: number,
-  category: FixedTopic
+  category: string
 ): string {
   const correctOption = options[correctIndex];
   return `The correct answer is "${correctOption}". In ${category}, this follows from analyzing the problem stem and systematically verifying the conditions against the given choices.`;
@@ -255,13 +274,16 @@ export async function analyzeQuestionWithAI(
   text: string,
   rawOptions: string[],
   correctAnswerIndex: number,
-  customExplanation?: string
+  customExplanation?: string,
+  providedCategory?: string,
+  availableCategories?: string[]
 ): Promise<ParsedQuestionWithAI> {
   const cleanOptions = rawOptions.map(o => o.trim());
-  const taxonomy = classifyTaxonomy(text, cleanOptions);
+  const taxonomy = classifyTaxonomy(text, cleanOptions, availableCategories);
+  const finalCategory = providedCategory?.trim() || taxonomy.category;
   const distractorAnalysis = analyzeDistractorQuality(text, cleanOptions, correctAnswerIndex);
   const ambiguity = checkAmbiguity(text, cleanOptions, correctAnswerIndex);
-  const draftExplanation = customExplanation?.trim() || generateDraftExplanation(text, cleanOptions, correctAnswerIndex, taxonomy.category);
+  const draftExplanation = customExplanation?.trim() || generateDraftExplanation(text, cleanOptions, correctAnswerIndex, finalCategory);
 
   // Check for duplicate in DB
   let duplicateMatch = {
@@ -299,7 +321,7 @@ export async function analyzeQuestionWithAI(
     text: text.trim(),
     options: cleanOptions.map(o => ({ text: o, explanation: "" })),
     correctAnswerIndex: Math.max(0, Math.min(cleanOptions.length - 1, correctAnswerIndex)),
-    category: taxonomy.category,
+    category: finalCategory,
     difficultyLevel: taxonomy.difficulty,
     confidence: taxonomy.confidence,
     draftExplanation,

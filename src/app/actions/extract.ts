@@ -23,7 +23,10 @@ async function getAuthorizedUser() {
 /**
  * Parses raw text, applies fixed taxonomy classification & generates AI quality feedback
  */
-export async function parseAndAnalyzeTextBlobAction(textBlob: string): Promise<{
+export async function parseAndAnalyzeTextBlobAction(
+  textBlob: string,
+  defaultCategory?: string
+): Promise<{
   error?: string;
   questions?: ParsedQuestionWithAI[];
 }> {
@@ -42,9 +45,25 @@ export async function parseAndAnalyzeTextBlobAction(textBlob: string): Promise<{
     };
   }
 
+  let dbSubjectNames: string[] = [];
+  try {
+    const subjects = await prisma.subject.findMany({ select: { name: true } });
+    dbSubjectNames = subjects.map(s => s.name);
+  } catch (e) {
+    console.error("Could not fetch db subjects for analyzer:", e);
+  }
+
   const analyzedQuestions: ParsedQuestionWithAI[] = [];
   for (const item of parsedItems) {
-    const analyzed = await analyzeQuestionWithAI(item.stem, item.options, item.answerIndex, item.explanation);
+    const categoryToUse = item.category || defaultCategory || undefined;
+    const analyzed = await analyzeQuestionWithAI(
+      item.stem,
+      item.options,
+      item.answerIndex,
+      item.explanation,
+      categoryToUse,
+      dbSubjectNames
+    );
     analyzedQuestions.push(analyzed);
   }
 
@@ -57,7 +76,8 @@ export async function parseAndAnalyzeTextBlobAction(textBlob: string): Promise<{
 export async function analyzeSingleQuestionAction(
   text: string,
   options: string[],
-  correctIndex: number
+  correctIndex: number,
+  customCategory?: string
 ): Promise<{ error?: string; analysis?: ParsedQuestionWithAI }> {
   const user = await getAuthorizedUser();
   if (!user) return { error: "Unauthorized" };
@@ -66,7 +86,7 @@ export async function analyzeSingleQuestionAction(
     return { error: "Please enter question text." };
   }
 
-  const analysis = await analyzeQuestionWithAI(text, options, correctIndex);
+  const analysis = await analyzeQuestionWithAI(text, options, correctIndex, undefined, customCategory);
   return { analysis };
 }
 
@@ -107,6 +127,19 @@ export async function saveVerifiedQuestionsAction(
 
     const correctText = formattedOptions[q.correctAnswerIndex]?.text || formattedOptions[0]?.text;
 
+    // Ensure custom category exists in Subject table so it remains selectable across platform
+    if (q.category && q.category.trim().length >= 2) {
+      try {
+        await prisma.subject.upsert({
+          where: { name: q.category.trim() },
+          update: {},
+          create: { name: q.category.trim() }
+        });
+      } catch (e) {
+        // ignore duplicate / race
+      }
+    }
+
     await prisma.question.create({
       data: {
         text: q.text,
@@ -129,5 +162,6 @@ export async function saveVerifiedQuestionsAction(
   revalidatePath("/dashboard/setter");
   revalidatePath("/dashboard/setter/bank");
   revalidatePath("/dashboard/owner");
+  revalidatePath("/dashboard/owner/templates");
   return { count: createdCount, skippedDuplicates };
 }
