@@ -9,6 +9,21 @@ const getSanitizedDatabaseUrl = (): string | undefined => {
   if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
     url = url.slice(1, -1).trim();
   }
+  // Enforce healthy connection pool parameters for serverless Neon PgBouncer
+  if (url.includes("connection_limit=")) {
+    url = url.replace(/connection_limit=\d+/, "connection_limit=35");
+  } else if (url.includes("?")) {
+    url += "&connection_limit=35";
+  } else {
+    url += "?connection_limit=35";
+  }
+  if (url.includes("pool_timeout=")) {
+    url = url.replace(/pool_timeout=\d+/, "pool_timeout=45");
+  } else if (url.includes("?")) {
+    url += "&pool_timeout=45";
+  } else {
+    url += "?pool_timeout=45";
+  }
   return url;
 };
 
@@ -22,7 +37,7 @@ const createPrismaClient = () => {
   return baseClient.$extends({
     query: {
       $allOperations({ model, operation, args, query }) {
-        const executeWithRetry = async (retries = 2, delay = 250): Promise<any> => {
+        const executeWithRetry = async (retries = 3, delay = 500): Promise<any> => {
           try {
             return await query(args)
           } catch (error: any) {
@@ -30,15 +45,18 @@ const createPrismaClient = () => {
               error?.code === 'P1001' || // Can't reach database server
               error?.code === 'P1008' || // Operations timed out
               error?.code === 'P1017' || // Server closed the connection
+              error?.code === 'P2024' || // Timed out fetching a new connection from connection pool
               (typeof error?.message === 'string' &&
                 (error.message.includes("Can't reach database server") ||
                  error.message.includes('Connection terminated') ||
                  error.message.includes('ECONNRESET') ||
-                 error.message.includes('ETIMEDOUT')));
+                 error.message.includes('ETIMEDOUT') ||
+                 error.message.includes('connection pool') ||
+                 error.message.includes('Timed out fetching a new connection')));
 
             if (retries > 0 && isTransient) {
               console.warn(
-                `[Prisma Resilience] Cold-start or connection lag detected for ${model ?? 'db'}.${operation}. Retrying in ${delay}ms (${retries} attempts left)...`
+                `[Prisma Resilience] Cold-start or connection lag/pool timeout detected for ${model ?? 'db'}.${operation} (code: ${error?.code || 'UNKNOWN'}). Retrying in ${delay}ms (${retries} attempts left)...`
               )
               await new Promise((resolve) => setTimeout(resolve, delay))
               return executeWithRetry(retries - 1, delay * 1.5)
