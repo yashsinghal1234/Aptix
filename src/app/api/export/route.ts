@@ -45,13 +45,22 @@ export async function GET(request: Request) {
 
   const rankedAttempts = session.attempts.map(attempt => {
     const flagsCount = session.cheatFlags.filter(f => f.userId === attempt.userId).length;
+    const timeTakenSeconds = attempt.submittedAt && attempt.createdAt
+      ? Math.max(0, Math.round((new Date(attempt.submittedAt).getTime() - new Date(attempt.createdAt).getTime()) / 1000))
+      : attempt.responses.reduce((sum, r) => sum + r.timeTakenSeconds, 0);
     return {
       ...attempt,
       flagsCount,
       score: attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0),
-      time: attempt.responses.reduce((sum, r) => sum + r.timeTakenSeconds, 0)
+      time: timeTakenSeconds
     };
-  }).sort((a, b) => b.score - a.score);
+  }).sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const aTime = a.time ?? (a.submittedAt ? new Date(a.submittedAt).getTime() : Infinity);
+    const bTime = b.time ?? (b.submittedAt ? new Date(b.submittedAt).getTime() : Infinity);
+    if (aTime !== bTime) return aTime - bTime;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
 
   rankedAttempts.forEach((a, i) => {
     const percentage = (a.score / totalMarks) * 100;

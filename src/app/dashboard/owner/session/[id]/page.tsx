@@ -79,11 +79,16 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
       const times = a.responses
         .map((r: any) => new Date(r.answeredAt || r.createdAt || r.updatedAt || a.createdAt).getTime())
         .filter((t: number) => !isNaN(t));
+      const timeTakenSeconds = a.submittedAt && a.createdAt
+        ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.createdAt).getTime()) / 1000))
+        : null;
       return {
         id: a.id,
         status: a.status,
         extendedUntil: a.extendedUntil ? a.extendedUntil.toISOString() : null,
         createdAt: new Date(a.createdAt).toISOString(),
+        submittedAt: a.submittedAt ? new Date(a.submittedAt).toISOString() : null,
+        timeTakenSeconds,
         lastActivity: times.length > 0 ? Math.max(...times) : new Date(a.createdAt).getTime(),
         userId: a.userId,
         userName: a.user.name,
@@ -201,6 +206,9 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
           flagsCount: a.flags,
           lastActivity: a.lastActivity,
           passCriteria: session.exam.passCriteria ?? 50,
+          createdAt: a.createdAt,
+          submittedAt: a.submittedAt,
+          timeTakenSeconds: a.timeTakenSeconds,
         }))}
         totalMarks={totalMarks}
         passCriteria={session.exam.passCriteria ?? 50}

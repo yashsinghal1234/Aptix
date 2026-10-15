@@ -21,6 +21,9 @@ export interface TeacherCandidateEntry {
   flagsCount: number;
   lastActivity?: number;
   passCriteria?: number;
+  createdAt?: string | null;
+  submittedAt?: string | null;
+  timeTakenSeconds?: number | null;
 }
 
 interface TeacherPodiumLeaderboardProps {
@@ -41,27 +44,45 @@ export function TeacherPodiumLeaderboard({
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "SUBMITTED" | "IN_PROGRESS">("ALL");
 
-  // Dense-ranked candidates by score descending
+  // Candidates ranked by score descending, with ties broken by fastest submission speed
   const rankedAll = useMemo(() => {
     const sorted = [...candidates].sort((a, b) => {
+      // 1. Primary: Higher score wins
       if (b.score !== a.score) return b.score - a.score;
-      // Tie-breaker: submitted earlier or more answered
+      // 2. Status: Submitted attempts beat in-progress
       if (a.status === "SUBMITTED" && b.status !== "SUBMITTED") return -1;
       if (b.status === "SUBMITTED" && a.status !== "SUBMITTED") return 1;
+      // 3. Speed Tie-breaker: How fast submitted (lower time taken or earlier submission timestamp wins!)
+      const aTime = a.timeTakenSeconds ?? (a.submittedAt ? new Date(a.submittedAt).getTime() : (a.lastActivity ?? Infinity));
+      const bTime = b.timeTakenSeconds ?? (b.submittedAt ? new Date(b.submittedAt).getTime() : (b.lastActivity ?? Infinity));
+      if (aTime !== bTime) return aTime - bTime;
+      // 4. Fallback tie-breaker: more questions answered
       return (b.answeredCount || 0) - (a.answeredCount || 0);
     });
 
     let currentRank = 0;
-    let prevScore: number | null = null;
-
-    return sorted.map((c) => {
-      if (prevScore === null || c.score !== prevScore) {
-        currentRank += 1;
-        prevScore = c.score;
+    return sorted.map((c, index) => {
+      const prev = index > 0 ? sorted[index - 1] : null;
+      const prevTime = prev ? (prev.timeTakenSeconds ?? (prev.submittedAt ? new Date(prev.submittedAt).getTime() : (prev.lastActivity ?? Infinity))) : null;
+      const cTime = c.timeTakenSeconds ?? (c.submittedAt ? new Date(c.submittedAt).getTime() : (c.lastActivity ?? Infinity));
+      
+      const isExactTie = prev && prev.score === c.score && prev.status === c.status && prevTime === cTime;
+      if (!isExactTie) {
+        currentRank = index + 1;
       }
+
       const mascot = c.mascotId ? getMascotById(c.mascotId) : null;
       const pct = totalMarks > 0 ? (c.score / totalMarks) * 100 : 0;
       const isPassed = pct >= passCriteria;
+
+      let timeFormatted = "";
+      if (c.timeTakenSeconds != null) {
+        const m = Math.floor(c.timeTakenSeconds / 60);
+        const s = c.timeTakenSeconds % 60;
+        timeFormatted = `${m}m ${s}s`;
+      } else if (c.submittedAt) {
+        timeFormatted = new Date(c.submittedAt).toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false });
+      }
 
       return {
         ...c,
@@ -72,6 +93,7 @@ export function TeacherPodiumLeaderboard({
         displayGif: c.gifUrl || mascot?.gifUrl,
         displayEmoji: c.emoji || mascot?.emoji || "👤",
         displayName: c.mascotName || mascot?.name || "Standard",
+        displayTimeTaken: timeFormatted,
       };
     });
   }, [candidates, totalMarks, passCriteria]);
@@ -246,13 +268,18 @@ export function TeacherPodiumLeaderboard({
                     <p className="text-[10px] text-neutral-400 font-mono truncate" title={p.entry.userEmail}>
                       {p.entry.userEmail.split("@")[0]}
                     </p>
-                    <div className="mt-1 flex items-center justify-center gap-1.5">
+                    <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                       <span className="text-[11px] font-black text-lime-300 font-mono tabular-nums">
                         {p.entry.score.toFixed(1)} pts
                       </span>
                       <span className="text-[10px] text-neutral-500 font-mono">
                         ({p.entry.pct.toFixed(0)}%)
                       </span>
+                      {p.entry.displayTimeTaken && (
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          • ⏱ {p.entry.displayTimeTaken}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -282,7 +309,7 @@ export function TeacherPodiumLeaderboard({
           <div>
             <h3 className="text-sm font-bold text-white">Full Cohort Leaderboard</h3>
             <p className="text-xs text-neutral-400">
-              Ranked by total score. Ties share a position.
+              Ranked by total score. Ties resolved by fastest submission speed.
             </p>
           </div>
 
@@ -401,10 +428,18 @@ export function TeacherPodiumLeaderboard({
 
                       {/* Score */}
                       <td className="py-3 px-4 text-center font-mono">
-                        <span className="text-sm font-black text-white tabular-nums">
-                          {c.score.toFixed(1)}
-                        </span>
-                        <span className="text-[10px] text-neutral-500 ml-1">/ {totalMarks}</span>
+                        <div>
+                          <span className="text-sm font-black text-white tabular-nums">
+                            {c.score.toFixed(1)}
+                          </span>
+                          <span className="text-[10px] text-neutral-500 ml-1">/ {totalMarks}</span>
+                        </div>
+                        {c.displayTimeTaken && (
+                          <div className="text-[10px] text-neutral-400 font-sans mt-0.5 flex items-center justify-center gap-1">
+                            <span>⏱</span>
+                            <span>{c.displayTimeTaken}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Accuracy & Progress */}

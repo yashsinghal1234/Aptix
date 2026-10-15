@@ -63,18 +63,35 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
   for (const r of responseCounts) attemptsByQ[r.questionId] = r._count.id;
 
   const ranked = attemptsWithScores
-    .map((a) => ({ ...a, score: a.responses.reduce((s, r) => s + r.earnedPoints, 0) }))
-    .sort((a, b) => b.score - a.score);
+    .map((a) => {
+      const timeTakenSeconds = a.submittedAt && a.createdAt
+        ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.createdAt).getTime()) / 1000))
+        : null;
+      return {
+        ...a,
+        score: a.responses.reduce((s, r) => s + r.earnedPoints, 0),
+        timeTakenSeconds,
+      };
+    })
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.status === "SUBMITTED" && b.status !== "SUBMITTED") return -1;
+      if (b.status === "SUBMITTED" && a.status !== "SUBMITTED") return 1;
+      const aTime = a.timeTakenSeconds ?? (a.submittedAt ? new Date(a.submittedAt).getTime() : Infinity);
+      const bTime = b.timeTakenSeconds ?? (b.submittedAt ? new Date(b.submittedAt).getTime() : Infinity);
+      if (aTime !== bTime) return aTime - bTime;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
 
-  // Dense ranks (ties share a rank: 1-2-2-3)
-  let denseRank = 0;
-  let prevScore: number | null = null;
-  const rankedDense = ranked.map((a) => {
-    if (prevScore === null || a.score !== prevScore) {
-      denseRank += 1;
-      prevScore = a.score;
+  // Ranks with speed tie-breaker (exact ties only when score, status, and duration match)
+  let currentRank = 0;
+  const rankedDense = ranked.map((a, index) => {
+    const prev = index > 0 ? ranked[index - 1] : null;
+    const isExactTie = prev && prev.score === a.score && prev.status === a.status && prev.timeTakenSeconds === a.timeTakenSeconds;
+    if (!isExactTie) {
+      currentRank = index + 1;
     }
-    return { ...a, rank: denseRank };
+    return { ...a, rank: currentRank };
   });
 
   const passPct = session.exam.passCriteria ?? 50;
@@ -93,6 +110,9 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
     const score = a.responses.reduce((s, r) => s + r.earnedPoints, 0);
     const mId = sessionMascots[a.userId];
     const m = mId ? getMascotById(mId) : null;
+    const timeTakenSeconds = a.submittedAt && a.createdAt
+      ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.createdAt).getTime()) / 1000))
+      : null;
     return {
       id: a.id,
       userId: a.userId,
@@ -109,6 +129,9 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
       mascotName: m ? m.name : null,
       flagsCount: flagCountByUser[a.userId] || 0,
       passCriteria: passPct,
+      createdAt: a.createdAt ? new Date(a.createdAt).toISOString() : null,
+      submittedAt: a.submittedAt ? new Date(a.submittedAt).toISOString() : null,
+      timeTakenSeconds,
     };
   });
 

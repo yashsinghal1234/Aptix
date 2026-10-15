@@ -195,15 +195,35 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
         include: { responses: true, user: { select: { id: true, name: true } } }
       });
 
-      const ranked = allAttempts.map(a => ({
-        userId: a.userId,
-        name: (a as any).user?.name || "Candidate",
-        score: a.responses.reduce((sum, r) => sum + r.earnedPoints, 0)
-      }));
+      const ranked = allAttempts.map(a => {
+        const timeTakenSeconds = a.submittedAt && a.createdAt
+          ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.createdAt).getTime()) / 1000))
+          : null;
+        return {
+          id: a.id,
+          userId: a.userId,
+          name: (a as any).user?.name || "Candidate",
+          score: a.responses.reduce((sum, r) => sum + r.earnedPoints, 0),
+          status: a.status,
+          createdAt: a.createdAt,
+          submittedAt: a.submittedAt,
+          timeTakenSeconds,
+        };
+      });
+
+      // Sort with tie-breaking: higher score -> submitted status -> faster time taken / earlier submission -> earlier join
+      ranked.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.status === "SUBMITTED" && b.status !== "SUBMITTED") return -1;
+        if (b.status === "SUBMITTED" && a.status !== "SUBMITTED") return 1;
+        const aTime = a.timeTakenSeconds ?? (a.submittedAt ? new Date(a.submittedAt).getTime() : Infinity);
+        const bTime = b.timeTakenSeconds ?? (b.submittedAt ? new Date(b.submittedAt).getTime() : Infinity);
+        if (aTime !== bTime) return aTime - bTime;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+
       const scoresList = ranked.map(r => r.score);
-      const totalCandidates = Math.max(1, scoresList.length);
-      scoresList.sort((a, b) => b - a);
-      ranked.sort((a, b) => b.score - a.score);
+      const totalCandidates = Math.max(1, ranked.length);
 
       // Mascot emblems for the podium (best-effort; falls back to defaults)
       let mascotByUser: Record<string, string> = {};
@@ -234,7 +254,8 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
         };
       });
 
-      const rank = scoresList.filter(s => s > score).length + 1;
+      const myIndex = ranked.findIndex(r => r.id === attempt.id || r.userId === attempt.userId);
+      const rank = myIndex >= 0 ? myIndex + 1 : 1;
       const percentile = totalCandidates > 1
         ? Math.max(1, Math.min(100, Math.round(((totalCandidates - rank) / (totalCandidates - 1)) * 100)))
         : 100;
