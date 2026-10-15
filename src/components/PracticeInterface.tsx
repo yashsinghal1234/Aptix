@@ -913,7 +913,7 @@ export function PracticeInterface({ candidateName = "Ananya Rao" }: { candidateN
 
       {/* ── Footer ────────────────────────────────────────── */}
       <footer className="border-t border-white/10 bg-[#060607] px-6 py-3 mt-auto flex items-center justify-between text-[11px] text-neutral-500">
-        <span>APTIX Assessment Platform · Northbridge University</span>
+        <span>APTIX Assessment Platform · KIET Deemed to be University</span>
         <span>Available practice pool: 212 Qs • 10:14:07 IST</span>
       </footer>
     </div>

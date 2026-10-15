@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
+import { invalidateSessionQuestionsCache } from "@/lib/exam-cache";
 
 function parseStartTime(startTimeStr: string | null | undefined, tzOffsetStr: string | null | undefined): Date | undefined {
   if (!startTimeStr || !startTimeStr.trim()) return undefined;
@@ -154,6 +155,7 @@ export async function createSessionAction(formData: FormData) {
         randomizeQuestionOrder: template.randomizeQuestionOrder,
         randomizeOptionOrder: template.randomizeOptionOrder,
         isGamified: template.description?.includes("[MODE:GAMIFIED]") || formData.get("isGamified") === "on",
+        resultsReleased: false,
       }),
       questions: {
         connect: snapshottedQuestions.map(q => ({ id: q.id }))
@@ -428,3 +430,147 @@ export async function rescheduleSessionAction(formData: FormData) {
   revalidatePath(`/dashboard/owner/session/${sessionId}`);
   return { success: true, session: updatedSession };
 }
+
+export async function toggleReleaseResultsAction(formData: FormData) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  const sessionId = formData.get("sessionId") as string;
+  const released = formData.get("released") === "true";
+
+  const session = await prisma.examSession.findUnique({ 
+    where: { id: sessionId },
+    include: { exam: true }
+  });
+  if (!session) return { error: "Session not found" };
+
+  let snap: any = {};
+  if (session.configSnapshot) {
+    try {
+      snap = JSON.parse(session.configSnapshot);
+    } catch {}
+  }
+  snap.resultsReleased = released;
+
+  await prisma.examSession.update({
+    where: { id: sessionId },
+    data: { configSnapshot: JSON.stringify(snap) }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: payload.userId as string,
+      action: released ? "RELEASE_RESULTS" : "WITHHOLD_RESULTS",
+      details: `${released ? "Released" : "Withheld"} candidate results for session "${session.exam.title}" (${session.pin || session.id})`,
+    }
+  });
+
+  invalidateOwnerDashboardCache();
+  revalidatePath("/dashboard/owner");
+  revalidatePath(`/dashboard/owner/session/${sessionId}`);
+  revalidatePath(`/dashboard/owner/results/${sessionId}`);
+  return { success: true, resultsReleased: released };
+}
+
+export async function togglePodiumRevealAction(formData: FormData) {
+  const sessionToken = (await cookies()).get("auth_session")?.value;
+  if (!sessionToken) return { error: "Unauthorized" };
+  const payload = await verifyToken(sessionToken);
+  if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
+    return { error: "Forbidden" };
+  }
+
+  const sessionId = String(formData.get("sessionId") || "");
+  const revealed = formData.get("revealed") === "true";
+
+  const session = await prisma.examSession.findUnique({ 
+    where: { id: sessionId },
+    include: { exam: true }
+  });
+  if (!session) return { error: "Session not found" };
+
+  let snap: any = {};
+  if (session.configSnapshot) {
+    try {
+      snap = JSON.parse(session.configSnapshot);
+    } catch {}
+  }
+  snap.podiumRevealed = revealed;
+
+  await prisma.examSession.update({
+    where: { id: sessionId },
+    data: { configSnapshot: JSON.stringify(snap) }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: payload.userId as string,
+      action: revealed ? "REVEAL_PODIUM" : "HIDE_PODIUM",
+      details: `${revealed ? "Revealed" : "Hidden"} cohort podium for session "${session.exam.title}" (${session.pin || session.id})`,
+    }
+  });
+
+  invalidateOwnerDashboardCache();
+  revalidatePath("/dashboard/owner");
+  revalidatePath(`/dashboard/owner/session/${sessionId}`);
+  revalidatePath(`/dashboard/owner/results/${sessionId}`);
+  return { success: true, podiumRevealed: revealed };
+}
+
+export async function toggleGamifiedModeAction(formData: FormData) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+
+  const sessionId = formData.get("sessionId") as string;
+  const gamified = formData.get("gamified") === "true";
+
+  const session = await prisma.examSession.findUnique({
+    where: { id: sessionId },
+    include: { exam: true }
+  });
+  if (!session) return { error: "Session not found" };
+
+  let snap: any = {};
+  if (session.configSnapshot) {
+    try {
+      snap = JSON.parse(session.configSnapshot);
+    } catch {}
+  }
+  snap.isGamified = gamified;
+
+  await prisma.examSession.update({
+    where: { id: sessionId },
+    data: { configSnapshot: JSON.stringify(snap) }
+  });
+
+  if (session.exam) {
+    let desc: string = session.exam.description || "";
+    if (gamified && !desc.includes("[MODE:GAMIFIED]")) {
+      desc = desc ? `${desc} [MODE:GAMIFIED]` : "[MODE:GAMIFIED]";
+      await prisma.exam.update({ where: { id: session.exam.id }, data: { description: desc } });
+    } else if (!gamified && desc.includes("[MODE:GAMIFIED]")) {
+      desc = desc.replace(/\s*\[MODE:GAMIFIED\]/g, "").trim();
+      await prisma.exam.update({ where: { id: session.exam.id }, data: { description: desc } });
+    }
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      userId: payload.userId as string,
+      action: gamified ? "ENABLE_GAMIFIED_MODE" : "DISABLE_GAMIFIED_MODE",
+      details: `${gamified ? "Enabled" : "Disabled"} gamified mode for session "${session.exam?.title || session.id}"`,
+    }
+  });
+
+  invalidateOwnerDashboardCache();
+  invalidateSessionQuestionsCache(sessionId);
+  revalidatePath("/dashboard/owner");
+  revalidatePath(`/dashboard/owner/session/${sessionId}`);
+  revalidatePath(`/dashboard/owner/results/${sessionId}`);
+  return { success: true, isGamified: gamified };
+}
+

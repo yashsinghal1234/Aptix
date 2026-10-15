@@ -61,5 +61,37 @@ export function runLeakageSecurityTests() {
   assert("JSON Payload Has Zero Traces of Solution Answer Key", !serialized.includes("Basic arithmetic") && !serialized.includes('"correctAnswer"'));
   assert("Candidate Receives Required Presentation Fields", sanitized.text === "What is 2 + 2?" && sanitized.options.length === 4);
 
+  // Result Visibility Enforcement Tests
+  function evaluateResultVisibility(visibility: string, sessionStatus: string, attemptStatus: string, resultsReleased: boolean = false) {
+    const isConcluded = sessionStatus === "COMPLETED";
+    if (visibility === "IMMEDIATE") return attemptStatus === "SUBMITTED" || isConcluded;
+    if (visibility === "AFTER_RELEASE") return resultsReleased;
+    if (visibility === "NEVER") return resultsReleased;
+    return false;
+  }
+
+  assert("Result Visibility 'NEVER' withholds results when not released", !evaluateResultVisibility("NEVER", "COMPLETED", "SUBMITTED", false));
+  assert("Result Visibility 'AFTER_RELEASE' withholds results when not released in live monitor", !evaluateResultVisibility("AFTER_RELEASE", "LIVE", "SUBMITTED", false));
+  assert("Result Visibility 'AFTER_RELEASE' withholds results even after session concludes if unreleased", !evaluateResultVisibility("AFTER_RELEASE", "COMPLETED", "SUBMITTED", false));
+  assert("Result Visibility 'AFTER_RELEASE' permits results once released in live monitor", evaluateResultVisibility("AFTER_RELEASE", "LIVE", "SUBMITTED", true));
+  assert("Result Visibility 'IMMEDIATE' permits results upon attempt submission", evaluateResultVisibility("IMMEDIATE", "LIVE", "SUBMITTED", false));
+
+  // Podium Reveal Invariant Tests: Only show podium if results are visible AND instructor revealed podium
+  function evaluatePodiumVisibility(
+    visibility: string,
+    sessionStatus: string,
+    attemptStatus: string,
+    resultsReleased: boolean,
+    podiumRevealed: boolean
+  ) {
+    const canViewResults = evaluateResultVisibility(visibility, sessionStatus, attemptStatus, resultsReleased);
+    return canViewResults && podiumRevealed;
+  }
+
+  assert("Podium Hidden when results withheld under AFTER_RELEASE even if podiumRevealed is true", !evaluatePodiumVisibility("AFTER_RELEASE", "LIVE", "SUBMITTED", false, true));
+  assert("Podium Hidden when results visible under IMMEDIATE but instructor has not clicked show podium", !evaluatePodiumVisibility("IMMEDIATE", "LIVE", "SUBMITTED", false, false));
+  assert("Podium Visible when results visible under IMMEDIATE and instructor clicked show podium", evaluatePodiumVisibility("IMMEDIATE", "LIVE", "SUBMITTED", false, true));
+  assert("Podium Visible when results released under AFTER_RELEASE and instructor clicked show podium", evaluatePodiumVisibility("AFTER_RELEASE", "LIVE", "SUBMITTED", true, true));
+
   return { passed, total };
 }

@@ -15,6 +15,7 @@ import {
   SessionCountdown,
   CandidateTable,
   IntegrityFeed,
+  ResultReleaseControl,
 } from "@/components/owner/SessionMonitor";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,16 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
   const screenNo = session.pin ? session.pin.split("-")[1] || session.pin : "—";
   const domain = session.allowedEmailDomain || session.exam.allowedEmailDomain;
 
+  let snap: any = {};
+  if (session.configSnapshot) {
+    try {
+      snap = JSON.parse(session.configSnapshot);
+    } catch {}
+  }
+  const resultVisibility = (snap.resultVisibility || session.exam.resultVisibility || "IMMEDIATE") as string;
+  const resultsReleased = Boolean(snap.resultsReleased);
+  const podiumRevealed = Boolean(snap.podiumRevealed);
+
   const attempts = session.attempts
     .map((a) => {
       const aFlags = session.cheatFlags.filter((f) => f.userId === a.userId);
@@ -77,6 +88,7 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
         userName: a.user.name,
         userEmail: a.user.email,
         emoji: m ? m.emoji : null,
+        gifUrl: m ? m.gifUrl : null,
         answered: a.responses.length,
         earned,
         flags: aFlags.length,
@@ -158,6 +170,16 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
           <p className="mt-1.5 text-[10px] text-neutral-500 leading-relaxed">Server-calibrated lease for all active candidates</p>
         </div>
       </div>
+
+      {/* Candidate Result Release & Podium Reveal Control */}
+      <ResultReleaseControl
+        sessionId={session.id}
+        initialReleased={resultsReleased}
+        initialPodiumRevealed={podiumRevealed}
+        initialGamified={Boolean(snap.isGamified || session.exam.description?.includes("[MODE:GAMIFIED]"))}
+        resultVisibility={resultVisibility}
+        submittedCount={submittedCount}
+      />
 
       {/* Global extension */}
       {!done && (

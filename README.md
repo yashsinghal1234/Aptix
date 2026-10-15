@@ -91,6 +91,18 @@ graph TD
 * **Psychometric Item Discrimination**: Per-question analytics measure question difficulty index ($p$-value), discrimination index ($D$), and distractor frequency distributions.
 * **Audit Trail & Response Inspection**: Comprehensive timeline view of every student's answer submission, flag occurrences, and time logged.
 
+### 5. 🎮 Gamified Assessment Mode & Spirit Mascots
+* **10 Interactive Spirit Mascots**: Candidates can choose from 10 pixel-art companions: Iron Man, Smooth Criminal (Michael Jackson), Madara Uchiha, Deadpool, Courage the Cowardly Dog, Spider-Man, Monkey D. Luffy, John Wick, Vader & Luke (Star Wars Lightsaber Duel), and The Contender (Boxer).
+* **Widescreen 5-in-One Selector Grid**: Responsive 5-column layout with character zoom, alignment, and power-flavor bios.
+* **Persistent Companion Experience**: Chosen mascot badge accompanies the student throughout the exam header and celebratory scorecard.
+* **Live Session Toggle**: Instructors can enable or disable Gamified Mode anytime on any live session directly from the Command Center.
+
+### 6. 🏆 Granular Result Release & Cohort Podium Control
+* **Flexible Visibility Policies**: Support for `IMMEDIATE`, `AFTER_RELEASE`, and `NEVER` score visibility policies.
+* **On-Demand Results Release**: For `AFTER_RELEASE` exams, submitted candidates view a submission confirmation until the instructor clicks **"Release Results to Candidates"** in the Live Session Monitor.
+* **Animated Top-3 Podium Reveal**: Instructors control when the cohort top-3 podium snapshot is revealed to candidates, showing the top performers along with their animated mascot character avatars.
+* **Zero Data Leakage Invariant**: Strict server-side gatekeeping ensures answers, solutions, and podium snapshots are never sent over the wire until officially released.
+
 ---
 
 ## 🖥️ Platform Tour & User Roles
@@ -182,7 +194,7 @@ npm run dev
 Access the application at [**http://localhost:3000**](http://localhost:3000).
 
 ### 6. Run Critical Path Test Suite
-Verify 67 platform invariants across scoring, rate limiting, anti-cheat detection, PRNG shuffling, psychometrics, and question bank deduplication:
+Verify 76 platform invariants across scoring, rate limiting, anti-cheat detection, PRNG shuffling, psychometrics, data leakage prevention, and question bank deduplication:
 ```bash
 npm test
 ```

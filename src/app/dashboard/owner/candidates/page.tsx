@@ -87,7 +87,7 @@ export default async function CandidateRecordsPage() {
           LIVE ROSTER
         </span>
         <span className="text-[9px] font-bold tracking-[0.12em] text-neutral-300 bg-white/[0.05] border border-white/10 rounded-md px-2 py-1">
-          Northbridge University · {latestSession ? `${latestSession.exam.title} · ${latestSession.pin || "no pin"}` : "No sessions yet"}
+          KIET Deemed to be University · {latestSession ? `${latestSession.exam.title} · ${latestSession.pin || "no pin"}` : "No sessions yet"}
         </span>
       </div>
 

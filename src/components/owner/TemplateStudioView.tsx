@@ -701,11 +701,6 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
         ) : null}
       </div>
 
-      {/* ── Page Footer ───────────────────────────────────── */}
-      <footer className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-neutral-500 font-mono">
-        <span>APTIX Assessment Platform · Northbridge University</span>
-        <span>Illustrative assessment data · 10 Oct 2026 · IST (UTC+05:30)</span>
-      </footer>
     </div>
   );
 }

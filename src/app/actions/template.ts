@@ -57,6 +57,8 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
   let rawDesc = (formData.get("description") as string)?.trim() || "";
   if (isGamified && !rawDesc.includes("[MODE:GAMIFIED]")) {
     rawDesc = rawDesc ? `${rawDesc} [MODE:GAMIFIED]` : "[MODE:GAMIFIED]";
+  } else if (!isGamified && rawDesc.includes("[MODE:GAMIFIED]")) {
+    rawDesc = rawDesc.replace(/\s*\[MODE:GAMIFIED\]/g, "").trim();
   }
 
   const parsed = templateSchema.safeParse({

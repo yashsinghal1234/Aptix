@@ -520,11 +520,6 @@ export default function CandidateAuditView({
         </div>
       </div>
 
-      {/* ── Page Footer ───────────────────────────────────── */}
-      <footer className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-neutral-500 font-mono">
-        <span>APTIX Assessment Platform · Northbridge University</span>
-        <span>Owner / Audit View · Revision locked 10 Oct 2026 · ID: {receiptId}</span>
-      </footer>
     </div>
   );
 }

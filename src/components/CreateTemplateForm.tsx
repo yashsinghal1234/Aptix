@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createTemplateAction } from "@/app/actions/template";
 import { useRouter } from "next/navigation";
 import { FIXED_TOPICS, FIXED_DIFFICULTIES } from "@/lib/ai-question-analyzer";
@@ -16,6 +16,37 @@ interface DraftState {
   marksPerQuestion: string;
 }
 
+const DEFAULT_FIELDS: Record<string, string> = {
+  title: "",
+  subject: "",
+  description: "",
+  instructions: "",
+  allowedEmailDomain: "",
+  passCriteria: "50",
+  negativeMarksValue: "0.25",
+  durationMinutes: "60",
+  defaultStartWindowHours: "1",
+  maxAttempts: "1",
+  tabSwitchLimit: "5",
+  questionDisplayMode: "ONE_AT_A_TIME",
+  resultVisibility: "IMMEDIATE",
+  selectionMode: "MANUAL",
+};
+
+const DEFAULT_CHECKS: Record<string, boolean> = {
+  negativeMarkingEnabled: false,
+  partialCreditEnabled: false,
+  allowQuestionSkip: true,
+  allowAnswerReview: true,
+  allowBackNavigation: true,
+  showCorrectAnswers: true,
+  showExplanation: false,
+  requireFullscreen: true,
+  disableCopyPaste: true,
+  isGamified: false,
+  enableStreakHighlights: false,
+};
+
 function loadDraft(): DraftState | null {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
@@ -28,24 +59,41 @@ function loadDraft(): DraftState | null {
 
 /* ── Controls ────────────────────────────────────── */
 
-function Switch({ name, defaultChecked, onChange }: { name: string; defaultChecked?: boolean; onChange?: (v: boolean) => void }) {
-  const [on, setOn] = useState(!!defaultChecked);
+function Switch({
+  name,
+  checked,
+  defaultChecked,
+  onChange,
+}: {
+  name: string;
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onChange?: (v: boolean) => void;
+}) {
+  const [internalOn, setInternalOn] = useState(!!defaultChecked);
+  const on = checked !== undefined ? checked : internalOn;
+
+  const toggle = () => {
+    const next = !on;
+    if (checked === undefined) {
+      setInternalOn(next);
+    }
+    onChange?.(next);
+  };
+
   return (
-    <label className="relative inline-flex cursor-pointer shrink-0">
-      <input
-        type="checkbox"
-        name={name}
-        checked={on}
-        onChange={(e) => {
-          setOn(e.target.checked);
-          onChange?.(e.target.checked);
-        }}
-        className="peer sr-only"
-      />
-      <span className={`block w-9 h-5 rounded-full transition-colors ${on ? "bg-lime-300" : "bg-white/15"}`}>
+    <div className="relative inline-flex items-center shrink-0">
+      <input type="hidden" name={name} value={on ? "on" : "off"} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        onClick={toggle}
+        className={`relative inline-block w-9 h-5 rounded-full transition-colors cursor-pointer ${on ? "bg-lime-300" : "bg-white/15"}`}
+      >
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-black transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
-      </span>
-    </label>
+      </button>
+    </div>
   );
 }
 
@@ -66,15 +114,19 @@ function LockedSwitch({ on, label, hint }: { on: boolean; label: string; hint?: 
 function Segmented<T extends string>({
   name,
   options,
+  value,
   defaultValue,
   onChange,
 }: {
   name: string;
   options: { value: T; label: string }[];
-  defaultValue: T;
+  value?: T;
+  defaultValue?: T;
   onChange?: (v: T) => void;
 }) {
-  const [val, setVal] = useState<T>(defaultValue);
+  const [internalVal, setInternalVal] = useState<T>((defaultValue ?? options[0]?.value) as T);
+  const val = value !== undefined ? value : internalVal;
+
   return (
     <div className="flex flex-wrap gap-1.5">
       {options.map((o) => (
@@ -85,7 +137,9 @@ function Segmented<T extends string>({
             value={o.value}
             checked={val === o.value}
             onChange={() => {
-              setVal(o.value);
+              if (value === undefined) {
+                setInternalVal(o.value);
+              }
               onChange?.(o.value);
             }}
             className="peer sr-only"
@@ -121,23 +175,60 @@ const STEPS = [
 export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const [draft] = useState<DraftState | null>(() => (typeof window !== "undefined" ? loadDraft() : null));
-  const [draftNote, setDraftNote] = useState<string | null>(() =>
-    typeof window !== "undefined" && loadDraft() ? "Draft restored from this browser." : null
-  );
+  const isLoadedRef = useRef(false);
 
   const [step, setStep] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set(draft?.selectedIds || [])
-  );
-  const [rules, setRules] = useState<{ id: string; category: string; difficultyLevel: string; count: number }[]>(
-    () => draft?.rules || []
-  );
-  const [selectionMode, setSelectionMode] = useState(draft?.selectionMode || "MANUAL");
-  const [marksPerQuestion, setMarksPerQuestion] = useState(draft?.marksPerQuestion || "1");
-  const [negOn, setNegOn] = useState(!!draft?.checks.negativeMarkingEnabled);
-  const [isGamified, setIsGamified] = useState(!!draft?.checks.isGamified);
+  const [fields, setFields] = useState<Record<string, string>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = loadDraft();
+      if (saved?.fields) return { ...DEFAULT_FIELDS, ...saved.fields };
+    }
+    return DEFAULT_FIELDS;
+  });
 
+  const [checks, setChecks] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = loadDraft();
+      if (saved?.checks) return { ...DEFAULT_CHECKS, ...saved.checks };
+    }
+    return DEFAULT_CHECKS;
+  });
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = loadDraft();
+      if (saved?.selectedIds) return new Set(saved.selectedIds);
+    }
+    return new Set();
+  });
+
+  const [rules, setRules] = useState<{ id: string; category: string; difficultyLevel: string; count: number }[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = loadDraft();
+      if (saved?.rules) return saved.rules;
+    }
+    return [];
+  });
+
+  const [selectionMode, setSelectionMode] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = loadDraft();
+      if (saved?.selectionMode) return saved.selectionMode;
+      if (saved?.fields?.selectionMode) return saved.fields.selectionMode;
+    }
+    return "MANUAL";
+  });
+
+  const [marksPerQuestion, setMarksPerQuestion] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = loadDraft();
+      if (saved?.marksPerQuestion) return saved.marksPerQuestion;
+      if (saved?.fields?.marksPerQuestion) return saved.fields.marksPerQuestion;
+    }
+    return "1";
+  });
+
+  const [draftNote, setDraftNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,8 +239,55 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   const [qPage, setQPage] = useState(0);
   const Q_PER = 4;
 
-  const d = (name: string, fallback = "") => draft?.fields[name] ?? fallback;
-  const dc = (name: string, fallback: boolean) => (draft ? (draft.checks[name] ?? fallback) : fallback);
+  const updateField = (name: string, val: string) => {
+    setFields((prev) => ({ ...prev, [name]: val }));
+  };
+
+  const updateCheck = (name: string, val: boolean) => {
+    setChecks((prev) => ({ ...prev, [name]: val }));
+  };
+
+  // Restore draft from browser localStorage on initial mount
+  useEffect(() => {
+    const saved = loadDraft();
+    if (saved) {
+      if (saved.fields) setFields((prev) => ({ ...prev, ...saved.fields }));
+      if (saved.checks) setChecks((prev) => ({ ...prev, ...saved.checks }));
+      if (saved.rules) setRules(saved.rules);
+      if (saved.selectedIds) setSelectedIds(new Set(saved.selectedIds));
+      if (saved.selectionMode) setSelectionMode(saved.selectionMode);
+      if (saved.marksPerQuestion) setMarksPerQuestion(saved.marksPerQuestion);
+      setDraftNote("Draft restored from this browser.");
+    }
+    isLoadedRef.current = true;
+  }, []);
+
+  // Auto-save draft on any user change
+  useEffect(() => {
+    if (!isLoadedRef.current || typeof window === "undefined") return;
+    try {
+      const hasAnyContent =
+        !!fields.title ||
+        !!fields.subject ||
+        !!fields.description ||
+        !!fields.instructions ||
+        !!fields.allowedEmailDomain ||
+        rules.length > 0 ||
+        selectedIds.size > 0;
+
+      if (hasAnyContent) {
+        const draftData: DraftState = {
+          fields,
+          checks,
+          rules,
+          selectedIds: Array.from(selectedIds),
+          selectionMode: fields.selectionMode || selectionMode,
+          marksPerQuestion,
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+      }
+    } catch {}
+  }, [fields, checks, rules, selectedIds, selectionMode, marksPerQuestion]);
 
   /* derived */
   const filteredQuestions = allQuestions.filter((q) => {
@@ -193,17 +331,14 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   };
 
   const collectDraft = (): DraftState => {
-    const fd = formRef.current ? new FormData(formRef.current) : new FormData();
-    const fields: Record<string, string> = {};
-    const checks: Record<string, boolean> = {};
-    ["title", "subject", "description", "instructions", "allowedEmailDomain", "marksPerQuestion", "passCriteria", "negativeMarksValue", "durationMinutes", "defaultStartWindowHours", "maxAttempts", "questionDisplayMode", "resultVisibility", "tabSwitchLimit", "selectionMode"].forEach((k) => {
-      const v = fd.get(k);
-      if (typeof v === "string") fields[k] = v;
-    });
-    ["negativeMarkingEnabled", "partialCreditEnabled", "allowQuestionSkip", "allowAnswerReview", "allowBackNavigation", "showCorrectAnswers", "showExplanation", "requireFullscreen", "disableCopyPaste", "isGamified"].forEach((k) => {
-      checks[k] = fd.get(k) === "on";
-    });
-    return { fields, checks, rules, selectedIds: Array.from(selectedIds), selectionMode, marksPerQuestion };
+    return {
+      fields,
+      checks,
+      rules,
+      selectedIds: Array.from(selectedIds),
+      selectionMode: fields.selectionMode || selectionMode,
+      marksPerQuestion,
+    };
   };
 
   const saveDraft = () => {
@@ -221,11 +356,23 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     try {
       localStorage.removeItem(DRAFT_KEY);
     } catch {}
+    setFields(DEFAULT_FIELDS);
+    setChecks(DEFAULT_CHECKS);
+    setRules([]);
+    setSelectedIds(new Set());
+    setSelectionMode("MANUAL");
+    setMarksPerQuestion("1");
     setDraftNote(null);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!fields.title.trim()) {
+      setError("Please enter an assessment title.");
+      setStep(0);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (selectedIds.size === 0 && rules.length === 0) {
       setError("Please select at least one fixed question or add at least one auto-pick rule.");
       setStep(1);
@@ -236,6 +383,17 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     setError(null);
 
     const formData = new FormData(e.currentTarget);
+    // Explicitly enforce state fields and checks into formData so nothing can ever desync
+    Object.entries(fields).forEach(([k, v]) => {
+      formData.set(k, v || "");
+    });
+    Object.entries(checks).forEach(([k, v]) => {
+      if (v) formData.set(k, "on");
+      else formData.delete(k);
+    });
+    formData.set("marksPerQuestion", marksPerQuestion);
+    formData.set("totalMarks", String(maxMarks));
+
     const cleanedRules = rules.map(({ category, difficultyLevel, count }) => ({ category, difficultyLevel, count }));
 
     const res = await createTemplateAction(formData, Array.from(selectedIds), cleanedRules);
@@ -260,10 +418,14 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const modeLabel = selectionMode === "MANUAL" ? "Manual only" : selectionMode === "RULE_BASED" ? "Hybrid selection" : "Hybrid selection";
+  const currentSelectionMode = fields.selectionMode || selectionMode;
+  const modeLabel = currentSelectionMode === "MANUAL" ? "Manual only" : currentSelectionMode === "RULE_BASED" ? "Hybrid selection" : "Hybrid selection";
+
+  const isGamified = !!checks.isGamified;
+  const negOn = !!checks.negativeMarkingEnabled;
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="pb-24">
+    <form ref={formRef} onSubmit={handleSubmit} noValidate className="pb-24">
       {/* Header */}
       <div className="px-1 pt-1">
         <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500 mb-2 font-mono">
@@ -390,44 +552,79 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
         </div>
 
         {/* Main column */}
-        <div className="space-y-4 min-w-0" key={step}>
+        <div className="space-y-4 min-w-0">
           {/* STEP 1 */}
-          <section className={CARD} hidden={step !== 0}>
+          <section className={`${CARD} ${step !== 0 ? "hidden" : ""}`} hidden={step !== 0}>
             <h2 className="text-[15px] font-bold text-white mb-4">1 · Basic information</h2>
             <div className="grid md:grid-cols-2 gap-x-5 gap-y-4">
               <div>
                 <label className={LABEL}>Assessment title</label>
-                <input name="title" required defaultValue={d("title")} placeholder="Quantitative Aptitude · Q4" className={INPUT} />
+                <input
+                  name="title"
+                  required
+                  value={fields.title}
+                  onChange={(e) => updateField("title", e.target.value)}
+                  placeholder="Quantitative Aptitude · Q4"
+                  className={INPUT}
+                />
               </div>
               <div>
                 <label className={LABEL}>Category</label>
-                <input name="subject" defaultValue={d("subject")} placeholder="Quantitative Aptitude" className={INPUT} />
+                <input
+                  name="subject"
+                  value={fields.subject}
+                  onChange={(e) => updateField("subject", e.target.value)}
+                  placeholder="Quantitative Aptitude"
+                  className={INPUT}
+                />
               </div>
               <div className="md:col-span-2">
                 <label className={LABEL}>Description</label>
-                <input name="description" defaultValue={d("description")} placeholder="Engineering cohort 2026 · foundational quantitative reasoning across algebra, arithmetic and data." className={INPUT} />
+                <input
+                  name="description"
+                  value={fields.description}
+                  onChange={(e) => updateField("description", e.target.value)}
+                  placeholder="Engineering cohort 2026 · foundational quantitative reasoning across algebra, arithmetic and data."
+                  className={INPUT}
+                />
               </div>
               <div className="md:col-span-2">
                 <label className={LABEL}>Candidate instructions</label>
-                <textarea name="instructions" rows={2} defaultValue={d("instructions")} placeholder="Answer all 40 questions. Calculators are not permitted. Review marked questions before submitting." className={`${INPUT} resize-none`} />
+                <textarea
+                  name="instructions"
+                  rows={2}
+                  value={fields.instructions}
+                  onChange={(e) => updateField("instructions", e.target.value)}
+                  placeholder="Answer all 40 questions. Calculators are not permitted. Review marked questions before submitting."
+                  className={`${INPUT} resize-none`}
+                />
               </div>
               <div className="md:col-span-2">
                 <label className={LABEL}>Restricted email domain <span className="normal-case font-medium text-neutral-600">(optional)</span></label>
-                <input name="allowedEmailDomain" defaultValue={d("allowedEmailDomain")} placeholder="@northbridge.edu" className={INPUT} />
-                <p className="text-[10px] text-neutral-600 mt-1.5">Institution: Northbridge University · Cohort: ENG-26. Domain restriction applies at candidate authentication.</p>
+                <input
+                  name="allowedEmailDomain"
+                  value={fields.allowedEmailDomain}
+                  onChange={(e) => updateField("allowedEmailDomain", e.target.value)}
+                  placeholder="@northbridge.edu"
+                  className={INPUT}
+                />
+                <p className="text-[10px] text-neutral-600 mt-1.5">Institution: KIET Deemed to be University · Cohort: ENG-26. Domain restriction applies at candidate authentication.</p>
               </div>
             </div>
           </section>
 
           {/* STEP 2 */}
-          <section className={CARD} hidden={step !== 1}>
+          <section className={`${CARD} ${step !== 1 ? "hidden" : ""}`} hidden={step !== 1}>
             <h2 className="text-[15px] font-bold text-white mb-4">2 · Question Selection Strategy</h2>
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
               <span className="text-[9px] font-black tracking-[0.14em] text-neutral-500">MODE</span>
               <Segmented
                 name="selectionMode"
-                defaultValue={(["MANUAL", "RULE_BASED", "HYBRID"] as const).includes(selectionMode as any) ? (selectionMode as "MANUAL" | "RULE_BASED" | "HYBRID") : "MANUAL"}
-                onChange={(v) => setSelectionMode(v)}
+                value={(["MANUAL", "RULE_BASED", "HYBRID"] as const).includes(currentSelectionMode as any) ? (currentSelectionMode as "MANUAL" | "RULE_BASED" | "HYBRID") : "MANUAL"}
+                onChange={(v) => {
+                  updateField("selectionMode", v);
+                  setSelectionMode(v);
+                }}
                 options={[
                   { value: "MANUAL", label: "MANUAL ONLY" },
                   { value: "RULE_BASED", label: "HYBRID BLUEPRINT" },
@@ -539,16 +736,35 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
           </section>
 
           {/* STEP 3 */}
-          <section className={CARD} hidden={step !== 2}>
+          <section className={`${CARD} ${step !== 2 ? "hidden" : ""}`} hidden={step !== 2}>
             <h2 className="text-[15px] font-bold text-white mb-4">3 · Scoring</h2>
             <div className="grid md:grid-cols-2 gap-x-5 gap-y-4">
               <div>
                 <label className={LABEL}>Points per question</label>
-                <input type="number" name="marksPerQuestion" value={marksPerQuestion} onChange={(e) => setMarksPerQuestion(e.target.value)} step="0.5" min="0" className={`${INPUT} tabular-nums`} />
+                <input
+                  type="number"
+                  name="marksPerQuestion"
+                  value={marksPerQuestion}
+                  onChange={(e) => {
+                    setMarksPerQuestion(e.target.value);
+                    updateField("marksPerQuestion", e.target.value);
+                  }}
+                  step="0.5"
+                  min="0"
+                  className={`${INPUT} tabular-nums`}
+                />
               </div>
               <div>
                 <label className={LABEL}>Passing percentage</label>
-                <input type="number" name="passCriteria" defaultValue={d("passCriteria", "50")} min="0" max="100" className={`${INPUT} tabular-nums`} />
+                <input
+                  type="number"
+                  name="passCriteria"
+                  value={fields.passCriteria}
+                  onChange={(e) => updateField("passCriteria", e.target.value)}
+                  min="0"
+                  max="100"
+                  className={`${INPUT} tabular-nums`}
+                />
               </div>
             </div>
             <div className="mt-4 space-y-3">
@@ -557,10 +773,23 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   <p className="text-xs font-bold text-white">Negative marking</p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">Deduction for incorrect response</p>
                 </div>
-                <Switch name="negativeMarkingEnabled" defaultChecked={dc("negativeMarkingEnabled", false)} onChange={setNegOn} />
+                <Switch
+                  name="negativeMarkingEnabled"
+                  checked={checks.negativeMarkingEnabled}
+                  onChange={(v) => updateCheck("negativeMarkingEnabled", v)}
+                />
               </div>
               <div className={negOn ? "" : "opacity-40 pointer-events-none select-none"}>
-                <input type="number" name="negativeMarksValue" defaultValue={d("negativeMarksValue", "0.25")} step="0.01" min="0" disabled={!negOn} className={`${INPUT} tabular-nums disabled:cursor-not-allowed`} />
+                <input
+                  type="number"
+                  name="negativeMarksValue"
+                  value={fields.negativeMarksValue}
+                  onChange={(e) => updateField("negativeMarksValue", e.target.value)}
+                  step="0.01"
+                  min="0"
+                  disabled={!negOn}
+                  className={`${INPUT} tabular-nums disabled:cursor-not-allowed`}
+                />
                 {!negOn && <p className="mt-1.5 text-[10px] text-neutral-600">Enable Negative marking above to set a deduction.</p>}
               </div>
               <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
@@ -568,22 +797,41 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   <p className="text-xs font-bold text-white">MSQ partial credit</p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">Unanswered: 0. Partial credit is OFF for this blueprint; MSQ requires the full correct set, otherwise −0.5. If enabled, award proportional credit only when no incorrect option is selected. Maximum marks remain {Math.round(maxMarks)}.</p>
                 </div>
-                <Switch name="partialCreditEnabled" defaultChecked={dc("partialCreditEnabled", false)} />
+                <Switch
+                  name="partialCreditEnabled"
+                  checked={checks.partialCreditEnabled}
+                  onChange={(v) => updateCheck("partialCreditEnabled", v)}
+                />
               </div>
             </div>
           </section>
 
           {/* STEP 4 */}
-          <section className={CARD} hidden={step !== 3}>
+          <section className={`${CARD} ${step !== 3 ? "hidden" : ""}`} hidden={step !== 3}>
             <h2 className="text-[15px] font-bold text-white mb-4">4 · Timing</h2>
             <div className="grid md:grid-cols-2 gap-x-5 gap-y-4">
               <div>
                 <label className={LABEL}>Duration in minutes</label>
-                <input type="number" name="durationMinutes" defaultValue={d("durationMinutes", "60")} required min="1" className={`${INPUT} tabular-nums`} />
+                <input
+                  type="number"
+                  name="durationMinutes"
+                  value={fields.durationMinutes}
+                  onChange={(e) => updateField("durationMinutes", e.target.value)}
+                  required
+                  min="1"
+                  className={`${INPUT} tabular-nums`}
+                />
               </div>
               <div>
                 <label className={LABEL}>Default start window in hours</label>
-                <input type="number" name="defaultStartWindowHours" defaultValue={d("defaultStartWindowHours", "1")} min="1" className={`${INPUT} tabular-nums`} />
+                <input
+                  type="number"
+                  name="defaultStartWindowHours"
+                  value={fields.defaultStartWindowHours}
+                  onChange={(e) => updateField("defaultStartWindowHours", e.target.value)}
+                  min="1"
+                  className={`${INPUT} tabular-nums`}
+                />
               </div>
             </div>
             <p className="mt-3 text-[10px] text-neutral-500 leading-relaxed">
@@ -592,14 +840,22 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
           </section>
 
           {/* STEP 5 */}
-          <section className={CARD} hidden={step !== 4}>
+          <section className={`${CARD} ${step !== 4 ? "hidden" : ""}`} hidden={step !== 4}>
             <h2 className="text-[15px] font-bold text-white mb-4">5 · Navigation</h2>
             <label className={LABEL}>Maximum attempts</label>
-            <input type="number" name="maxAttempts" defaultValue={d("maxAttempts", "1")} min="1" className={`${INPUT} tabular-nums mb-4`} />
+            <input
+              type="number"
+              name="maxAttempts"
+              value={fields.maxAttempts}
+              onChange={(e) => updateField("maxAttempts", e.target.value)}
+              min="1"
+              className={`${INPUT} tabular-nums mb-4`}
+            />
             <div className="flex items-center gap-2 mb-4">
               <Segmented
                 name="questionDisplayMode"
-                defaultValue={(d("questionDisplayMode", "ONE_AT_A_TIME") as "ONE_AT_A_TIME" | "ALL_ON_ONE_PAGE") === "ALL_ON_ONE_PAGE" ? "ALL_ON_ONE_PAGE" : "ONE_AT_A_TIME"}
+                value={(fields.questionDisplayMode as "ONE_AT_A_TIME" | "ALL_ON_ONE_PAGE") === "ALL_ON_ONE_PAGE" ? "ALL_ON_ONE_PAGE" : "ONE_AT_A_TIME"}
+                onChange={(v) => updateField("questionDisplayMode", v)}
                 options={[
                   { value: "ONE_AT_A_TIME", label: "● ONE AT A TIME" },
                   { value: "ALL_ON_ONE_PAGE", label: "○ ALL ON ONE PAGE" },
@@ -614,7 +870,11 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
               ].map(([n, l, fb]) => (
                 <div key={n as string} className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
                   <p className="text-xs font-bold text-white">{l}</p>
-                  <Switch name={n as string} defaultChecked={dc(n as string, fb as boolean)} />
+                  <Switch
+                    name={n as string}
+                    checked={checks[n as string] ?? (fb as boolean)}
+                    onChange={(v) => updateCheck(n as string, v)}
+                  />
                 </div>
               ))}
             </div>
@@ -622,12 +882,13 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
           </section>
 
           {/* STEP 6 */}
-          <section className={CARD} hidden={step !== 5}>
+          <section className={`${CARD} ${step !== 5 ? "hidden" : ""}`} hidden={step !== 5}>
             <h2 className="text-[15px] font-bold text-white mb-4">6 · Feedback</h2>
             <div className="flex items-center gap-2 mb-4">
               <Segmented
                 name="resultVisibility"
-                defaultValue={(["IMMEDIATE", "AFTER_RELEASE", "NEVER"] as const).includes(d("resultVisibility", "IMMEDIATE") as any) ? (d("resultVisibility", "IMMEDIATE") as "IMMEDIATE" | "AFTER_RELEASE" | "NEVER") : "IMMEDIATE"}
+                value={(["IMMEDIATE", "AFTER_RELEASE", "NEVER"] as const).includes(fields.resultVisibility as any) ? (fields.resultVisibility as "IMMEDIATE" | "AFTER_RELEASE" | "NEVER") : "IMMEDIATE"}
+                onChange={(v) => updateField("resultVisibility", v)}
                 options={[
                   { value: "IMMEDIATE", label: "○ IMMEDIATE" },
                   { value: "AFTER_RELEASE", label: "● AFTER SESSION RELEASE" },
@@ -638,11 +899,19 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
             <div className="space-y-2.5">
               <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
                 <p className="text-xs font-bold text-white">Show correct answers after owner release</p>
-                <Switch name="showCorrectAnswers" defaultChecked={dc("showCorrectAnswers", true)} />
+                <Switch
+                  name="showCorrectAnswers"
+                  checked={checks.showCorrectAnswers}
+                  onChange={(v) => updateCheck("showCorrectAnswers", v)}
+                />
               </div>
               <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
                 <p className="text-xs font-bold text-white">Show explanations after owner release</p>
-                <Switch name="showExplanation" defaultChecked={dc("showExplanation", false)} />
+                <Switch
+                  name="showExplanation"
+                  checked={checks.showExplanation}
+                  onChange={(v) => updateCheck("showExplanation", v)}
+                />
               </div>
             </div>
             <div className="mt-3 rounded-xl border border-white/10 bg-black/40 p-3">
@@ -651,27 +920,43 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
           </section>
 
           {/* STEP 7 */}
-          <section className={CARD} hidden={step !== 6}>
+          <section className={`${CARD} ${step !== 6 ? "hidden" : ""}`} hidden={step !== 6}>
             <h2 className="text-[15px] font-bold text-white mb-4">7 · Proctoring</h2>
             <div className="mb-3">
               <label className={LABEL}>Tab-switch threshold N · auto-submit</label>
-              <input type="number" name="tabSwitchLimit" defaultValue={d("tabSwitchLimit", "5")} min="1" placeholder="5 verified events" className={`${INPUT} tabular-nums`} />
+              <input
+                type="number"
+                name="tabSwitchLimit"
+                value={fields.tabSwitchLimit}
+                onChange={(e) => updateField("tabSwitchLimit", e.target.value)}
+                min="1"
+                placeholder="5 verified events"
+                className={`${INPUT} tabular-nums`}
+              />
             </div>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
                 <p className="text-xs font-bold text-white">Require fullscreen</p>
-                <Switch name="requireFullscreen" defaultChecked={dc("requireFullscreen", true)} />
+                <Switch
+                  name="requireFullscreen"
+                  checked={checks.requireFullscreen}
+                  onChange={(v) => updateCheck("requireFullscreen", v)}
+                />
               </div>
               <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
                 <p className="text-xs font-bold text-white">Disable copy / paste</p>
-                <Switch name="disableCopyPaste" defaultChecked={dc("disableCopyPaste", true)} />
+                <Switch
+                  name="disableCopyPaste"
+                  checked={checks.disableCopyPaste}
+                  onChange={(v) => updateCheck("disableCopyPaste", v)}
+                />
               </div>
             </div>
             <p className="mt-3 text-[10px] text-neutral-500 leading-relaxed">Warnings appear before the threshold. Focus events require context; a flag is not an automatic cheating verdict. Optional display, VM/RDP and extension checks depend on browser capability and cannot guarantee detection.</p>
           </section>
 
           {/* STEP 8 */}
-          <section className={CARD} hidden={step !== 7}>
+          <section className={`${CARD} ${step !== 7 ? "hidden" : ""}`} hidden={step !== 7}>
             <h2 className="text-[15px] font-bold text-white mb-4">8 · Gamification</h2>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
@@ -679,11 +964,25 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   <p className="text-xs font-bold text-white">Kahoot / Wayground-inspired mode · Idrisified</p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">Master switch for every playful mechanic below.</p>
                 </div>
-                <Switch name="isGamified" defaultChecked={dc("isGamified", false)} onChange={setIsGamified} />
+                <Switch
+                  name="isGamified"
+                  checked={checks.isGamified}
+                  onChange={(v) => updateCheck("isGamified", v)}
+                />
               </div>
               <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 space-y-3">
                 <LockedSwitch on={isGamified} label="Spirit Mascot selector" hint="Candidates pick an emblem before launch." />
-                <LockedSwitch on={isGamified} label="Correct-answer streak highlights" hint="Live multipliers stay cosmetic." />
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-neutral-200">Correct-answer streak highlights</p>
+                    <p className="text-[10px] text-neutral-500 mt-0.5">Live multipliers stay cosmetic.</p>
+                  </div>
+                  <Switch
+                    name="enableStreakHighlights"
+                    checked={checks.enableStreakHighlights}
+                    onChange={(v) => updateCheck("enableStreakHighlights", v)}
+                  />
+                </div>
                 <LockedSwitch on={isGamified} label="Result podium display" hint="Celebration board on the scorecard." />
               </div>
             </div>
@@ -691,6 +990,9 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
               <p className="text-[10px] text-neutral-300 leading-relaxed">Flavor only. Never extra marks. Six mascot choices are cosmetic. The selected spirit appears in the exam header, invigilator roster and result podium. No scoring, timing, partial-credit or ranking advantage is granted.</p>
             </div>
           </section>
+
+          {/* Hidden inputs for computed totals */}
+          <input type="hidden" name="totalMarks" value={maxMarks} />
 
           {/* Wizard nav */}
           <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">

@@ -40,7 +40,7 @@ export function MascotSelector({ candidateName, sessionId, examTitle, examMeta, 
   return (
     <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
       <CandidateTopbar candidateName={candidateName} roll={`SES-${sessionId.slice(-4).toUpperCase()}`} />
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+      <main className="flex-1 w-full max-w-[1800px] mx-auto px-4 sm:px-8 py-6 space-y-4">
         <div className="flex items-start justify-between gap-6 px-1 pt-1">
           <div>
             <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">
@@ -56,22 +56,7 @@ export function MascotSelector({ candidateName, sessionId, examTitle, examMeta, 
           <Flower className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 mt-1" />
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5 sm:p-7 max-w-4xl">
-          <div className="flex items-center justify-between gap-3 mb-5">
-            <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-400">
-              STATUS: CONFIRMATIONAL STATE · <span className="text-lime-200">Gamified + timed</span>
-            </p>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={isSubmitting}
-              aria-label="Confirm selection"
-              className="text-neutral-500 hover:text-white text-xl leading-none px-1 disabled:opacity-50"
-            >
-              ×
-            </button>
-          </div>
-
+        <div className="w-full rounded-2xl border border-white/10 bg-[#0e0f13] p-5 sm:p-7 shadow-2xl">
           <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Choose your Spirit Mascot</h2>
           <p className="text-xs text-neutral-400 mt-1.5">
             Select one companion for this attempt. Power-bluff descriptions are playful cosmetic flavor, never a scoring advantage.
@@ -81,7 +66,7 @@ export function MascotSelector({ candidateName, sessionId, examTitle, examMeta, 
             <p className="mt-3 text-xs font-bold text-rose-300 bg-rose-950/40 border border-rose-800/50 rounded-xl px-3 py-2">{error}</p>
           )}
 
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {MASCOTS.map((m) => {
               const sel = selectedMascot.id === m.id;
               return (
@@ -89,30 +74,38 @@ export function MascotSelector({ candidateName, sessionId, examTitle, examMeta, 
                   key={m.id}
                   type="button"
                   onClick={() => setSelectedMascot(m)}
-                  className={`text-left rounded-2xl border p-4 transition-all cursor-pointer ${
+                  className={`text-left rounded-2xl border p-3.5 transition-all cursor-pointer flex flex-col justify-between ${
                     sel
-                      ? "border-lime-300/70 bg-lime-300/[0.05] shadow-[0_0_24px_rgba(190,242,100,0.12)]"
+                      ? "border-lime-300/70 bg-lime-300/[0.05] shadow-[0_0_24px_rgba(190,242,100,0.12)] ring-1 ring-lime-300/40"
                       : "border-white/10 bg-black/40 hover:bg-white/[0.04] hover:border-white/25"
                   }`}
                 >
-                  <span className="flex items-center justify-between">
-                    <span className="text-2xl">{m.emoji}</span>
-                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${sel ? "border-lime-300" : "border-neutral-600"}`}>
-                      {sel && <span className="w-2 h-2 rounded-full bg-lime-300" />}
+                  <div>
+                    <span className="relative block w-full h-48 sm:h-52 rounded-xl bg-white/[0.04] border border-white/5 overflow-hidden">
+                      {m.gifUrl ? (
+                        <img
+                          src={m.gifUrl}
+                          alt={m.name}
+                          style={m.imgZoom ? { transform: `scale(${m.imgZoom})`, transformOrigin: m.imgOrigin ?? "center" } : undefined}
+                          className={`w-full h-full object-contain filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] select-none pointer-events-none ${m.imgZoom ? "" : "scale-[1.35]"}`}
+                        />
+                      ) : (
+                        <span className="w-full h-full flex items-center justify-center text-6xl">{m.emoji}</span>
+                      )}
+                      <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none" />
+                      <span className="absolute bottom-2 left-2.5 right-2.5 block">
+                        <span className="block text-[15px] font-black text-white leading-tight truncate">{m.name}</span>
+                        <span className="block text-[10px] font-mono text-lime-300 uppercase tracking-wider truncate">{m.title}</span>
+                      </span>
+                      <span className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center bg-black/60 backdrop-blur-sm ${sel ? "border-lime-300" : "border-neutral-500"}`}>
+                        {sel && <span className="w-2.5 h-2.5 rounded-full bg-lime-300" />}
+                      </span>
                     </span>
-                  </span>
-                  <span className="block mt-2.5 text-sm font-black text-white">{m.name}</span>
-                  <span className="block mt-1 text-[11px] text-neutral-400 leading-relaxed">{m.tagline}</span>
+                    <span className="block mt-2.5 px-1 text-[11px] text-neutral-400 leading-relaxed">{m.tagline}</span>
+                  </div>
                 </button>
               );
             })}
-          </div>
-
-          <div className="mt-5 rounded-xl border border-white/10 bg-black/40 p-4">
-            <p className="text-xs font-black text-white">One mascot. The same marks.</p>
-            <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
-              Cyber Lion appears on your exam header, the invigilator roster and the result podium. No changes to points, penalties, time, ranking or pass criteria. Existing result initials remain your identity marker.
-            </p>
           </div>
 
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -127,9 +120,6 @@ export function MascotSelector({ candidateName, sessionId, examTitle, examMeta, 
               {isSubmitting ? "Locking in…" : `Continue with ${selectedMascot.name}`}
             </button>
           </div>
-          <p className="mt-3 text-[10px] text-neutral-600 leading-relaxed">
-            Standard (un-gamified) exams skip this selector. Your choice is cosmetic — never a scoring advantage.
-          </p>
         </div>
       </main>
       <CandidateFooter />

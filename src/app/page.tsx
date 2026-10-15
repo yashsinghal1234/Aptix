@@ -51,7 +51,7 @@ export default async function Home() {
       include: { session: { include: { exam: true } } },
       orderBy: { createdAt: "desc" }
     });
-    if (candidateAttempt?.session && ["SCHEDULED", "LIVE"].includes(candidateAttempt.session.status)) {
+    if (candidateAttempt?.session && (["SCHEDULED", "LIVE"].includes(candidateAttempt.session.status) || candidateAttempt.status === "SUBMITTED")) {
       activeSession = candidateAttempt.session;
     }
   }
@@ -112,7 +112,7 @@ export default async function Home() {
               <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
                 <h3 className="text-[13px] font-bold text-white">Your next assessment</h3>
                 <p className="text-xs font-bold text-neutral-200 mt-2">{preview?.exam.title || "Upcoming assessment"}</p>
-                <p className="text-[10px] text-neutral-500 mt-0.5">Northbridge University · Engineering cohort 2026 · {preview?.exam.subject || "General"}</p>
+                <p className="text-[10px] text-neutral-500 mt-0.5">KIET Deemed to be University · Engineering cohort 2026 · {preview?.exam.subject || "General"}</p>
                 <div className="mt-3 grid grid-cols-3 gap-2.5">
                   {[
                     { l: "Questions", v: String(pq), s: `Attempt 1` },

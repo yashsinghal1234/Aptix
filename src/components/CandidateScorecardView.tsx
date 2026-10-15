@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { getMascotById } from "@/lib/mascots";
 
 interface CandidateScorecardProps {
   candidateName?: string;
@@ -24,7 +25,8 @@ interface CandidateScorecardProps {
     mean: number;
     median: number;
     topScores?: number[];
-    podium?: { name: string; score: number; mascot: string }[];
+    podium?: { name: string; score: number; mascot: string; gifUrl?: string; mascotId?: string }[];
+    podiumRevealed?: boolean;
   } | null;
   onReturnToLogin?: () => void;
 }
@@ -292,11 +294,28 @@ export default function CandidateScorecardView({
   // Dynamic podium: real submitted cohort members with emblems, never fabricated
   const podium = React.useMemo(() => {
     const entries = Array.isArray(cohort?.podium) ? cohort.podium.slice(0, 3) : [];
-    const ordered = [entries[2], entries[0], entries[1]].filter(Boolean) as { name: string; score: number; mascot: string }[];
+    const ordered = [entries[2], entries[0], entries[1]].filter(Boolean) as {
+      name: string;
+      score: number;
+      mascot: string;
+      gifUrl?: string;
+      mascotId?: string;
+    }[];
     const places = ["3rd", "1st", "2nd"];
     const colors = ["bg-[#f2a488]", "bg-lime-300", "bg-purple-300"];
     const max = Math.max(...entries.map((e) => e.score), 1);
-    return ordered.map((e, i) => ({ ...e, place: places[i], color: colors[i], h: 72 + Math.round(88 * (e.score / max)) }));
+    return ordered.map((e, i) => {
+      const resolved = getMascotById(e.mascotId || e.mascot);
+      const gifUrl = e.gifUrl || (e.mascot?.startsWith("/") ? e.mascot : resolved?.gifUrl);
+      return {
+        ...e,
+        gifUrl,
+        resolvedMascot: resolved,
+        place: places[i],
+        color: colors[i],
+        h: 72 + Math.round(88 * (e.score / max)),
+      };
+    });
   }, [cohort]);
 
   const handleDownload = () => {
@@ -482,7 +501,7 @@ export default function CandidateScorecardView({
               <div>
                 <h2 className="text-base font-bold text-white tracking-tight">Gamified result</h2>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Animated confetti, Spirit Mascot celebration banner, streak highlights, and rank badge.
+                  Animated confetti, Spirit Mascot celebration banner, and rank badge.
                 </p>
               </div>
               <span className="text-[10px] font-mono font-bold tracking-widest uppercase px-2.5 py-1 bg-white/5 border border-white/10 rounded text-neutral-400">
@@ -505,15 +524,11 @@ export default function CandidateScorecardView({
                     {cohortDiff >= 0
                       ? `${cohortDiff.toFixed(1)} points above the cohort mean`
                       : `${Math.abs(cohortDiff).toFixed(1)} points below the cohort mean`}
-                    {categoryStreaks[0]?.streak > 0
-                      ? ` · ${categoryStreaks[0].streak} correct streaks in ${categoryStreaks[0].name.toLowerCase()}`
-                      : ""}
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap md:flex-col items-start md:items-end gap-2 text-xs font-bold text-neutral-900 font-mono">
-                <span className="inline-flex items-center gap-1">⚡ {maxStreak} correct streak</span>
                 <span className="inline-flex items-center gap-1">⏱ {timeFormatted} finish</span>
                 <span className="inline-flex items-center gap-1">✓ {computedStats.correct} correct answers</span>
               </div>
@@ -541,14 +556,36 @@ export default function CandidateScorecardView({
                   <span className="text-[10px] font-mono font-bold text-lime-300">You → COMMITTED</span>
                 </div>
                 {podium.length === 0 ? (
-                  <p className="text-[11px] text-neutral-500 font-sans py-6 text-center">
-                    Cohort scores appear here as submissions finalize.
-                  </p>
+                  <div className="py-7 px-4 flex flex-col items-center justify-center text-center space-y-2.5">
+                    <div className="w-10 h-10 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center text-amber-300">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-bold text-neutral-200">Podium Awaiting Instructor Reveal</p>
+                    <p className="text-[11px] text-neutral-500 max-w-xs leading-relaxed font-sans">
+                      The cohort podium snapshot will appear here once released by your instructor on their system.
+                    </p>
+                  </div>
                 ) : (
                   <div className="flex items-end justify-center gap-3 sm:gap-5">
                     {podium.map((p, i) => (
                       <div key={p.place} className="flex flex-col items-center">
-                        <span className="text-3xl mb-1">{p.mascot}</span>
+                        <div className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center mb-1.5 relative bg-white/[0.03] ring-1 ring-white/10">
+                          {p.gifUrl ? (
+                            <img
+                              src={p.gifUrl}
+                              alt={p.name}
+                              style={p.resolvedMascot?.imgZoom ? {
+                                transform: `scale(${p.resolvedMascot.imgZoom})`,
+                                transformOrigin: p.resolvedMascot.imgOrigin ?? "center",
+                              } : undefined}
+                              className={`w-full h-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)] select-none pointer-events-none ${p.resolvedMascot?.imgZoom ? "" : "scale-[1.35]"}`}
+                            />
+                          ) : (
+                            <span className="text-3xl">{p.mascot}</span>
+                          )}
+                        </div>
                         <span className="text-[10px] font-bold text-neutral-300 mb-2 max-w-[90px] truncate">{p.name}</span>
                         <div
                           className={`${p.color} w-20 sm:w-24 rounded-t-xl flex flex-col items-center justify-end pb-2 pt-3`}
@@ -798,7 +835,7 @@ export default function CandidateScorecardView({
 
       {/* ── Footer ────────────────────────────────────────── */}
       <footer className="border-t border-white/10 bg-[#060607] px-6 py-3 mt-12 flex items-center justify-between text-[11px] text-neutral-500">
-        <span>APTIX Assessment Platform · Northbridge University</span>
+        <span>APTIX Assessment Platform · KIET Deemed to be University</span>
         <span>Secure session • Server time is authoritative</span>
       </footer>
     </div>

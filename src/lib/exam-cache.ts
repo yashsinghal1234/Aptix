@@ -35,6 +35,7 @@ export async function getCachedSessionQuestions(sessionId: string) {
   const session = await prisma.examSession.findUnique({
     where: { id: sessionId },
     include: {
+      exam: true,
       questions: {
         where: { status: "APPROVED" },
         orderBy: { createdAt: "asc" }
@@ -44,14 +45,17 @@ export async function getCachedSessionQuestions(sessionId: string) {
 
   if (!session) return [];
 
+  const examMarksPerQ = session.exam?.marksPerQuestion ?? (session.totalMarks > 0 && session.questions.length > 0 ? (session.totalMarks / session.questions.length) : 1);
+  const examNegMarks = session.negativeMarkingEnabled ? (session.negativeMarksValue ?? 0) : 0;
+
   // Pre-seed grading question cache to make subsequent candidate answer checks 0ms
   for (const q of session.questions) {
     gradingQuestionCache.set(q.id, {
       data: {
         id: q.id,
         type: q.type || "MCQ_SINGLE",
-        points: q.points,
-        negativePoints: q.negativePoints,
+        points: examMarksPerQ,
+        negativePoints: examNegMarks,
         answerData: q.answerData
       },
       cachedAt: now
@@ -73,8 +77,8 @@ export async function getCachedSessionQuestions(sessionId: string) {
       options: parsedOptions,
       category: q.category,
       type: q.type || "MCQ_SINGLE",
-      points: q.points,
-      negativePoints: q.negativePoints
+      points: examMarksPerQ,
+      negativePoints: examNegMarks
     };
   });
 

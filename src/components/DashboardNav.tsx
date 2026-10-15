@@ -153,7 +153,7 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
             <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-3 py-1.5">
               ILLUSTRATIVE WORKSPACE
             </span>
-            <span className="text-xs font-semibold text-neutral-200">Northbridge University.</span>
+            <span className="text-xs font-semibold text-neutral-200">KIET Deemed to be University.</span>
           </div>
         )}
 
@@ -369,7 +369,7 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
 
       {/* ── Footer strip ──────────────────────────── */}
       <footer className="shrink-0 border-t border-white/10 px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-1 text-[10px] font-medium text-neutral-600">
-        <span>APTIX Assessment Platform · Northbridge University</span>
+        <span>APTIX Assessment Platform · KIET Deemed to be University</span>
         <span>Illustrative assessment data · <span suppressHydrationWarning>{new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}</span> · IST (UTC+05:30)</span>
       </footer>
     </div>

@@ -7,6 +7,9 @@ import {
   extendCandidateTimeAction,
   reopenCandidateAttemptAction,
   resetCandidateAttemptAction,
+  toggleReleaseResultsAction,
+  togglePodiumRevealAction,
+  toggleGamifiedModeAction,
 } from "@/app/actions/session";
 import { useServerTime } from "@/hooks/useServerTime";
 
@@ -89,6 +92,7 @@ export interface MonitorAttempt {
   userName: string;
   userEmail: string;
   emoji: string | null;
+  gifUrl?: string | null;
   answered: number;
   earned: number;
   flags: number;
@@ -168,8 +172,12 @@ export function CandidateTable({
                 <p className="text-[10px] text-neutral-500 truncate">{a.userEmail}</p>
               </div>
               <div onClick={toggle} className="py-3 border-t border-white/[0.06] cursor-pointer">
-                <span className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-base">
-                  {a.emoji || "👤"}
+                <span className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-base overflow-hidden">
+                  {a.gifUrl ? (
+                    <img src={a.gifUrl} alt="" className="w-6 h-6 object-contain" />
+                  ) : (
+                    a.emoji || "👤"
+                  )}
                 </span>
               </div>
               <div onClick={toggle} className="py-3 border-t border-white/[0.06] text-center cursor-pointer">
@@ -348,6 +356,298 @@ export function IntegrityFeed({ flags }: { flags: MonitorFlag[] }) {
               </span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Result Release Control ───────────────────────── */
+export function ResultReleaseControl({
+  sessionId,
+  initialReleased,
+  initialPodiumRevealed,
+  initialGamified,
+  resultVisibility,
+  submittedCount,
+}: {
+  sessionId: string;
+  initialReleased: boolean;
+  initialPodiumRevealed?: boolean;
+  initialGamified?: boolean;
+  resultVisibility: string;
+  submittedCount: number;
+}) {
+  const router = useRouter();
+  const [released, setReleased] = useState(initialReleased);
+  const [podiumRevealed, setPodiumRevealed] = useState(Boolean(initialPodiumRevealed));
+  const [gamified, setGamified] = useState(Boolean(initialGamified));
+  const [busy, setBusy] = useState(false);
+  const [podiumBusy, setPodiumBusy] = useState(false);
+  const [gamifiedBusy, setGamifiedBusy] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleToggle = async (nextState: boolean) => {
+    setBusy(true);
+    setStatusMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("sessionId", sessionId);
+      fd.append("released", String(nextState));
+      const res = await toggleReleaseResultsAction(fd);
+      if (res?.success) {
+        setReleased(nextState);
+        setStatusMsg({
+          type: "success",
+          text: nextState
+            ? "Results released successfully! Submitted candidates can now view their scorecards."
+            : "Results have been withheld from candidates.",
+        });
+        router.refresh();
+      } else {
+        setStatusMsg({ type: "error", text: res?.error || "Failed to update result release status." });
+      }
+    } catch (e: any) {
+      setStatusMsg({ type: "error", text: e.message || "Failed to update release status." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTogglePodium = async (nextState: boolean) => {
+    setPodiumBusy(true);
+    setStatusMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("sessionId", sessionId);
+      fd.append("revealed", String(nextState));
+      const res = await togglePodiumRevealAction(fd);
+      if (res?.success) {
+        setPodiumRevealed(nextState);
+        setStatusMsg({
+          type: "success",
+          text: nextState
+            ? "Cohort podium revealed! Candidates who have access to results can now see the animated podium snapshot."
+            : "Cohort podium is now hidden from candidates.",
+        });
+        router.refresh();
+      } else {
+        setStatusMsg({ type: "error", text: res?.error || "Failed to update podium visibility." });
+      }
+    } catch (e: any) {
+      setStatusMsg({ type: "error", text: e.message || "Failed to update podium visibility." });
+    } finally {
+      setPodiumBusy(false);
+    }
+  };
+
+  const handleToggleGamified = async (nextState: boolean) => {
+    setGamifiedBusy(true);
+    setStatusMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("sessionId", sessionId);
+      fd.append("gamified", String(nextState));
+      const res = await toggleGamifiedModeAction(fd);
+      if (res?.success) {
+        setGamified(nextState);
+        setStatusMsg({
+          type: "success",
+          text: nextState
+            ? "Gamified mode enabled! Candidates who enter will now choose their spirit mascot character before launching."
+            : "Gamified mode disabled for this session.",
+        });
+        router.refresh();
+      } else {
+        setStatusMsg({ type: "error", text: res?.error || "Failed to update gamified mode." });
+      }
+    } catch (e: any) {
+      setStatusMsg({ type: "error", text: e.message || "Failed to update gamified mode." });
+    } finally {
+      setGamifiedBusy(false);
+    }
+  };
+
+  const isAfterRelease = resultVisibility === "AFTER_RELEASE";
+  const isNever = resultVisibility === "NEVER";
+  const resultsAccessible = resultVisibility === "IMMEDIATE" || released;
+
+  return (
+    <div className={`rounded-2xl border p-5 transition-all space-y-5 ${
+      released
+        ? "border-emerald-500/30 bg-emerald-950/[0.08]"
+        : isAfterRelease
+          ? "border-amber-400/25 bg-amber-500/[0.04]"
+          : "border-white/10 bg-[#0e0f13]"
+    }`}>
+      {/* ── SECTION A: Result Release ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold tracking-[0.18em] text-neutral-400 uppercase">
+              CANDIDATE RESULT RELEASE
+            </span>
+            {released ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-300 text-[10px] font-bold font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                RESULTS RELEASED
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[10px] font-bold font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                WITHHELD (PENDING RELEASE)
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-neutral-300 font-medium leading-relaxed max-w-xl">
+            {released
+              ? "All submitted candidates can now immediately view their marks, performance scorecard, and answer keys."
+              : isAfterRelease
+                ? "This exam is configured for 'After Release'. Candidates who have submitted are currently seeing the submission confirmation screen and cannot see their score until you release results here."
+                : isNever
+                  ? "This exam is configured for 'Never' visibility. Releasing here will override and allow submitted candidates to view their results."
+                  : "Exam is currently set to Immediate visibility upon candidate submission."}
+          </p>
+          <p className="text-[10px] text-neutral-500 font-mono">
+            {submittedCount} candidate{submittedCount === 1 ? "" : "s"} submitted · Template policy: {resultVisibility}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          {released ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleToggle(false)}
+              className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
+            >
+              {busy ? "Updating..." : "Withhold / Hide Results"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleToggle(true)}
+              className="px-5 py-2.5 bg-lime-300 hover:bg-lime-200 text-black text-xs font-black rounded-xl shadow-lg shadow-lime-950/30 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 whitespace-nowrap"
+            >
+              <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>{busy ? "Releasing..." : "Release Results to Candidates"}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── SECTION B: Podium Reveal Control ── */}
+      <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold tracking-[0.18em] text-neutral-400 uppercase">
+              COHORT PODIUM REVEAL
+            </span>
+            {podiumRevealed ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-400/10 border border-purple-400/30 text-purple-300 text-[10px] font-bold font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                PODIUM REVEALED
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-400 text-[10px] font-bold font-mono">
+                PODIUM HIDDEN
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-neutral-300 font-medium leading-relaxed max-w-xl">
+            {podiumRevealed
+              ? "Candidates who have access to results can now see the animated top-3 podium snapshot with mascot character GIFs."
+              : "The cohort podium snapshot is hidden on student screens. Candidates only see their own rank until you reveal the podium here."}
+          </p>
+          <p className="text-[10px] text-neutral-500 font-mono">
+            Requires results visibility ({resultsAccessible ? "Currently accessible" : "Pending result release"})
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          {podiumRevealed ? (
+            <button
+              type="button"
+              disabled={podiumBusy}
+              onClick={() => handleTogglePodium(false)}
+              className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
+            >
+              {podiumBusy ? "Updating..." : "Withhold / Hide Podium"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={podiumBusy}
+              onClick={() => handleTogglePodium(true)}
+              className="px-5 py-2.5 bg-purple-500 hover:bg-purple-400 text-white text-xs font-black rounded-xl shadow-lg shadow-purple-950/30 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 whitespace-nowrap"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+              <span>{podiumBusy ? "Revealing..." : "Reveal Podium to Candidates"}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── SECTION C: Gamified Mode Control ── */}
+      <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold tracking-[0.18em] text-neutral-400 uppercase">
+              GAMIFIED MODE (MASCOT SELECTION)
+            </span>
+            {gamified ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-lime-400/10 border border-lime-400/30 text-lime-300 text-[10px] font-bold font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse" />
+                GAMIFIED MODE ACTIVE
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-400 text-[10px] font-bold font-mono">
+                STANDARD (OFF)
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-neutral-300 font-medium leading-relaxed max-w-xl">
+            {gamified
+              ? "Candidates pick their spirit mascot character before launch, and see their mascot badge throughout the assessment and leaderboard."
+              : "Standard mode is active. Candidates bypass the mascot chooser and enter straight into the exam."}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          {gamified ? (
+            <button
+              type="button"
+              disabled={gamifiedBusy}
+              onClick={() => handleToggleGamified(false)}
+              className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
+            >
+              {gamifiedBusy ? "Updating..." : "Disable Gamified Mode"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={gamifiedBusy}
+              onClick={() => handleToggleGamified(true)}
+              className="px-5 py-2.5 bg-lime-300 hover:bg-lime-200 text-black text-xs font-black rounded-xl shadow-lg shadow-lime-950/30 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 whitespace-nowrap"
+            >
+              <span>⚡ {gamifiedBusy ? "Enabling..." : "Enable Gamified Mode"}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {statusMsg && (
+        <div className={`mt-3 p-3 rounded-xl text-xs font-medium border ${
+          statusMsg.type === "success"
+            ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300"
+            : "bg-rose-950/40 border-rose-500/30 text-rose-300"
+        }`}>
+          {statusMsg.text}
         </div>
       )}
     </div>

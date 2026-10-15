@@ -26,7 +26,7 @@ export function CandidateTopbar({ candidateName, roll }: { candidateName: string
           My assessments
         </Link>
         <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-3 py-1 uppercase">
-          Northbridge University
+          KIET Deemed to be University
         </span>
       </nav>
       <div className="ml-auto flex items-center gap-2.5">
@@ -45,7 +45,7 @@ export function CandidateTopbar({ candidateName, roll }: { candidateName: string
 export function CandidateFooter() {
   return (
     <footer className="shrink-0 border-t border-white/10 px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-1 text-[10px] font-medium text-neutral-600">
-      <span>APTIX Assessment Platform · Northbridge University</span>
+      <span>APTIX Assessment Platform · KIET Deemed to be University</span>
       <span>Secure session · Server time is authoritative</span>
     </footer>
   );

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getSessionMascotsMap } from "@/app/actions/mascot";
 import { getMascotById } from "@/lib/mascots";
 import { Flower } from "@/components/owner/OpsPanels";
+import { ResultReleaseControl } from "@/components/owner/SessionMonitor";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,16 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
   const passPct = session.exam.passCriteria ?? 50;
   const passed = ranked.filter((a) => (a.score / totalMarks) * 100 >= passPct).length;
 
+  let snap: any = {};
+  if (session.configSnapshot) {
+    try {
+      snap = JSON.parse(session.configSnapshot);
+    } catch {}
+  }
+  const resultVisibility = (snap.resultVisibility || session.exam.resultVisibility || "IMMEDIATE") as string;
+  const resultsReleased = Boolean(snap.resultsReleased);
+  const podiumRevealed = Boolean(snap.podiumRevealed);
+
   // Category mastery
   const categoryStats: Record<string, { totalEarned: number; totalPossible: number; count: number }> = {};
   sessionQuestions.forEach((q) => {
@@ -142,6 +153,15 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
         </div>
       </div>
 
+      {/* Candidate Result Release & Podium Reveal Control */}
+      <ResultReleaseControl
+        sessionId={session.id}
+        initialReleased={resultsReleased}
+        initialPodiumRevealed={podiumRevealed}
+        resultVisibility={resultVisibility}
+        submittedCount={ranked.length}
+      />
+
       {/* Scope pills */}
       <div className="flex flex-wrap gap-1.5 px-1">
         {[session.exam.subject || "ENG-26", "All categories", `ALL SUBMISSIONS / ${ranked.length} VALIDATED`, "LIVE COHORT DATA"].map((p) => (
@@ -151,10 +171,10 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
         ))}
       </div>
 
-      {/* Copied analytics + export */}
+      {/* Cohort analytics + export */}
       <div className="grid lg:grid-cols-[1fr_280px] gap-4 items-stretch">
         <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-          <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500">COPIED ANALYTICS</p>
+          <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500">COHORT ANALYTICS</p>
           <p className="mt-2 text-sm font-black text-white">
             {session.exam.title} · Q4 · {session.exam.subject || "ENG-26"}
           </p>
@@ -303,7 +323,22 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
                   <p className="py-2.5 border-t border-white/[0.06] text-xs font-black text-neutral-400 tabular-nums">{a.rank}</p>
                   <p className="py-2.5 border-t border-white/[0.06] text-xs font-bold text-white truncate pr-2">{a.user.name}</p>
                   <p className="py-2.5 border-t border-white/[0.06] text-[10px] text-neutral-500 truncate pr-2">{a.user.email}</p>
-                  <p className="py-2.5 border-t border-white/[0.06] text-center text-base">{m ? m.emoji : <span className="text-neutral-700">—</span>}</p>
+                  <p className="py-2.5 border-t border-white/[0.06] text-center text-base flex items-center justify-center">
+                    {m ? (
+                      m.gifUrl ? (
+                        <img
+                          src={m.gifUrl}
+                          alt={m.name}
+                          title={m.name}
+                          className="w-6 h-6 object-contain inline-block filter drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]"
+                        />
+                      ) : (
+                        <span>{m.emoji}</span>
+                      )
+                    ) : (
+                      <span className="text-neutral-700">—</span>
+                    )}
+                  </p>
                   <p className="py-2.5 border-t border-white/[0.06] text-xs font-bold text-white tabular-nums text-center">{a.score.toFixed(0)}</p>
                   <p className="py-2.5 border-t border-white/[0.06] text-[11px] tabular-nums text-center text-neutral-300">{pct.toFixed(1)}%</p>
                   <p className="py-2.5 border-t border-white/[0.06] text-center">

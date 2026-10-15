@@ -193,6 +193,22 @@ export function ExamInterface({
     }
   }, [session.configSnapshot]);
 
+  const resultVisibility = useMemo(() => {
+    return (config.resultVisibility || session.exam?.resultVisibility || "IMMEDIATE") as "IMMEDIATE" | "AFTER_RELEASE" | "NEVER";
+  }, [config.resultVisibility, session.exam?.resultVisibility]);
+
+  const [resultsReleased, setResultsReleased] = useState(Boolean(config.resultsReleased));
+
+  const canViewResults = useMemo(() => {
+    if (resultVisibility === "IMMEDIATE") return true;
+    if (resultVisibility === "AFTER_RELEASE" || resultVisibility === "NEVER") return resultsReleased;
+    return false;
+  }, [resultVisibility, resultsReleased]);
+
+  const candidateRoll = useMemo(() => {
+    return session.pin ? `PIN-${session.pin}` : (attempt.id ? `ID-${String(attempt.id).slice(-8).toUpperCase()}` : "NB2026-0418");
+  }, [session.pin, attempt.id]);
+
   useEffect(() => { 
     answersRef.current = answers; 
   }, [answers]);
@@ -571,9 +587,9 @@ export function ExamInterface({
     clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
     setIsFinished(true);
 
-    if (config.resultVisibility === "IMMEDIATE") {
+    if (canViewResults) {
       const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
-      if (statusData) {
+      if (statusData && statusData.score !== null) {
         setFinalScore(statusData.score);
         setFinalTotalMarks(statusData.totalMarks);
         if (statusData.detailedResults) {
@@ -587,7 +603,7 @@ export function ExamInterface({
         }
       }
     }
-  }, [attempt.id, config.resultVisibility, isFinished, session.durationMinutes, timeLeft, attempt.createdAt]);
+  }, [attempt.id, canViewResults, isFinished, session.durationMinutes, timeLeft, attempt.createdAt]);
 
   useEffect(() => {
     if (shouldAutoSubmit && !isFinishingRef.current) {
@@ -839,6 +855,21 @@ export function ExamInterface({
 
       setSessionStatus(statusData.sessionStatus);
 
+      if (statusData.canViewResults !== undefined) {
+        if (statusData.canViewResults && !resultsReleased) {
+          setResultsReleased(true);
+          if (statusData.score !== null) {
+            setFinalScore(statusData.score);
+            setFinalTotalMarks(statusData.totalMarks);
+            if (statusData.detailedResults) setDetailedResults(statusData.detailedResults);
+            if (statusData.cohort) setCohortData(statusData.cohort);
+            if (statusData.timeTakenSeconds) setFinalTimeSpent(statusData.timeTakenSeconds);
+          }
+        } else if (!statusData.canViewResults && resultsReleased) {
+          setResultsReleased(false);
+        }
+      }
+
       // Instant live resume if Owner reopens the test from SUBMITTED -> IN_PROGRESS
       if (statusData.status === "IN_PROGRESS" && isFinished) {
         setIsFinished(false);
@@ -865,11 +896,11 @@ export function ExamInterface({
     return () => clearInterval(interval);
   }, [attempt.id, isFinished, hasStarted, timeUntilStart, handleFinishTest]);
 
-  // Immediate scorecard retrieval if already submitted on initial page load
+  // Scorecard retrieval if submitted and results are allowed to be viewed
   useEffect(() => {
-    if (isAlreadySubmitted && config.resultVisibility === "IMMEDIATE" && finalScore === null) {
+    if (isAlreadySubmitted && canViewResults && finalScore === null) {
       getAttemptStatusAction(attempt.id, clientDeviceIdRef.current).then((statusData) => {
-        if (statusData) {
+        if (statusData && statusData.score !== null) {
           setFinalScore(statusData.score);
           setFinalTotalMarks(statusData.totalMarks);
           if (statusData.detailedResults) {
@@ -884,7 +915,7 @@ export function ExamInterface({
         }
       });
     }
-  }, [isAlreadySubmitted, config.resultVisibility, attempt.id, finalScore]);
+  }, [isAlreadySubmitted, canViewResults, attempt.id, finalScore]);
 
   const handleReturnToLogin = () => {
     if (typeof document !== "undefined" && document.fullscreenElement) {
@@ -962,30 +993,144 @@ export function ExamInterface({
     );
   }
 
-  // 1. If candidate has completed/submitted the exam, ALWAYS show results/scorecard first
+  // 1. If candidate has completed/submitted the exam
   if (isFinished || isAlreadySubmitted) {
     const timeSpentCalculated = finalTimeSpent !== null
       ? finalTimeSpent
       : (session.durationMinutes ? Math.max(1, session.durationMinutes * 60 - timeLeft) : 180);
+
+    // If candidate is allowed to view results and score is loaded, show the full Scorecard
+    if (canViewResults && finalScore !== null) {
+      return (
+        <CandidateScorecardView
+          candidateName={candidateName}
+          candidateRoll={candidateRoll}
+          examTitle={session.exam?.title || session.title || "Quantitative Aptitude"}
+          examCode={session.exam?.code || "ENG-26"}
+          dateStr={new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+          attemptNumber={attempt.attemptNumber || 1}
+          finalScore={finalScore}
+          totalMarks={finalTotalMarks}
+          timeTakenSeconds={timeSpentCalculated}
+          allottedMinutes={session.durationMinutes || 60}
+          questions={questions}
+          answers={answers}
+          detailedResults={detailedResults || []}
+          timeSpent={timeSpentRef.current}
+          cohort={cohortData}
+          onReturnToLogin={handleReturnToLogin}
+        />
+      );
+    }
+
+    // If candidate is allowed to view results but score is still compiling right after submission
+    if (canViewResults && finalScore === null) {
+      return (
+        <main className="min-h-screen bg-black text-white flex items-center justify-center selection:bg-white selection:text-black">
+          <div className="flex flex-col items-center bg-[#0a0c10] p-8 rounded-2xl shadow-2xl border border-neutral-800">
+            <div className="w-10 h-10 border-2 border-white/20 border-t-lime-400 rounded-full animate-spin mb-4"></div>
+            <p className="text-white font-bold text-sm tracking-wide">Compiling Scorecard...</p>
+            <p className="text-neutral-400 text-xs mt-1">Calculating verified grades & cohort standings</p>
+          </div>
+        </main>
+      );
+    }
+
+    // Results are withheld / hidden (resultVisibility === "NEVER" or pending "AFTER_RELEASE")
+    const mins = Math.floor(timeSpentCalculated / 60);
+    const secs = timeSpentCalculated % 60;
+    const timeFormatted = `${mins}m ${String(secs).padStart(2, "0")}s`;
+    const answeredCountTotal = Object.values(answers).filter(v => v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0)).length;
+    const isPendingRelease = resultVisibility === "AFTER_RELEASE";
+
     return (
-      <CandidateScorecardView
-        candidateName={candidateName}
-        candidateRoll={session.pin ? `PIN-${session.pin}` : (attempt.id ? `ID-${String(attempt.id).slice(-8).toUpperCase()}` : "NB2026-0418")}
-        examTitle={session.exam?.title || session.title || "Quantitative Aptitude"}
-        examCode={session.exam?.code || "ENG-26"}
-        dateStr={new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-        attemptNumber={attempt.attemptNumber || 1}
-        finalScore={finalScore}
-        totalMarks={finalTotalMarks}
-        timeTakenSeconds={timeSpentCalculated}
-        allottedMinutes={session.durationMinutes || 60}
-        questions={questions}
-        answers={answers}
-        detailedResults={detailedResults || []}
-        timeSpent={timeSpentRef.current}
-        cohort={cohortData}
-        onReturnToLogin={handleReturnToLogin}
-      />
+      <div className="min-h-screen bg-[#060607] text-white flex flex-col font-sans selection:bg-lime-400 selection:text-black">
+        <CandidateTopbar candidateName={candidateName} roll={candidateRoll} />
+        
+        <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-10 flex items-center justify-center">
+          <div className="w-full bg-[#0c0d12] rounded-3xl border border-white/10 p-6 sm:p-10 shadow-2xl relative overflow-hidden text-center space-y-6">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-32 bg-lime-400/10 blur-3xl pointer-events-none rounded-full" />
+            
+            {/* Checkmark Badge */}
+            <div className="w-20 h-20 rounded-3xl bg-lime-300/10 border border-lime-300/30 flex items-center justify-center text-lime-300 mx-auto shadow-xl shadow-lime-950/50 relative">
+              <svg className="w-10 h-10 text-lime-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-lime-300/10 border border-lime-300/25 text-lime-300 text-[11px] font-mono font-bold tracking-wider uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse" />
+                <span>Responses Recorded</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                Assessment Submitted Successfully
+              </h1>
+              <p className="text-neutral-400 text-xs sm:text-sm font-medium leading-relaxed max-w-lg mx-auto">
+                {isPendingRelease
+                  ? "Your examination attempt has concluded and your responses are safely locked. Results for this assessment will appear automatically once released by the instructor in the live monitor."
+                  : "Your examination attempt has concluded and your responses are safely recorded. Results for this assessment are withheld by the instructor."}
+              </p>
+            </div>
+
+            {/* Assessment Meta Box */}
+            <div className="bg-black/50 border border-white/10 rounded-2xl p-5 text-left space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div>
+                  <p className="text-[10px] font-mono font-bold tracking-wider uppercase text-neutral-500">Assessment</p>
+                  <p className="text-sm font-bold text-white mt-0.5">{session.exam?.title || session.title || "Assessment"}</p>
+                </div>
+                <span className="text-xs font-mono font-bold text-lime-300 bg-lime-300/10 border border-lime-300/20 px-2.5 py-1 rounded-lg">
+                  SUBMITTED
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-1">
+                <div>
+                  <p className="text-[10px] font-mono text-neutral-500 uppercase">Questions Attempted</p>
+                  <p className="text-base font-bold text-white mt-0.5 font-mono">
+                    {answeredCountTotal} <span className="text-xs text-neutral-500 font-normal">/ {questions.length}</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-mono text-neutral-500 uppercase">Time Spent</p>
+                  <p className="text-base font-bold text-white mt-0.5 font-mono">{timeFormatted}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <p className="text-[10px] font-mono text-neutral-500 uppercase">Result Policy</p>
+                  <p className="text-xs font-bold text-neutral-300 mt-1">
+                    {isPendingRelease ? "Pending Release by Instructor" : "Withheld by Instructor"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Guarantee Note */}
+            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] text-neutral-400 text-left">
+              <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>Cryptographic hash stored. Local draft answers cleared. You may safely exit.</span>
+            </div>
+
+            {/* Exit Action */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleReturnToLogin}
+                className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Exit Assessment Hall</span>
+              </button>
+            </div>
+          </div>
+        </main>
+
+        <CandidateFooter />
+      </div>
     );
   }
 
@@ -1122,7 +1267,8 @@ export function ExamInterface({
 
   // 6. Onboarding / Guidelines screen (ONLY shown when exam is open and candidate has not clicked start yet)
   if (!hasStarted && timeUntilStart <= 0 && timeLeft > 0) {
-    const totalMarksPreview = questions.reduce((s, q) => s + (q.points || 1), 0) || session.totalMarks || session.exam?.totalMarks || 0;
+    const marksPerQ = session.exam?.marksPerQuestion ?? (session.totalMarks > 0 && questions.length > 0 ? (session.totalMarks / questions.length) : 1);
+    const totalMarksPreview = session.totalMarks || session.exam?.totalMarks || (questions.length * marksPerQ);
     const passPct = Math.round(session.exam?.passCriteria ?? config.passCriteria ?? 50);
     const domainLock = session.allowedEmailDomain || session.exam?.allowedEmailDomain;
     const startLabel = session.startTime
@@ -1166,7 +1312,7 @@ export function ExamInterface({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-base font-black text-white">{session.exam?.title || "Assessment"}</h2>
-                    <p className="text-[10px] text-neutral-500 mt-1">Northbridge University · Engineering cohort 2026</p>
+                    <p className="text-[10px] text-neutral-500 mt-1">KIET Deemed to be University · Engineering cohort 2026</p>
                   </div>
                   <span className="text-[9px] font-black tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-2.5 py-1 whitespace-nowrap">
                     SECURE ASSESSMENT
@@ -1189,9 +1335,18 @@ export function ExamInterface({
                   {startLabel} · {negLine} · 0 for unanswered.
                 </p>
                 {(session.exam?.instructions || chosenMascot) && (
-                  <p className="mt-1.5 text-[10px] text-neutral-500 font-mono truncate">
-                    {chosenMascot ? `${chosenMascot.emoji} ${chosenMascot.name} · ` : ""}
-                    {session.exam?.instructions || ""}
+                  <p className="mt-1.5 text-[10px] text-neutral-500 font-mono flex items-center gap-1.5 truncate">
+                    {chosenMascot ? (
+                      <>
+                        {chosenMascot.gifUrl ? (
+                          <img src={chosenMascot.gifUrl} alt="" className="w-4 h-4 object-contain inline-block shrink-0" />
+                        ) : (
+                          <span>{chosenMascot.emoji}</span>
+                        )}
+                        <span>{chosenMascot.name} · </span>
+                      </>
+                    ) : null}
+                    <span>{session.exam?.instructions || ""}</span>
                   </p>
                 )}
               </div>
@@ -1261,9 +1416,6 @@ export function ExamInterface({
                 <p className="mt-2.5 text-[10px] text-neutral-600 leading-relaxed">
                   Fullscreen is verified at launch and monitored; timer starts automatically and endures after a crash. Offline time does not extend the deadline.
                 </p>
-                <button type="button" onClick={handleReturnToLogin} className="mt-2 text-[11px] font-semibold text-neutral-500 hover:text-white transition-colors">
-                  Return to Login
-                </button>
               </div>
             </div>
           </div>
@@ -1353,7 +1505,7 @@ export function ExamInterface({
           {/* Center: University Badge */}
           <div className="hidden md:flex items-center">
             <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-3.5 py-1 uppercase">
-              Northbridge University
+              KIET Deemed to be University
             </span>
           </div>
 
@@ -1793,7 +1945,7 @@ export function ExamInterface({
 
         {/* ── Footer matching Figma ─────────────────────────── */}
         <footer className="border-t border-white/10 bg-[#060607] px-6 py-3 mt-10 flex items-center justify-between text-[11px] text-neutral-500">
-          <span>APTIX Assessment Platform · Northbridge University</span>
+          <span>APTIX Assessment Platform · KIET Deemed to be University</span>
           <span>Secure session • Server time is authoritative</span>
         </footer>
       </main>

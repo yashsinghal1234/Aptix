@@ -104,6 +104,37 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
     activeAttemptSessions.delete(attemptId);
   }
 
+  let resultVisibility = attempt.session.exam.resultVisibility || "IMMEDIATE";
+  let resultsReleased = false;
+  let podiumRevealed = false;
+  if (attempt.session.configSnapshot) {
+    try {
+      const snap = JSON.parse(attempt.session.configSnapshot);
+      if (snap.resultVisibility) {
+        resultVisibility = snap.resultVisibility;
+      }
+      if (snap.resultsReleased !== undefined) {
+        resultsReleased = Boolean(snap.resultsReleased);
+      }
+      if (snap.podiumRevealed !== undefined) {
+        podiumRevealed = Boolean(snap.podiumRevealed);
+      }
+    } catch {}
+  }
+
+  const isSessionConcluded = attempt.session.status === "COMPLETED";
+  let canViewResults = false;
+  if (resultVisibility === "IMMEDIATE") {
+    canViewResults = (currentStatus === "SUBMITTED" || isSessionConcluded);
+  } else if (resultVisibility === "AFTER_RELEASE") {
+    // ONLY when instructor explicitly releases the results via the live monitor or results page
+    canViewResults = resultsReleased;
+  } else if (resultVisibility === "NEVER") {
+    canViewResults = resultsReleased;
+  }
+
+  const canViewPodium = canViewResults && podiumRevealed;
+
   const score = attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0);
 
   let totalMarks = attempt.session.totalMarks || attempt.session.exam.totalMarks || 0;
@@ -115,7 +146,7 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
   }
 
   let detailedResults = null;
-  if (currentStatus === "SUBMITTED" || attempt.session.status === "COMPLETED") {
+  if (canViewResults && (currentStatus === "SUBMITTED" || isSessionConcluded)) {
     const showCorrect = attempt.session.exam.showCorrectAnswers ?? true;
     const showExpl = attempt.session.exam.showExplanation ?? false;
     
@@ -157,7 +188,7 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
   }
 
   let cohort = null;
-  if (currentStatus === "SUBMITTED" || attempt.session.status === "COMPLETED") {
+  if (canViewResults && (currentStatus === "SUBMITTED" || isSessionConcluded)) {
     try {
       const allAttempts = await prisma.candidateAttempt.findMany({
         where: { examSessionId: attempt.examSessionId },
@@ -192,11 +223,16 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
       } catch {}
 
       const { getMascotById } = await import("@/lib/mascots");
-      const podium = ranked.slice(0, 3).map(r => ({
-        name: r.name.split(" ")[0] || "Candidate",
-        score: Math.round(r.score * 10) / 10,
-        mascot: getMascotById(mascotByUser[r.userId]).emoji
-      }));
+      const podium = ranked.slice(0, 3).map(r => {
+        const m = getMascotById(mascotByUser[r.userId]);
+        return {
+          name: r.name.split(" ")[0] || "Candidate",
+          score: Math.round(r.score * 10) / 10,
+          mascot: m.emoji,
+          gifUrl: m.gifUrl,
+          mascotId: m.id
+        };
+      });
 
       const rank = scoresList.filter(s => s > score).length + 1;
       const percentile = totalCandidates > 1
@@ -216,7 +252,8 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
         mean,
         median,
         topScores: scoresList.slice(0, 3),
-        podium
+        podium: canViewPodium ? podium : [],
+        podiumRevealed: canViewPodium
       };
     } catch (e) {
       console.warn("Cohort calculation error:", e);
@@ -227,7 +264,7 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
     status: attempt.status,
     sessionStatus: attempt.session.status,
     extendedUntil: attempt.extendedUntil || attempt.session.extendedUntil || null,
-    score: score,
+    score: canViewResults ? score : null,
     totalMarks: totalMarks || 1,
     startTime: attempt.session.startTime,
     durationMinutes: attempt.session.durationMinutes,
@@ -237,8 +274,13 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
           Math.max(1, Math.round((new Date(attempt.submittedAt).getTime() - new Date(attempt.createdAt).getTime()) / 1000))
         )
       : null,
-    cohort,
-    detailedResults,
+    cohort: canViewResults ? cohort : null,
+    detailedResults: canViewResults ? detailedResults : null,
+    resultVisibility,
+    resultsReleased,
+    podiumRevealed,
+    canViewPodium,
+    canViewResults,
     concurrentSessionDetected
   };
 }
