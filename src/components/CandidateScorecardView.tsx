@@ -304,7 +304,9 @@ export default function CandidateScorecardView({
     const buildPillar = (
       e: typeof entries[0] | null,
       place: string,
-      color: string,
+      pillarBg: string,
+      scoreColor: string,
+      ringColor: string,
       baseH: number
     ) => {
       if (!e) return null;
@@ -315,8 +317,10 @@ export default function CandidateScorecardView({
         gifUrl,
         resolvedMascot: resolved,
         place,
-        color,
-        h: baseH + Math.round(75 * (e.score / max)),
+        pillarBg,
+        scoreColor,
+        ringColor,
+        h: baseH + Math.round(50 * (e.score / max)),
       };
     };
 
@@ -324,9 +328,30 @@ export default function CandidateScorecardView({
     // If 2 candidates: show 2nd (left) and 1st (center/right)
     // If 3 candidates: show 2nd (left), 1st (center), 3rd (right)
     const ordered = [
-      buildPillar(second, "2nd", "bg-purple-300", 85),
-      buildPillar(first, "1st", "bg-lime-300", 115),
-      buildPillar(third, "3rd", "bg-[#f2a488]", 70),
+      buildPillar(
+        second,
+        "2nd",
+        "bg-gradient-to-t from-purple-950/70 to-purple-500/30 border-purple-400/50 shadow-[0_0_20px_rgba(192,132,252,0.2)]",
+        "text-purple-300",
+        "ring-purple-400/40",
+        95
+      ),
+      buildPillar(
+        first,
+        "1st",
+        "bg-gradient-to-t from-lime-950/70 to-lime-500/30 border-lime-400/50 shadow-[0_0_25px_rgba(163,230,53,0.25)]",
+        "text-lime-300",
+        "ring-lime-400/50",
+        130
+      ),
+      buildPillar(
+        third,
+        "3rd",
+        "bg-gradient-to-t from-amber-950/70 to-amber-500/30 border-amber-400/50 shadow-[0_0_20px_rgba(251,191,36,0.2)]",
+        "text-amber-300",
+        "ring-amber-400/40",
+        80
+      ),
     ].filter(Boolean) as NonNullable<ReturnType<typeof buildPillar>>[];
 
     return ordered;
@@ -582,10 +607,15 @@ export default function CandidateScorecardView({
                     </p>
                   </div>
                 ) : (
-                  <div className="flex items-end justify-center gap-3 sm:gap-5">
+                  <div className="flex items-end justify-center gap-3 sm:gap-6">
                     {podium.map((p, i) => (
-                      <div key={p.place} className="flex flex-col items-center">
-                        <div className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center mb-1.5 relative bg-white/[0.03] ring-1 ring-white/10">
+                      <div key={p.place} className="flex flex-col items-center flex-1 max-w-[120px]">
+                        {p.place === "1st" && (
+                          <span className="text-base -mb-1 animate-bounce filter drop-shadow-[0_2px_6px_rgba(250,204,21,0.6)]">
+                            👑
+                          </span>
+                        )}
+                        <div className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center mb-1.5 relative bg-white/[0.03] ring-2 ${p.ringColor}`}>
                           {p.gifUrl ? (
                             <img
                               src={p.gifUrl}
@@ -600,13 +630,24 @@ export default function CandidateScorecardView({
                             <span className="text-3xl">{p.mascot}</span>
                           )}
                         </div>
-                        <span className="text-[10px] font-bold text-neutral-300 mb-2 max-w-[90px] truncate">{p.name}</span>
+                        <span className="text-xs font-bold text-white mb-0.5 max-w-[100px] truncate text-center">
+                          {p.name}
+                        </span>
+                        <div className="flex items-center gap-1 mb-2">
+                          <span className={`text-[10px] font-mono font-black tabular-nums ${p.scoreColor}`}>
+                            {p.score.toFixed(1)} pts
+                          </span>
+                        </div>
                         <div
-                          className={`${p.color} w-20 sm:w-24 rounded-t-xl flex flex-col items-center justify-end pb-2 pt-3`}
+                          className={`w-20 sm:w-24 rounded-t-2xl border-t-2 border-x flex flex-col items-center justify-end pb-3 pt-3 shadow-xl ${p.pillarBg}`}
                           style={{ height: `${p.h}px` }}
                         >
-                          <span className="text-2xl font-black text-black/80 leading-none">{p.place[0]}</span>
-                          <span className="text-[10px] font-mono font-bold text-black/60 mt-1 tabular-nums">{p.score}</span>
+                          <span className="text-2xl sm:text-3xl font-black text-white/95 leading-none">
+                            {p.place[0]}
+                          </span>
+                          <span className="text-[9px] font-mono font-bold tracking-widest text-neutral-300 uppercase mt-1">
+                            {p.place} PLACE
+                          </span>
                         </div>
                       </div>
                     ))}
