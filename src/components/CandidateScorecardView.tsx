@@ -294,28 +294,42 @@ export default function CandidateScorecardView({
   // Dynamic podium: real submitted cohort members with emblems, never fabricated
   const podium = React.useMemo(() => {
     const entries = Array.isArray(cohort?.podium) ? cohort.podium.slice(0, 3) : [];
-    const ordered = [entries[2], entries[0], entries[1]].filter(Boolean) as {
-      name: string;
-      score: number;
-      mascot: string;
-      gifUrl?: string;
-      mascotId?: string;
-    }[];
-    const places = ["3rd", "1st", "2nd"];
-    const colors = ["bg-[#f2a488]", "bg-lime-300", "bg-purple-300"];
+    if (entries.length === 0) return [];
+
+    const first = entries[0] || null;
+    const second = entries[1] || null;
+    const third = entries[2] || null;
     const max = Math.max(...entries.map((e) => e.score), 1);
-    return ordered.map((e, i) => {
+
+    const buildPillar = (
+      e: typeof entries[0] | null,
+      place: string,
+      color: string,
+      baseH: number
+    ) => {
+      if (!e) return null;
       const resolved = getMascotById(e.mascotId || e.mascot);
       const gifUrl = e.gifUrl || (e.mascot?.startsWith("/") ? e.mascot : resolved?.gifUrl);
       return {
         ...e,
         gifUrl,
         resolvedMascot: resolved,
-        place: places[i],
-        color: colors[i],
-        h: 72 + Math.round(88 * (e.score / max)),
+        place,
+        color,
+        h: baseH + Math.round(75 * (e.score / max)),
       };
-    });
+    };
+
+    // If 1 candidate: show 1st place in center
+    // If 2 candidates: show 2nd (left) and 1st (center/right)
+    // If 3 candidates: show 2nd (left), 1st (center), 3rd (right)
+    const ordered = [
+      buildPillar(second, "2nd", "bg-purple-300", 85),
+      buildPillar(first, "1st", "bg-lime-300", 115),
+      buildPillar(third, "3rd", "bg-[#f2a488]", 70),
+    ].filter(Boolean) as NonNullable<ReturnType<typeof buildPillar>>[];
+
+    return ordered;
   }, [cohort]);
 
   const handleDownload = () => {

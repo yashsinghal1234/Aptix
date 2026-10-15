@@ -856,15 +856,13 @@ export function ExamInterface({
       setSessionStatus(statusData.sessionStatus);
 
       if (statusData.canViewResults !== undefined) {
-        if (statusData.canViewResults && !resultsReleased) {
+        if (statusData.canViewResults) {
           setResultsReleased(true);
-          if (statusData.score !== null) {
-            setFinalScore(statusData.score);
-            setFinalTotalMarks(statusData.totalMarks);
-            if (statusData.detailedResults) setDetailedResults(statusData.detailedResults);
-            if (statusData.cohort) setCohortData(statusData.cohort);
-            if (statusData.timeTakenSeconds) setFinalTimeSpent(statusData.timeTakenSeconds);
-          }
+          if (statusData.score !== null) setFinalScore(statusData.score);
+          if (statusData.totalMarks) setFinalTotalMarks(statusData.totalMarks);
+          if (statusData.detailedResults) setDetailedResults(statusData.detailedResults);
+          if (statusData.timeTakenSeconds) setFinalTimeSpent(statusData.timeTakenSeconds);
+          if (statusData.cohort) setCohortData(statusData.cohort);
         } else if (!statusData.canViewResults && resultsReleased) {
           setResultsReleased(false);
         }
@@ -892,13 +890,13 @@ export function ExamInterface({
       if (statusData.extendedUntil) {
         setCurrentExtendedUntil(new Date(statusData.extendedUntil));
       }
-    }, 10000);
+    }, isFinished || isAlreadySubmitted ? 3000 : 8000);
     return () => clearInterval(interval);
-  }, [attempt.id, isFinished, hasStarted, timeUntilStart, handleFinishTest]);
+  }, [attempt.id, isFinished, isAlreadySubmitted, hasStarted, timeUntilStart, handleFinishTest, resultsReleased]);
 
   // Scorecard retrieval if submitted and results are allowed to be viewed
   useEffect(() => {
-    if (isAlreadySubmitted && canViewResults && finalScore === null) {
+    if (isAlreadySubmitted && canViewResults) {
       getAttemptStatusAction(attempt.id, clientDeviceIdRef.current).then((statusData) => {
         if (statusData && statusData.score !== null) {
           setFinalScore(statusData.score);
@@ -915,7 +913,7 @@ export function ExamInterface({
         }
       });
     }
-  }, [isAlreadySubmitted, canViewResults, attempt.id, finalScore]);
+  }, [isAlreadySubmitted, canViewResults, attempt.id]);
 
   const handleReturnToLogin = () => {
     if (typeof document !== "undefined" && document.fullscreenElement) {
