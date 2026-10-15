@@ -432,10 +432,13 @@ export async function rescheduleSessionAction(formData: FormData) {
 }
 
 export async function toggleReleaseResultsAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
+  const cookieStore = cookies();
+  const token = cookieStore.get("token")?.value || cookieStore.get("auth_session")?.value;
   if (!token) return { error: "Unauthorized" };
   const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
+    return { error: "Unauthorized" };
+  }
 
   const sessionId = formData.get("sessionId") as string;
   const released = formData.get("released") === "true";
@@ -475,9 +478,10 @@ export async function toggleReleaseResultsAction(formData: FormData) {
 }
 
 export async function togglePodiumRevealAction(formData: FormData) {
-  const sessionToken = (await cookies()).get("auth_session")?.value;
-  if (!sessionToken) return { error: "Unauthorized" };
-  const payload = await verifyToken(sessionToken);
+  const cookieStore = cookies();
+  const token = cookieStore.get("token")?.value || cookieStore.get("auth_session")?.value;
+  if (!token) return { error: "Unauthorized" };
+  const payload = await verifyToken(token);
   if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
     return { error: "Forbidden" };
   }
@@ -520,10 +524,13 @@ export async function togglePodiumRevealAction(formData: FormData) {
 }
 
 export async function toggleGamifiedModeAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
+  const cookieStore = cookies();
+  const token = cookieStore.get("token")?.value || cookieStore.get("auth_session")?.value;
   if (!token) return { error: "Unauthorized" };
   const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
+    return { error: "Unauthorized" };
+  }
 
   const sessionId = formData.get("sessionId") as string;
   const gamified = formData.get("gamified") === "true";
