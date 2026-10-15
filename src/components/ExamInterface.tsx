@@ -688,6 +688,13 @@ export function ExamInterface({
     const handleCopy = (e: ClipboardEvent) => {
       if (config.disableCopyPaste !== false) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        try {
+          if (e.clipboardData) {
+            e.clipboardData.setData("text/plain", "");
+          }
+        } catch (_) {}
         handleSecurityInfraction("COPY_PASTE", "Candidate attempted to copy assessment content");
       }
     };
@@ -695,6 +702,8 @@ export function ExamInterface({
     const handlePaste = (e: ClipboardEvent) => {
       if (config.disableCopyPaste !== false) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         handleSecurityInfraction("COPY_PASTE", "Candidate attempted to paste content into assessment");
       }
     };
@@ -702,14 +711,69 @@ export function ExamInterface({
     const handleCut = (e: ClipboardEvent) => {
       if (config.disableCopyPaste !== false) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        try {
+          if (e.clipboardData) {
+            e.clipboardData.setData("text/plain", "");
+          }
+        } catch (_) {}
         handleSecurityInfraction("COPY_PASTE", "Candidate attempted to cut content from assessment");
       }
     };
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       handleSecurityInfraction("CONTEXT_MENU", "Candidate opened right-click context menu");
+      return false;
     };
+
+    const handleAuxClick = (e: MouseEvent) => {
+      if (e.button === 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        handleSecurityInfraction("CONTEXT_MENU", "Candidate attempted right-click via pointer button");
+        return false;
+      }
+    };
+
+    const handleSelectStart = (e: Event) => {
+      if (config.disableCopyPaste !== false) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (typeof window !== "undefined") {
+          window.getSelection()?.removeAllRanges();
+        }
+        return false;
+      }
+    };
+
+    const handleSelectionChange = () => {
+      if (config.disableCopyPaste !== false && typeof window !== "undefined") {
+        const sel = window.getSelection();
+        if (sel && sel.toString().length > 0) {
+          sel.removeAllRanges();
+        }
+      }
+    };
+
+    // Lock down oncontextmenu property to prevent extensions from unsetting it (e.g. document.oncontextmenu = null)
+    try {
+      Object.defineProperty(document, "oncontextmenu", {
+        get: () => handleContextMenu,
+        set: () => {},
+        configurable: true,
+      });
+      Object.defineProperty(window, "oncontextmenu", {
+        get: () => handleContextMenu,
+        set: () => {},
+        configurable: true,
+      });
+    } catch (_) {}
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Intercept F12 and common DevTools shortcuts
@@ -760,13 +824,31 @@ export function ExamInterface({
       }
     };
 
+    const captureActive = { capture: true, passive: false };
+    const capturePassive = { capture: true, passive: true };
+
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("copy", handleCopy);
-    document.addEventListener("paste", handlePaste);
-    document.addEventListener("cut", handleCut);
-    document.addEventListener("contextmenu", handleContextMenu);
+
+    // Capture-phase registration on window AND document to execute before extension content scripts
+    window.addEventListener("contextmenu", handleContextMenu, captureActive);
+    document.addEventListener("contextmenu", handleContextMenu, captureActive);
+    window.addEventListener("auxclick", handleAuxClick, captureActive);
+    document.addEventListener("auxclick", handleAuxClick, captureActive);
+    window.addEventListener("pointerdown", handleAuxClick, captureActive);
+    document.addEventListener("pointerdown", handleAuxClick, captureActive);
+
+    window.addEventListener("copy", handleCopy, captureActive);
+    document.addEventListener("copy", handleCopy, captureActive);
+    window.addEventListener("paste", handlePaste, captureActive);
+    document.addEventListener("paste", handlePaste, captureActive);
+    window.addEventListener("cut", handleCut, captureActive);
+    document.addEventListener("cut", handleCut, captureActive);
+
+    document.addEventListener("selectstart", handleSelectStart, captureActive);
+    document.addEventListener("selectionchange", handleSelectionChange, capturePassive);
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
@@ -776,13 +858,32 @@ export function ExamInterface({
 
     return () => {
       cleanupGuardian();
+      try {
+        delete (document as any).oncontextmenu;
+        delete (window as any).oncontextmenu;
+      } catch (_) {}
+
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener("copy", handleCopy);
-      document.removeEventListener("paste", handlePaste);
-      document.removeEventListener("cut", handleCut);
-      document.removeEventListener("contextmenu", handleContextMenu);
+
+      window.removeEventListener("contextmenu", handleContextMenu, captureActive);
+      document.removeEventListener("contextmenu", handleContextMenu, captureActive);
+      window.removeEventListener("auxclick", handleAuxClick, captureActive);
+      document.removeEventListener("auxclick", handleAuxClick, captureActive);
+      window.removeEventListener("pointerdown", handleAuxClick, captureActive);
+      document.removeEventListener("pointerdown", handleAuxClick, captureActive);
+
+      window.removeEventListener("copy", handleCopy, captureActive);
+      document.removeEventListener("copy", handleCopy, captureActive);
+      window.removeEventListener("paste", handlePaste, captureActive);
+      document.removeEventListener("paste", handlePaste, captureActive);
+      window.removeEventListener("cut", handleCut, captureActive);
+      document.removeEventListener("cut", handleCut, captureActive);
+
+      document.removeEventListener("selectstart", handleSelectStart, captureActive);
+      document.removeEventListener("selectionchange", handleSelectionChange, capturePassive);
+
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       if (typeof window !== "undefined" && (window.screen as any)?.removeEventListener) {

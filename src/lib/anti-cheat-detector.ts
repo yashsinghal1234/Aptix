@@ -75,6 +75,7 @@ export function createExtensionGuardian(
   }
 
   const suspiciousPatterns = [
+    // AI Assistant extensions
     "chatgpt",
     "monica-root",
     "sider-root",
@@ -85,6 +86,21 @@ export function createExtensionGuardian(
     "extension-root",
     "gpt-prompt",
     "solve-ai",
+    // Right-click, copy-paste, and selection unblocker extensions
+    "allow-right-click",
+    "enable-right-click",
+    "absolute-enable-right-click",
+    "supercopy",
+    "unblock-contextmenu",
+    "allow-copy",
+    "enable-copy",
+    "smart-right-click",
+    "enable-select",
+    "rightclick_",
+    "copy-unblock",
+    "enable-contextmenu",
+    "force-copy",
+    "simple-allow-copy",
   ];
 
   const observer = new MutationObserver((mutations) => {
@@ -105,10 +121,30 @@ export function createExtensionGuardian(
             }
           }
 
+          // Check for injected style tags overriding user-select
+          if (tagName === "style") {
+            const css = (el.textContent || "").toLowerCase();
+            if (css.includes("user-select") && (css.includes("auto") || css.includes("text")) && css.includes("!important")) {
+              onDetected("Injected right-click / selection override stylesheet");
+              return;
+            }
+          }
+
+          // Check for extension bypass attributes
+          if (
+            el.hasAttribute?.("data-supercopy") ||
+            el.hasAttribute?.("data-enable-right-click") ||
+            el.hasAttribute?.("data-allow-copy") ||
+            el.hasAttribute?.("data-unblock")
+          ) {
+            onDetected("Injected right-click bypass attribute");
+            return;
+          }
+
           // Check IDs and Classes
           for (const pattern of suspiciousPatterns) {
             if (id.includes(pattern) || className.includes(pattern)) {
-              onDetected(`Injected assistant element (${pattern})`);
+              onDetected(`Injected extension element (${pattern})`);
               return;
             }
           }
