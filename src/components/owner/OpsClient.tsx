@@ -294,39 +294,73 @@ export function LiveSessionsTable({ initialSessions, serverNow }: { initialSessi
 }
 
 /* ── Quality queue ───────────────────────────────── */
-type QTab = "PENDING" | "APPROVED" | "DRAFT" | "ALL";
+type QTab = "PENDING" | "APPROVED" | "DRAFT" | "REJECTED" | "ALL";
 
 export function QualityQueue({ questions }: { questions: any[] }) {
   const [tab, setTab] = useState<QTab>("PENDING");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [batch, setBatch] = useState(false);
+  const [localQuestions, setLocalQuestions] = useState(questions);
   const router = useRouter();
 
-  const pending = questions.filter((q) => q.status === "SUBMITTED");
-  const approved = questions.filter((q) => q.status === "APPROVED");
-  const drafts = questions.filter((q) => q.status === "DRAFT");
-  const list = tab === "PENDING" ? pending : tab === "APPROVED" ? approved : tab === "DRAFT" ? drafts : questions;
+  useEffect(() => {
+    setLocalQuestions(questions);
+  }, [questions]);
+
+  const pending = localQuestions.filter((q) => q.status === "SUBMITTED");
+  const approved = localQuestions.filter((q) => q.status === "APPROVED");
+  const drafts = localQuestions.filter((q) => q.status === "DRAFT");
+  const rejected = localQuestions.filter((q) => q.status === "REJECTED");
+  const list =
+    tab === "PENDING"
+      ? pending
+      : tab === "APPROVED"
+      ? approved
+      : tab === "DRAFT"
+      ? drafts
+      : tab === "REJECTED"
+      ? rejected
+      : localQuestions;
   const shown = list.slice(0, 6);
 
   const review = async (id: string, action: "APPROVE" | "REJECT") => {
     setLoadingId(id);
-    await reviewQuestionAction(id, action);
+    const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
+    setLocalQuestions((prev) =>
+      prev.map((q) => (q.id === id ? { ...q, status: newStatus } : q))
+    );
+    const res = await reviewQuestionAction(id, action);
     setLoadingId(null);
-    router.refresh();
+    if (res?.error) {
+      setLocalQuestions(questions);
+      alert(res.error);
+    } else {
+      router.refresh();
+    }
   };
+
   const approveAll = async () => {
     if (!confirm(`Approve all ${pending.length} pending questions?`)) return;
     setBatch(true);
-    await approveAllQuestionsAction();
+    setLocalQuestions((prev) =>
+      prev.map((q) => (q.status === "SUBMITTED" ? { ...q, status: "APPROVED" } : q))
+    );
+    const res = await approveAllQuestionsAction();
     setBatch(false);
-    router.refresh();
+    if (res?.error) {
+      setLocalQuestions(questions);
+      alert(res.error);
+    } else {
+      router.refresh();
+    }
   };
 
   const tabs: { k: QTab; label: string; n: number }[] = [
     { k: "PENDING", label: "Pending", n: pending.length },
     { k: "APPROVED", label: "Approved", n: approved.length },
     { k: "DRAFT", label: "Drafts", n: drafts.length },
-    { k: "ALL", label: "All", n: questions.length },
+    { k: "REJECTED", label: "Rejected", n: rejected.length },
+    { k: "ALL", label: "All", n: localQuestions.length },
   ];
 
   return (
@@ -338,7 +372,7 @@ export function QualityQueue({ questions }: { questions: any[] }) {
           <button
             onClick={approveAll}
             disabled={batch}
-            className="text-[10px] font-black text-black bg-lime-300 hover:brightness-110 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 whitespace-nowrap"
+            className="text-[10px] font-black text-black bg-lime-300 hover:brightness-110 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 whitespace-nowrap cursor-pointer"
           >
             {batch ? "Approving..." : "Approve All Selected"}
           </button>
@@ -350,7 +384,7 @@ export function QualityQueue({ questions }: { questions: any[] }) {
           <button
             key={t.k}
             onClick={() => setTab(t.k)}
-            className={`text-[10px] font-bold rounded-lg px-2.5 py-1.5 border transition-colors ${
+            className={`text-[10px] font-bold rounded-lg px-2.5 py-1.5 border transition-colors cursor-pointer ${
               tab === t.k
                 ? "text-lime-200 border-lime-300/40 bg-lime-300/10"
                 : "text-neutral-500 border-white/10 hover:text-white"
@@ -374,7 +408,7 @@ export function QualityQueue({ questions }: { questions: any[] }) {
                 <button
                   disabled={loadingId === q.id}
                   onClick={() => review(q.id, "APPROVE")}
-                  className="text-[10px] font-bold text-black bg-lime-300 hover:brightness-110 rounded-md px-2 py-1 transition-all disabled:opacity-50"
+                  className="text-[10px] font-bold text-black bg-lime-300 hover:brightness-110 rounded-md px-2 py-1 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   Approve
                 </button>
@@ -383,7 +417,7 @@ export function QualityQueue({ questions }: { questions: any[] }) {
                 <button
                   disabled={loadingId === q.id}
                   onClick={() => review(q.id, "REJECT")}
-                  className="text-[10px] font-bold text-[#f2a488] bg-[#f2a488]/10 border border-[#f2a488]/30 rounded-md px-2 py-1 transition-all disabled:opacity-50"
+                  className="text-[10px] font-bold text-[#f2a488] bg-[#f2a488]/10 hover:bg-[#f2a488]/20 border border-[#f2a488]/30 rounded-md px-2 py-1 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   Reject
                 </button>
@@ -393,7 +427,7 @@ export function QualityQueue({ questions }: { questions: any[] }) {
         ))}
       </div>
       <p className="mt-3 text-[10px] text-neutral-600">
-        Showing {shown.length} of {list.length} {tab.toLowerCase()} questions. All approvals are logged to the audit trail.
+        Showing {shown.length} of {list.length} {tab.toLowerCase()} questions. All reviews are logged to the audit trail.
       </p>
     </Panel>
   );

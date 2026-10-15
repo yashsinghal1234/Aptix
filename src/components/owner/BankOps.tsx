@@ -54,6 +54,7 @@ export function BankOps({
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [approving, setApproving] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
   const [approvingAll, setApprovingAll] = useState(false);
   const PER = 8;
 
@@ -72,6 +73,12 @@ export function BankOps({
     setApproving(id);
     await reviewQuestionAction(id, "APPROVE");
     setApproving(null);
+    router.refresh();
+  };
+  const reject = async (id: string) => {
+    setRejecting(id);
+    await reviewQuestionAction(id, "REJECT");
+    setRejecting(null);
     router.refresh();
   };
   const approveAll = async () => {

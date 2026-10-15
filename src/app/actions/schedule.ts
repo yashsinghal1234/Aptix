@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
-import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
+import { invalidateOwnerDashboardCache, invalidateQuestionBankCache } from "@/lib/dashboard-cache";
 import { z } from "zod";
 
 const scheduleSchema = z.object({
@@ -106,7 +106,7 @@ export async function reviewQuestionAction(questionId: string, action: "APPROVE"
   const token = cookies().get("token")?.value;
   if (!token) return { error: "Unauthorized" };
   const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  if (!payload || (payload.role !== "OWNER" && payload.role !== "SETTER")) return { error: "Unauthorized" };
 
   await prisma.question.update({
     where: { id: questionId },
@@ -121,7 +121,11 @@ export async function reviewQuestionAction(questionId: string, action: "APPROVE"
     }
   });
 
+  invalidateOwnerDashboardCache();
+  invalidateQuestionBankCache();
   revalidatePath("/dashboard/owner");
+  revalidatePath("/dashboard/setter/bank");
+  revalidatePath("/dashboard/setter");
   return { success: true };
 }
 
@@ -129,7 +133,7 @@ export async function approveAllQuestionsAction() {
   const token = cookies().get("token")?.value;
   if (!token) return { error: "Unauthorized" };
   const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  if (!payload || (payload.role !== "OWNER" && payload.role !== "SETTER")) return { error: "Unauthorized" };
 
   await prisma.question.updateMany({
     where: { status: { in: ["SUBMITTED", "DRAFT"] } },
@@ -137,7 +141,9 @@ export async function approveAllQuestionsAction() {
   });
 
   invalidateOwnerDashboardCache();
+  invalidateQuestionBankCache();
   revalidatePath("/dashboard/owner");
   revalidatePath("/dashboard/setter/bank");
+  revalidatePath("/dashboard/setter");
   return { success: true };
 }
