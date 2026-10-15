@@ -175,6 +175,7 @@ export async function createQuestionAction(formData: FormData) {
     }
   }
 
+  const isOwner = user.role === "OWNER";
   await prisma.question.create({
     data: {
       text,
@@ -183,7 +184,7 @@ export async function createQuestionAction(formData: FormData) {
       answerData,
       category,
       difficultyLevel,
-      status: isDraft ? "DRAFT" : "SUBMITTED",
+      status: isDraft ? "DRAFT" : isOwner ? "APPROVED" : "SUBMITTED",
       authorId: user.userId as string,
       type: qType,
       points,
@@ -193,6 +194,9 @@ export async function createQuestionAction(formData: FormData) {
 
   revalidatePath("/dashboard/setter");
   revalidatePath("/dashboard/setter/bank");
+  revalidatePath("/dashboard/owner");
+  revalidatePath("/dashboard/owner/template/new");
+  revalidatePath("/dashboard/owner/review");
   invalidateOwnerDashboardCache();
   invalidateQuestionBankCache();
   return { success: true };

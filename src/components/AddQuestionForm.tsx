@@ -80,11 +80,15 @@ export function AddQuestionForm() {
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
-    formData.append("actionType", actionType);
-    formData.append("qType", qType);
-    formData.append("multiCorrect", JSON.stringify(multiCorrect));
-    formData.append("blanksData", JSON.stringify(blanks));
-    formData.append("partialCredit", JSON.stringify(partialCredit));
+    formData.set("actionType", actionType);
+    formData.set("qType", qType);
+    formData.set("multiCorrect", JSON.stringify(multiCorrect));
+    formData.set("blanksData", JSON.stringify(blanks));
+    formData.set("partialCredit", JSON.stringify(partialCredit));
+    formData.set("category", selectedTopic);
+    formData.set("difficultyLevel", selectedDifficulty);
+    formData.set("points", pointsVal);
+    formData.set("negativePoints", negPointsVal);
 
     const imageFile = formData.get("image") as File;
     let imageUrl = null;

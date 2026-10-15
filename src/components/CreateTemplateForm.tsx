@@ -312,6 +312,13 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   const poolReady = rules.length > 0 && shortfall.length === 0;
 
   /* handlers */
+  const allCategories = Array.from(
+    new Set([
+      ...allQuestions.map((q) => q.category).filter(Boolean),
+      ...FIXED_TOPICS,
+    ])
+  ).sort();
+
   const toggleQuestion = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -321,7 +328,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     });
   };
   const addRule = () => {
-    setRules((r) => [...r, { id: Math.random().toString(), category: FIXED_TOPICS[0], difficultyLevel: "MEDIUM", count: 5 }]);
+    setRules((r) => [...r, { id: Math.random().toString(), category: allCategories[0] || FIXED_TOPICS[0], difficultyLevel: "MEDIUM", count: 5 }]);
   };
   const updateRule = (id: string, field: string, value: string | number) => {
     setRules((rs) => rs.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
@@ -645,7 +652,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   {rules.map((rule) => (
                     <div key={rule.id} className="flex gap-2 items-center bg-[#16171c] p-2.5 rounded-xl border border-white/10">
                       <select value={rule.category} onChange={(e) => updateRule(rule.id, "category", e.target.value)} className="text-xs border border-white/10 rounded-lg p-2 flex-1 bg-black font-medium text-neutral-200 outline-none cursor-pointer min-w-0">
-                        {FIXED_TOPICS.map((t) => (<option key={t} value={t}>{t}</option>))}
+                        {allCategories.map((t) => (<option key={t} value={t}>{t}</option>))}
                       </select>
                       <select value={rule.difficultyLevel} onChange={(e) => updateRule(rule.id, "difficultyLevel", e.target.value)} className="text-xs border border-white/10 rounded-lg p-2 bg-black font-medium text-neutral-200 outline-none cursor-pointer">
                         {FIXED_DIFFICULTIES.map((df) => (<option key={df} value={df}>{df === "MEDIUM" ? "Med" : df.charAt(0) + df.slice(1).toLowerCase()}</option>))}
@@ -671,7 +678,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   <span className={LABEL}>Subject filter</span>
                   <select value={filterTopic} onChange={(e) => { setFilterTopic(e.target.value); setQPage(0); }} className={`${INPUT} cursor-pointer`}>
                     <option value="">All categories</option>
-                    {FIXED_TOPICS.map((t) => (<option key={t} value={t}>{t}</option>))}
+                    {allCategories.map((t) => (<option key={t} value={t}>{t}</option>))}
                   </select>
                 </label>
                 <label className="block">

@@ -125,6 +125,11 @@ export function SubjectSelector({
             <option value="" disabled className="bg-[#121318] text-neutral-500">
               {loading ? "Loading subjects..." : placeholder}
             </option>
+            {selected && !subjects.some((s) => s.name === selected) && (
+              <option value={selected} className="bg-[#121318] text-white">
+                {selected}
+              </option>
+            )}
             {subjects.map((s) => (
               <option key={s.id} value={s.name} className="bg-[#121318] text-white">
                 {s.name} {s.code ? `(${s.code})` : ""}
@@ -185,7 +190,7 @@ export function SubjectSelector({
               </div>
             )}
 
-            <form onSubmit={handleCreateSubject} className="space-y-4">
+            <div className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
                   Subject Name <span className="text-lime-400">*</span>
@@ -197,6 +202,13 @@ export function SubjectSelector({
                   placeholder="e.g. Machine Learning, Mathematics"
                   value={newSubjectName}
                   onChange={(e) => setNewSubjectName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCreateSubject();
+                    }
+                  }}
                   className="w-full px-4 py-2.5 text-xs sm:text-sm bg-black/60 border border-white/15 rounded-xl text-white outline-none focus:border-lime-400 focus:ring-1 focus:ring-lime-400 transition-colors font-medium placeholder-neutral-600"
                 />
               </div>
@@ -210,6 +222,13 @@ export function SubjectSelector({
                   placeholder="e.g. CS401, MATH102"
                   value={newSubjectCode}
                   onChange={(e) => setNewSubjectCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCreateSubject();
+                    }
+                  }}
                   className="w-full px-4 py-2.5 text-xs sm:text-sm bg-black/60 border border-white/15 rounded-xl text-white outline-none focus:border-lime-400 focus:ring-1 focus:ring-lime-400 transition-colors font-medium placeholder-neutral-600"
                 />
               </div>
@@ -223,14 +242,19 @@ export function SubjectSelector({
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCreateSubject();
+                  }}
                   disabled={submitting}
                   className="px-5 py-2.5 rounded-xl text-xs font-bold bg-lime-400 hover:bg-lime-300 text-black shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
                 >
                   {submitting ? "Adding..." : "Add Subject"}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
