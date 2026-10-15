@@ -568,8 +568,19 @@ export default function CandidateScorecardView({
               </div>
 
               <div className="flex flex-wrap md:flex-col items-start md:items-end gap-2 text-xs font-bold text-neutral-900 font-mono">
-                <span className="inline-flex items-center gap-1">⏱ {timeFormatted} finish</span>
-                <span className="inline-flex items-center gap-1">✓ {computedStats.correct} correct answers</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-neutral-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" strokeWidth="2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 7v5l3 3" />
+                  </svg>
+                  <span>{timeFormatted} finish</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-neutral-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>{computedStats.correct} correct answers</span>
+                </span>
               </div>
             </div>
 
@@ -611,8 +622,10 @@ export default function CandidateScorecardView({
                     {podium.map((p, i) => (
                       <div key={p.place} className="flex flex-col items-center flex-1 max-w-[120px]">
                         {p.place === "1st" && (
-                          <span className="text-base -mb-1 animate-bounce filter drop-shadow-[0_2px_6px_rgba(250,204,21,0.6)]">
-                            👑
+                          <span className="mb-1 text-amber-300 filter drop-shadow-[0_2px_6px_rgba(250,204,21,0.6)] animate-bounce">
+                            <svg className="w-5 h-5 fill-current text-amber-300" viewBox="0 0 24 24">
+                              <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
+                            </svg>
                           </span>
                         )}
                         <div className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center mb-1.5 relative bg-white/[0.03] ring-2 ${p.ringColor}`}>

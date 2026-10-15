@@ -4,6 +4,56 @@ import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { getMascotById, Mascot } from "@/lib/mascots";
 
+function TrophyIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z" />
+    </svg>
+  );
+}
+
+function MedalIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="8" r="6" strokeWidth="2" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.21 13.89L7 22l5-3 5 3-1.21-8.12" />
+    </svg>
+  );
+}
+
+function CrownIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className = "w-3 h-3" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" strokeWidth="2" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function AlertTriangleIcon({ className = "w-3 h-3" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+  );
+}
+
+function UserFallbackIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  );
+}
+
 export interface TeacherCandidateEntry {
   id: string; // Attempt ID
   userId: string;
@@ -112,16 +162,16 @@ export function TeacherPodiumLeaderboard({
     const maxScore = Math.max(...active.map((c) => c.score), 1);
 
     const ordered = [
-      second ? { entry: second, place: "2nd", color: "bg-purple-400/20 border-purple-400/40 text-purple-300", pillarBg: "bg-gradient-to-t from-purple-950/60 to-purple-600/30 border-purple-500/40", height: 110 + Math.round(50 * (second.score / maxScore)), badge: "🥈 2ND" } : null,
-      first ? { entry: first, place: "1st", color: "bg-lime-400/20 border-lime-400/40 text-lime-300", pillarBg: "bg-gradient-to-t from-lime-950/60 to-lime-500/30 border-lime-400/50", height: 150 + Math.round(50 * (first.score / maxScore)), badge: "👑 1ST" } : null,
-      third ? { entry: third, place: "3rd", color: "bg-[#f2a488]/20 border-[#f2a488]/40 text-[#f2a488]", pillarBg: "bg-gradient-to-t from-orange-950/60 to-amber-600/30 border-amber-500/40", height: 85 + Math.round(45 * (third.score / maxScore)), badge: "🥉 3RD" } : null,
+      second ? { entry: second, place: "2nd", color: "bg-purple-400/20 border-purple-400/40 text-purple-300", pillarBg: "bg-gradient-to-t from-purple-950/60 to-purple-600/30 border-purple-500/40", height: 110 + Math.round(50 * (second.score / maxScore)), badgeText: "2ND" } : null,
+      first ? { entry: first, place: "1st", color: "bg-lime-400/20 border-lime-400/40 text-lime-300", pillarBg: "bg-gradient-to-t from-lime-950/60 to-lime-500/30 border-lime-400/50", height: 150 + Math.round(50 * (first.score / maxScore)), badgeText: "1ST" } : null,
+      third ? { entry: third, place: "3rd", color: "bg-[#f2a488]/20 border-[#f2a488]/40 text-[#f2a488]", pillarBg: "bg-gradient-to-t from-orange-950/60 to-amber-600/30 border-amber-500/40", height: 85 + Math.round(45 * (third.score / maxScore)), badgeText: "3RD" } : null,
     ].filter(Boolean) as {
       entry: typeof rankedAll[0];
       place: string;
       color: string;
       pillarBg: string;
       height: number;
-      badge: string;
+      badgeText: string;
     }[];
 
     return ordered;
@@ -206,8 +256,8 @@ export function TeacherPodiumLeaderboard({
       {/* ── Top 3 Visual Podium ── */}
       {top3.length === 0 ? (
         <div className="py-12 px-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col items-center justify-center text-center space-y-2">
-          <div className="w-12 h-12 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center text-neutral-400 text-xl">
-            🏆
+          <div className="w-12 h-12 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center text-amber-300">
+            <TrophyIcon className="w-6 h-6" />
           </div>
           <p className="text-sm font-bold text-white">Podium Awaiting Candidate Activity</p>
           <p className="text-xs text-neutral-400 max-w-sm">
@@ -226,8 +276,8 @@ export function TeacherPodiumLeaderboard({
                   {/* Mascot Avatar & Crown */}
                   <div className="relative mb-2 flex flex-col items-center">
                     {isFirst && (
-                      <span className="text-2xl mb-1 filter drop-shadow-[0_2px_8px_rgba(250,204,21,0.6)] animate-bounce">
-                        👑
+                      <span className="mb-1 text-amber-300 filter drop-shadow-[0_2px_8px_rgba(250,204,21,0.6)] animate-bounce">
+                        <CrownIcon className="w-6 h-6 fill-current text-amber-300" />
                       </span>
                     )}
 
@@ -255,8 +305,13 @@ export function TeacherPodiumLeaderboard({
                       )}
                     </div>
 
-                    <span className={`mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase border font-mono ${p.color}`}>
-                      {p.badge}
+                    <span className={`mt-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase border font-mono flex items-center gap-1 ${p.color}`}>
+                      {isFirst ? (
+                        <CrownIcon className="w-3 h-3 fill-current text-amber-300" />
+                      ) : (
+                        <MedalIcon className="w-3 h-3" />
+                      )}
+                      <span>{p.badgeText}</span>
                     </span>
                   </div>
 
@@ -276,8 +331,10 @@ export function TeacherPodiumLeaderboard({
                         ({p.entry.pct.toFixed(0)}%)
                       </span>
                       {p.entry.displayTimeTaken && (
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          • ⏱ {p.entry.displayTimeTaken}
+                        <span className="text-[10px] text-neutral-400 font-mono inline-flex items-center gap-1">
+                          <span>•</span>
+                          <ClockIcon className="w-2.5 h-2.5 text-neutral-500" />
+                          <span>{p.entry.displayTimeTaken}</span>
                         </span>
                       )}
                     </div>
@@ -367,25 +424,43 @@ export function TeacherPodiumLeaderboard({
                 </tr>
               ) : (
                 filteredList.map((c) => {
-                  const isTop3 = c.denseRank <= 3;
-                  const rankIcon =
-                    c.denseRank === 1 ? "🥇" : c.denseRank === 2 ? "🥈" : c.denseRank === 3 ? "🥉" : null;
-
                   return (
                     <tr
                       key={c.id}
                       className={`transition-colors hover:bg-white/[0.03] ${
                         c.denseRank === 1
                           ? "bg-lime-400/[0.02]"
-                          : isTop3
+                          : c.denseRank <= 3
                             ? "bg-white/[0.01]"
                             : ""
                       }`}
                     >
                       {/* Rank */}
                       <td className="py-3 px-4 text-center">
-                        {rankIcon ? (
-                          <span className="text-base" title={`Rank ${c.denseRank}`}>{rankIcon}</span>
+                        {c.denseRank === 1 ? (
+                          <span
+                            className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/40 text-amber-300 font-mono font-black text-xs shadow-[0_0_12px_rgba(251,191,36,0.25)] mx-auto"
+                            title="Rank 1"
+                          >
+                            <TrophyIcon className="w-3.5 h-3.5 text-amber-300" />
+                            <span>1</span>
+                          </span>
+                        ) : c.denseRank === 2 ? (
+                          <span
+                            className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-slate-300/15 border border-slate-300/40 text-slate-200 font-mono font-black text-xs shadow-[0_0_8px_rgba(203,213,225,0.2)] mx-auto"
+                            title="Rank 2"
+                          >
+                            <MedalIcon className="w-3.5 h-3.5 text-slate-300" />
+                            <span>2</span>
+                          </span>
+                        ) : c.denseRank === 3 ? (
+                          <span
+                            className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-amber-700/20 border border-amber-600/40 text-amber-400 font-mono font-black text-xs shadow-[0_0_8px_rgba(217,119,6,0.2)] mx-auto"
+                            title="Rank 3"
+                          >
+                            <MedalIcon className="w-3.5 h-3.5 text-amber-500" />
+                            <span>3</span>
+                          </span>
                         ) : (
                           <span className="font-mono font-black text-neutral-400 text-xs tabular-nums">
                             #{c.denseRank}
@@ -417,8 +492,10 @@ export function TeacherPodiumLeaderboard({
                               alt={c.displayName}
                               className="w-5 h-5 object-contain shrink-0 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
                             />
-                          ) : (
+                          ) : c.displayEmoji && c.displayEmoji !== "👤" ? (
                             <span className="text-sm">{c.displayEmoji}</span>
+                          ) : (
+                            <UserFallbackIcon className="w-4 h-4 text-neutral-400" />
                           )}
                           <span className="text-[11px] font-semibold text-neutral-200 truncate max-w-[110px]">
                             {c.displayName}
@@ -436,7 +513,7 @@ export function TeacherPodiumLeaderboard({
                         </div>
                         {c.displayTimeTaken && (
                           <div className="text-[10px] text-neutral-400 font-sans mt-0.5 flex items-center justify-center gap-1">
-                            <span>⏱</span>
+                            <ClockIcon className="w-3 h-3 text-neutral-500" />
                             <span>{c.displayTimeTaken}</span>
                           </div>
                         )}
@@ -475,8 +552,9 @@ export function TeacherPodiumLeaderboard({
                       {/* Flags */}
                       <td className="py-3 px-4 text-center font-mono">
                         {c.flagsCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[10px] font-bold">
-                            ⚠️ {c.flagsCount}
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[10px] font-bold">
+                            <AlertTriangleIcon className="w-3 h-3 text-rose-400 shrink-0" />
+                            <span>{c.flagsCount}</span>
                           </span>
                         ) : (
                           <span className="text-[10px] text-neutral-600">0</span>
