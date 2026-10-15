@@ -591,7 +591,7 @@ export default function CandidateScorecardView({
                 <span className="text-[10px] font-mono font-bold uppercase text-neutral-400">Your rank</span>
                 <div className="my-3">
                   <span className="text-5xl font-mono font-black text-lime-400">
-                    {cohort ? `${cohortPercentile}${getOrdinal(cohortPercentile)}` : "—"}
+                    {cohort ? `${cohortRank}${getOrdinal(cohortRank)}` : "—"}
                   </span>
                 </div>
                 <span className="text-xs text-neutral-400">
