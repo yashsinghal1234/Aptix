@@ -565,9 +565,6 @@ export function ExamInterface({
     if (isFinishingRef.current && isFinished) return;
     isFinishingRef.current = true;
     setShowSubmitConfirm(false);
-    if (typeof document !== "undefined" && document.fullscreenElement) {
-      document.exitFullscreen().catch(err => console.log(err));
-    }
     
     try {
       localStorage.removeItem(`aptix_attempt_start_${attempt.id}`);
