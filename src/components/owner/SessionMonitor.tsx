@@ -11,6 +11,7 @@ import {
   togglePodiumRevealAction,
   toggleGamifiedModeAction,
 } from "@/app/actions/session";
+import { blockCandidateAction, unblockCandidateAction } from "@/app/actions/moderate";
 import { useServerTime } from "@/hooks/useServerTime";
 
 /* ── IST helpers ─────────────────────────────────── */
@@ -28,6 +29,28 @@ export function RefreshClock() {
     return () => clearInterval(id);
   }, []);
   return <span className="tabular-nums">Last refreshed {t} IST</span>;
+}
+
+/* ── Auto-sync live monitor (fixes "auto sync not working") ── */
+export function AutoRefresher({ active, intervalMs = 8000 }: { active: boolean; intervalMs?: number }) {
+  const router = useRouter();
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (!active || paused) return;
+    const id = setInterval(() => router.refresh(), intervalMs);
+    return () => clearInterval(id);
+  }, [active, paused, intervalMs, router]);
+  if (!active) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => setPaused((p) => !p)}
+      className="text-[10px] font-bold text-neutral-400 hover:text-lime-200 border border-white/10 rounded-lg px-2.5 py-1 transition-colors"
+      title={paused ? "Resume live auto-sync" : "Pause live auto-sync"}
+    >
+      {paused ? "▶ Resume sync" : "⏸ Pause sync (8s)"}
+    </button>
+  );
 }
 
 /* ── Server-calibrated countdown ─────────────────── */
@@ -116,16 +139,20 @@ export function CandidateTable({
   totalQuestions,
   totalMarks,
   sessionId,
+  blockedEmails = [],
 }: {
   attempts: MonitorAttempt[];
   totalQuestions: number;
   totalMarks: number;
   sessionId: string;
+  blockedEmails?: string[];
 }) {
   const router = useRouter();
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<Set<string>>(new Set(blockedEmails.map((e) => e.toLowerCase())));
+  useEffect(() => setBlocked(new Set(blockedEmails.map((e) => e.toLowerCase()))), [blockedEmails]);
   const PER = 8;
   const pages = Math.max(1, Math.ceil(attempts.length / PER));
   const shown = attempts.slice(page * PER, page * PER + PER);
@@ -207,17 +234,60 @@ export function CandidateTable({
                 )}
               </p>
               <div className="py-3 border-t border-white/[0.06] flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                {a.status === "IN_PROGRESS" ? (
-                  [5, 10, 15].map((m) => (
+                {blocked.has(a.userEmail.toLowerCase()) ? (
+                  <>
+                    <span className="text-[9px] font-black tracking-wider text-red-300 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5 whitespace-nowrap">BLOCKED</span>
                     <button
-                      key={m}
-                      disabled={busy === `${a.id}-${m}`}
-                      onClick={() => call(`${a.id}-${m}`, extendCandidateTimeAction, { attemptId: a.id, minutes: String(m) })}
-                      className="text-[11px] font-bold text-black bg-white hover:bg-neutral-200 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 whitespace-nowrap"
+                      disabled={busy === `${a.id}-unblock`}
+                      onClick={async () => {
+                        setBusy(`${a.id}-unblock`);
+                        try {
+                          await unblockCandidateAction(sessionId, a.userEmail);
+                          setBlocked((prev) => {
+                            const n = new Set(prev);
+                            n.delete(a.userEmail.toLowerCase());
+                            return n;
+                          });
+                          router.refresh();
+                        } finally {
+                          setBusy(null);
+                        }
+                      }}
+                      className="text-[11px] font-bold text-lime-200 hover:text-lime-100 transition-colors disabled:opacity-50 whitespace-nowrap px-1"
                     >
-                      +{m}m
+                      Unblock
                     </button>
-                  ))
+                  </>
+                ) : a.status === "IN_PROGRESS" ? (
+                  <>
+                    <button
+                      disabled={busy === `${a.id}-block`}
+                      onClick={async () => {
+                        if (!confirm(`Block ${a.userName} (${a.userEmail}) mid-exam? They will be force-submitted and cannot rejoin.`)) return;
+                        setBusy(`${a.id}-block`);
+                        try {
+                          await blockCandidateAction(sessionId, a.userEmail, "Blocked mid-exam by proctor");
+                          setBlocked((prev) => new Set(prev).add(a.userEmail.toLowerCase()));
+                          router.refresh();
+                        } finally {
+                          setBusy(null);
+                        }
+                      }}
+                      className="text-[11px] font-bold text-red-300 hover:text-red-200 border border-red-500/30 bg-red-500/10 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      Block
+                    </button>
+                    {[5, 10, 15].map((m) => (
+                      <button
+                        key={m}
+                        disabled={busy === `${a.id}-${m}`}
+                        onClick={() => call(`${a.id}-${m}`, extendCandidateTimeAction, { attemptId: a.id, minutes: String(m) })}
+                        className="text-[11px] font-bold text-black bg-white hover:bg-neutral-200 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 whitespace-nowrap"
+                      >
+                        +{m}m
+                      </button>
+                    ))}
+                  </>
                 ) : a.status === "SUBMITTED" ? (
                   <>
                     <button

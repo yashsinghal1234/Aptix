@@ -3,7 +3,8 @@ import { LoginForm } from "@/components/LoginForm";
 import { CandidateExamFlow } from "@/components/CandidateExamFlow";
 import { NoExamPoller } from "@/components/NoExamPoller";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { randomInt } from "crypto";
 import { getCandidateMascot } from "@/app/actions/mascot";
 import { logoutAction } from "@/app/actions/auth";
 import { startAttemptAction } from "@/app/actions/attempt";
@@ -14,20 +15,14 @@ import { Flower } from "@/components/owner/OpsPanels";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const cookieStore = cookies();
-  const token = cookieStore.get("token")?.value;
-  
-  if (!token) {
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) {
     return <LoginForm />;
   }
 
-  const payload = await verifyToken(token);
-  if (!payload) {
-    return <LoginForm />;
-  }
-
-  const role = payload.role as string;
-  const name = payload.name as string;
+  const { user, payload } = auth;
+  const role = user.role;
+  const name = user.name || (payload.name as string);
   const email = (payload.email as string) || "";
   const userId = payload.userId as string;
   const examSessionId = payload.examSessionId as string | undefined;
@@ -166,7 +161,7 @@ export default async function Home() {
       data: {
         userId,
         examSessionId: activeSession.id,
-        shuffleSeed: Math.floor(Math.random() * 1000000),
+        shuffleSeed: randomInt(100000, 9999999),
         status: "IN_PROGRESS"
       },
       include: { responses: true }

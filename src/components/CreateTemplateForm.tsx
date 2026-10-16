@@ -617,6 +617,18 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                 />
                 <p className="text-[10px] text-neutral-600 mt-1.5">Institution: KIET Deemed to be University · Cohort: ENG-26. Domain restriction applies at candidate authentication.</p>
               </div>
+              <div className="md:col-span-2">
+                <label className={LABEL}>Approved students <span className="normal-case font-medium text-neutral-600">(optional - only these emails can take exams from this blueprint)</span></label>
+                <textarea
+                  name="rosterText"
+                  rows={4}
+                  value={fields.rosterText || ""}
+                  onChange={(e) => updateField("rosterText", e.target.value)}
+                  placeholder={"One per line:\nyash.2428c@example.edu\npriya@example.edu,Priya Sharma"}
+                  className={`${INPUT} resize-y font-mono`}
+                />
+                <p className="text-[10px] text-neutral-600 mt-1.5">Copied to every session launched from this blueprint. You can add more at schedule time or in Live Monitor. Empty = open session.</p>
+              </div>
             </div>
           </section>
 

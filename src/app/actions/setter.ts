@@ -222,6 +222,20 @@ export async function deleteQuestionAction(id: string) {
       };
     }
 
+    // Ownership check: Only the author of the question or an OWNER can delete it
+    const existingQ = await prisma.question.findUnique({
+      where: { id },
+      select: { authorId: true }
+    });
+
+    if (!existingQ) {
+      return { error: "Question not found" };
+    }
+
+    if (user.role !== "OWNER" && existingQ.authorId !== user.id) {
+      return { error: "Forbidden: You can only delete questions that you authored." };
+    }
+
     await prisma.candidateResponse.deleteMany({
       where: { questionId: id }
     });

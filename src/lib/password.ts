@@ -16,3 +16,16 @@ export function verifyPassword(password: string, storedHash: string): boolean {
     return false;
   }
 }
+
+export function validatePasswordPolicy(password: string): { valid: boolean; error?: string } {
+  if (!password || typeof password !== "string" || password.length < 8) {
+    return { valid: false, error: "Password must be at least 8 characters long." };
+  }
+  if (!/[a-zA-Z]/.test(password)) {
+    return { valid: false, error: "Password must contain at least one letter." };
+  }
+  if (!/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    return { valid: false, error: "Password must contain at least one number or symbol." };
+  }
+  return { valid: true };
+}

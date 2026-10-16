@@ -2,6 +2,7 @@
 
 import { createSetterAction, removeSetterAction } from "@/app/actions/owner";
 import { useState, useRef } from "react";
+import { generateSecureTemporaryPassword } from "@/lib/password-generator";
 
 export function SetterForm() {
   const formRef = useRef<HTMLFormElement>(null);
@@ -15,8 +16,7 @@ export function SetterForm() {
   const [copied, setCopied] = useState(false);
 
   const handleGeneratePassword = () => {
-    const num = Math.floor(1000 + Math.random() * 9000);
-    setCustomPassword(`Setter@${num}`);
+    setCustomPassword(generateSecureTemporaryPassword("Setter"));
   };
 
   const handleCopy = () => {

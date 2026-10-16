@@ -1,18 +1,30 @@
 import { NextResponse } from "next/server";
 import { sweepExpiredAttemptsAction } from "@/app/actions/exam";
+import { timingSafeEqual } from "crypto";
 
 export const dynamic = "force-dynamic";
+
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const secretParam = searchParams.get("secret");
   const authHeader = request.headers.get("authorization");
-  const bearerSecret = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
+  const bearerSecret = authHeader ? authHeader.replace(/^Bearer\s+/i, "").trim() : null;
 
-  const expectedSecret = process.env.CRON_SECRET || process.env.JWT_SECRET;
+  const expectedSecret = process.env.CRON_SECRET;
 
-  // Verify authorization if CRON_SECRET is configured
-  if (expectedSecret && secretParam !== expectedSecret && bearerSecret !== expectedSecret) {
+  if (!expectedSecret) {
+    return NextResponse.json({ error: "Server configuration error: CRON_SECRET is not configured." }, { status: 500 });
+  }
+
+  const providedSecret = secretParam || bearerSecret;
+  if (!providedSecret || !safeCompare(providedSecret, expectedSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

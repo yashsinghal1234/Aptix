@@ -15,6 +15,9 @@ model User {
   role         String   // 'OWNER' | 'SETTER' | 'CANDIDATE'
   passwordHash       String?
   mustChangePassword Boolean  @default(false)
+  emailVerifiedAt    DateTime?
+  googleId           String?   @unique
+  tokenVersion       Int      @default(0)
   assignedSubject    String?  // Department/Subject e.g. "Machine Learning", "Mathematics"
   createdAt          DateTime @default(now())
 
@@ -76,6 +79,20 @@ model Exam {
   questions        Question[]
   rules            ExamRule[]
   sessions         ExamSession[]
+  rosters          ExamRoster[]
+}
+
+model ExamRoster {
+  id        String   @id @default(cuid())
+  examId    String
+  email     String
+  name      String?
+  createdAt DateTime @default(now())
+
+  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, email])
+  @@index([examId])
 }
 
 model ExamRule {
@@ -114,11 +131,39 @@ model ExamSession {
 
   attempts         CandidateAttempt[]
   cheatFlags       CheatFlag[]
+  rosters          SessionRoster[]
+  blocked          SessionBlocked[]
   
   sessionStats     SessionStats?
   questionStats    QuestionStats[]
 
   @@index([pin])
+}
+
+model SessionBlocked {
+  id            String      @id @default(cuid())
+  examSessionId String
+  email         String
+  reason        String?
+  createdAt     DateTime    @default(now())
+
+  session       ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([examSessionId, email])
+  @@index([examSessionId])
+}
+
+model SessionRoster {
+  id            String      @id @default(cuid())
+  examSessionId String
+  email         String
+  name          String?
+  createdAt     DateTime    @default(now())
+
+  session       ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([examSessionId, email])
+  @@index([examSessionId])
 }
 
 model SessionStats {
@@ -159,6 +204,7 @@ model CandidateAttempt {
   extendedUntil    DateTime? // Individual time extension
   status           String   @default("IN_PROGRESS") // IN_PROGRESS, SUBMITTED
   createdAt        DateTime @default(now())
+  startedAt        DateTime? // Stamped when candidate clicks "Start Exam" (not login time)
   submittedAt      DateTime?
 
   user             User        @relation(fields: [userId], references: [id])

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSetterAction, removeSetterAction, adminResetUserPasswordAction } from "@/app/actions/owner";
 import { SubjectSelector } from "@/components/SubjectSelector";
 import { Panel, Flower } from "./OpsPanels";
+import { generateSecureTemporaryPassword } from "@/lib/password-generator";
 
 export interface SetterRow {
   id: string;
@@ -109,7 +110,7 @@ export function AddSetterPanel() {
   const [created, setCreated] = useState<{ email: string; name: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const generate = () => setPassword(`Setter@${Math.floor(1000 + Math.random() * 9000)}`);
+  const generate = () => setPassword(generateSecureTemporaryPassword("Setter"));
 
   const copy = () => {
     if (!created) return;
@@ -178,7 +179,7 @@ export function AddSetterPanel() {
         {/* Row 2: Temporary password + Auto-Generate Random */}
         <div>
           <label className="block text-xs font-normal text-neutral-400 mb-2">
-            Temporary password · minimum 6 characters
+            Temporary password · minimum 8 characters
           </label>
           <div className="flex items-center gap-3">
             <input
@@ -395,11 +396,11 @@ export function ResetDialog({
       <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mira.nair@northbridge.edu" className={INPUT} />
       <div className="flex items-center justify-between mt-3 mb-1.5">
         <label className={LABEL + " !mb-0"}>Temporary password</label>
-        <button type="button" onClick={() => setPassword(`Reset@${Math.floor(1000 + Math.random() * 9000)}`)} className="text-[10px] font-bold text-neutral-400 hover:text-lime-200 transition-colors">
+        <button type="button" onClick={() => setPassword(generateSecureTemporaryPassword("Reset"))} className="text-[10px] font-bold text-neutral-400 hover:text-lime-200 transition-colors">
           ⟳ Auto-generate
         </button>
       </div>
-      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Reset@7392" className={`${INPUT} font-mono`} />
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="e.g. Reset#k8M2!vP9" className={`${INPUT} font-mono`} />
       {result && (
         <button
           type="button"
@@ -414,7 +415,7 @@ export function ResetDialog({
         </button>
       )}
       <div className="mt-3 border-t border-white/[0.07] pt-3">
-        <Toggle on={requireChange} onChange={setRequireChange} label="Require password change on next login" hint="Minimum 6 characters. The previous password is replaced, never retrieved." />
+        <Toggle on={requireChange} onChange={setRequireChange} label="Require password change on next login" hint="Minimum 8 characters (letters & numbers). The previous password is replaced, never retrieved." />
       </div>
       <div className="mt-3 flex gap-2">
         <button type="button" onClick={onClose} className="text-[11px] font-bold text-neutral-400 hover:text-white px-3 py-2">Cancel</button>

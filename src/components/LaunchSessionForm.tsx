@@ -18,8 +18,10 @@ export function LaunchSessionForm({
   const [loading, setLoading] = useState(false);
   const [showSchedule, setShowSchedule] = useState(autoOpenSchedule);
   const [startTimeLocal, setStartTimeLocal] = useState("");
+  const [rosterText, setRosterText] = useState("");
+  const [showRoster, setShowRoster] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successData, setSuccessData] = useState<{ pin: string; sessionId?: string } | null>(null);
+  const [successData, setSuccessData] = useState<{ pin: string; sessionId?: string; rosterAdded?: number } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const handleLaunch = async (scheduledTime?: string) => {
@@ -30,6 +32,7 @@ export function LaunchSessionForm({
     const formData = new FormData();
     formData.append("examId", templateId);
     formData.append("timezoneOffset", new Date().getTimezoneOffset().toString());
+    if (rosterText.trim()) formData.append("rosterText", rosterText);
 
     if (scheduledTime) {
       const localDate = new Date(scheduledTime);
@@ -44,9 +47,11 @@ export function LaunchSessionForm({
     if (res?.error) {
       setError(res.error);
     } else if (res?.success) {
-      setSuccessData({ pin: res.pin || "Created", sessionId: res.sessionId });
+      setSuccessData({ pin: res.pin || "Created", sessionId: res.sessionId, rosterAdded: (res as any).rosterAdded || 0 });
       setStartTimeLocal("");
+      setRosterText("");
       setShowSchedule(false);
+      setShowRoster(false);
       router.refresh();
     }
   };
@@ -122,6 +127,25 @@ export function LaunchSessionForm({
               {loading ? "Scheduling..." : "Confirm Schedule"}
             </button>
           </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowRoster((v) => !v)}
+              className="text-[11px] font-bold text-neutral-300 hover:text-white transition-colors"
+            >
+              {showRoster ? "− Hide approved students" : "+ Restrict to approved students (optional)"}
+            </button>
+            {showRoster && (
+              <textarea
+                value={rosterText}
+                onChange={(e) => setRosterText(e.target.value)}
+                rows={4}
+                placeholder={"One per line:\nyash.2428c@example.edu\npriya@example.edu,Priya Sharma"}
+                className="mt-2 w-full text-xs px-3.5 py-2 bg-neutral-900 border border-neutral-700 rounded-xl focus:border-white focus:outline-none text-white font-mono placeholder:text-neutral-600"
+              />
+            )}
+            <p className="mt-1 text-[10px] text-neutral-500">Blueprint list is inherited automatically. Extra emails here are added on top. Empty = open unless blueprint has a list.</p>
+          </div>
         </form>
       )}
 
@@ -145,7 +169,9 @@ export function LaunchSessionForm({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-emerald-300 font-semibold">Session Created!</span>
+              <span className="text-xs text-emerald-300 font-semibold">
+                Session Created!{successData.rosterAdded ? ` · ${successData.rosterAdded} approved students` : ""}
+              </span>
             </div>
             <button
               type="button"

@@ -1,14 +1,21 @@
 "use server";
 
+import { randomInt } from "crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { signToken, verifyToken } from "@/lib/auth";
-import { hashPassword, verifyPassword } from "@/lib/password";
-import { checkRateLimit, recordFailedAttempt, resetRateLimit } from "@/lib/rate-limiter";
+import { hashPassword, verifyPassword, validatePasswordPolicy } from "@/lib/password";
+import { 
+  checkRateLimit, 
+  recordFailedAttempt, 
+  resetRateLimit,
+  getSafeClientIp,
+  checkDualRateLimit,
+  recordDualFailedAttempt,
+  resetDualRateLimit
+} from "@/lib/rate-limiter";
 
-const OWNER_EMAILS = ["admin@aptix.com", "singhalyash307@gmail.com"];
-const DEFAULT_OWNER_PASSWORD = "282007@aA";
 
 function formatAuthError(error: any, fallbackMessage: string): string {
   if (!error) return fallbackMessage;
@@ -88,15 +95,55 @@ export async function candidateLoginAction(formData: FormData) {
     const normalizedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
 
-    const headerList = headers();
-    const clientIp = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip") || "local_client";
-    const rateLimitKey = `pin_${clientIp}`;
+    // ── College SSO verification (Google Workspace, SSO-first-then-PIN) ──
+    // If the browser holds a verified Google session for the same email,
+    // ownership of the inbox is proven - skip fake-name heuristics below.
+    let ssoVerified = false;
+    try {
+      const { auth: ssoAuth } = await import("@/auth");
+      const ssoSession = await ssoAuth().catch(() => null);
+      const ssoEmail = ssoSession?.user?.email?.toLowerCase().trim();
+      if (ssoEmail && ssoEmail === normalizedEmail) ssoVerified = true;
+    } catch {}
 
-    const { allowed, retryAfterSeconds } = checkRateLimit(rateLimitKey);
+    // ── Name Validation ────────────────────────────────────────────────────────
+    // Skipped when SSO proved the identity (Google profile name is trusted).
+    if (!ssoVerified) {
+    // Reject obviously fake, single-word, or numeric names
+    const nameWords = trimmedName.split(/\s+/).filter(Boolean);
+    if (nameWords.length < 2) {
+      return { field: "name", error: "Please enter your full name (First and Last name are required)." };
+    }
+    if (trimmedName.length < 5) {
+      return { field: "name", error: "Full name must be at least 5 characters." };
+    }
+    if (/\d/.test(trimmedName)) {
+      return { field: "name", error: "Name cannot contain numbers. Please enter your real full name." };
+    }
+    const FAKE_NAME_PATTERNS = ["test", "asdf", "qwerty", "admin", "user", "demo", "temp", "hello", "abc", "xxx", "dummy"];
+    const lowerName = trimmedName.toLowerCase();
+    if (FAKE_NAME_PATTERNS.some(p => lowerName === p || nameWords.some(w => w.toLowerCase() === p))) {
+      return { field: "name", error: "Please enter your real full name as it appears on your ID." };
+    }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    const headerList = headers();
+    const clientIp = getSafeClientIp(headerList);
+    const candidateTargetKey = `candidate_${normalizedPin}_${normalizedEmail}`;
+
+    const { allowed, retryAfterSeconds, reason } = await checkDualRateLimit(clientIp, candidateTargetKey, {
+      ipLimit: 80,
+      ipWindowMs: 15 * 60 * 1000,
+      targetLimit: 6,
+      targetWindowMs: 5 * 60 * 1000
+    });
     if (!allowed) {
       return {
         field: "examPin",
-        error: `Security Lockout: Too many failed login attempts. Please wait ${retryAfterSeconds} seconds before trying again.`
+        error: reason === "ip_limit"
+          ? `Security Lockout: High volume of attempts detected from your IP. Please wait ${retryAfterSeconds} seconds before trying again.`
+          : `Security Lockout: Too many failed login attempts for this session. Please wait ${retryAfterSeconds} seconds before trying again.`
       };
     }
 
@@ -107,7 +154,7 @@ export async function candidateLoginAction(formData: FormData) {
     });
 
     if (!session) {
-      recordFailedAttempt(rateLimitKey);
+      await recordDualFailedAttempt(clientIp, candidateTargetKey);
       return { 
         field: "examPin",
         error: "Exam PIN not found. Please double-check the code provided by your instructor or proctor." 
@@ -115,6 +162,7 @@ export async function candidateLoginAction(formData: FormData) {
     }
 
     if (session.status === "COMPLETED") {
+      await recordDualFailedAttempt(clientIp, candidateTargetKey);
       return { 
         field: "examPin",
         error: "This examination session has already concluded and is no longer accepting submissions." 
@@ -122,24 +170,73 @@ export async function candidateLoginAction(formData: FormData) {
     }
 
     if (session.status === "CANCELLED") {
+      await recordDualFailedAttempt(clientIp, candidateTargetKey);
       return { 
         field: "examPin",
         error: "This examination session has been cancelled by the proctor." 
       };
     }
 
-    // 2. Validate institutional domain requirements if configured for this assessment
+    // 2. Validate institutional domain requirements
+    // Explicit per-session or per-exam domain takes priority.
+    // If not configured, we auto-infer from existing session candidates:
+    // if real candidates already logged in with @kiet.edu, block @gmail.com/@test.com.
     const domainReq = session.allowedEmailDomain?.trim().toLowerCase() || session.exam?.allowedEmailDomain?.trim().toLowerCase();
-    if (domainReq) {
-      const cleanDomain = domainReq.startsWith("@") ? domainReq.substring(1) : domainReq;
+    let effectiveDomain = domainReq ? (domainReq.startsWith("@") ? domainReq.substring(1) : domainReq) : null;
+
+    if (!effectiveDomain) {
+      // Auto-infer: find the most common email domain of existing confirmed candidates in this session
+      const existingAttempts = await prisma.candidateAttempt.findMany({
+        where: { examSessionId: session.id },
+        include: { user: { select: { email: true } } },
+        take: 5,
+      });
+      const domains = existingAttempts
+        .map(a => a.user?.email?.split("@")[1]?.toLowerCase())
+        .filter((d): d is string => !!d && d !== "test.com" && d !== "example.com");
+      if (domains.length >= 2) {
+        // If 2+ candidates already have the same domain, treat it as the de-facto domain
+        const domainCounts: Record<string, number> = {};
+        domains.forEach(d => { domainCounts[d] = (domainCounts[d] || 0) + 1; });
+        const mostCommon = Object.entries(domainCounts).sort((a, b) => b[1] - a[1])[0];
+        if (mostCommon && mostCommon[1] >= 2) effectiveDomain = mostCommon[0];
+      }
+    }
+
+    if (effectiveDomain) {
       const emailDomain = normalizedEmail.split("@")[1];
-      
-      if (!emailDomain || (emailDomain !== cleanDomain && !emailDomain.endsWith(`.${cleanDomain}`))) {
-        return { 
+      if (!emailDomain || (emailDomain !== effectiveDomain && !emailDomain.endsWith(`.${effectiveDomain}`))) {
+        await recordDualFailedAttempt(clientIp, candidateTargetKey);
+        return {
           field: "email",
-          error: `Restricted Access: Candidates must use their official @${cleanDomain} institutional email address.` 
+          error: `Restricted Access: This exam requires a @${effectiveDomain} institutional email address.`
         };
       }
+    }
+
+    // 2b. Session allowlist (roster) enforcement - scales to 500+ without OTP emails.
+    // If owner uploaded a roster for this session, only listed emails may log in.
+    // Empty roster = open session (backward compatible, domain check above still applies).
+    const rosterCount = await prisma.sessionRoster.count({ where: { examSessionId: session.id } });
+    if (rosterCount > 0) {
+      const allowed = await prisma.sessionRoster.findUnique({
+        where: { examSessionId_email: { examSessionId: session.id, email: normalizedEmail } },
+      });
+      if (!allowed) {
+        await recordDualFailedAttempt(clientIp, candidateTargetKey);
+        return {
+          field: "email",
+          error: "This email is not on the approved list for this session. Contact your proctor.",
+        };
+      }
+    }
+
+    const blocked = await prisma.sessionBlocked.findUnique({
+      where: { examSessionId_email: { examSessionId: session.id, email: normalizedEmail } },
+    });
+    if (blocked) {
+      await recordDualFailedAttempt(clientIp, candidateTargetKey);
+      return { field: "email", error: "You have been blocked from this session by the proctor." };
     }
 
     // 3. Find or create candidate User
@@ -178,7 +275,7 @@ export async function candidateLoginAction(formData: FormData) {
         data: {
           userId: candidate.id,
           examSessionId: session.id,
-          shuffleSeed: Math.floor(Math.random() * 1000000),
+          shuffleSeed: randomInt(100000, 9999999),
           status: "IN_PROGRESS"
         }
       });
@@ -188,11 +285,18 @@ export async function candidateLoginAction(formData: FormData) {
     const token = await signToken({
       userId: candidate.id,
       role: "CANDIDATE",
+      tokenVersion: candidate.tokenVersion ?? 0,
       examSessionId: session.id,
       attemptId: attempt.id,
       email: normalizedEmail,
-      name: candidate.name
+      name: candidate.name,
+      ssoVerified,
+      emailVerified: ssoVerified || !!candidate.emailVerifiedAt,
     });
+
+    if (ssoVerified && !candidate.emailVerifiedAt) {
+      await prisma.user.update({ where: { id: candidate.id }, data: { emailVerifiedAt: new Date() } }).catch(() => {});
+    }
 
     cookies().set("token", token, {
       httpOnly: true,
@@ -201,7 +305,7 @@ export async function candidateLoginAction(formData: FormData) {
       path: "/"
     });
 
-    resetRateLimit(rateLimitKey);
+    await resetDualRateLimit(clientIp, candidateTargetKey);
     return { success: true, redirectUrl: "/?started=true" };
   } catch (error: any) {
     if (error?.digest?.startsWith("NEXT_REDIRECT") || error?.message === "NEXT_REDIRECT") {
@@ -231,81 +335,34 @@ export async function staffLoginAction(formData: FormData) {
     const normalizedEmail = email.trim().toLowerCase();
 
     const headerList = headers();
-    const clientIp = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip") || "local_client";
-    const staffRateKey = `staff_${clientIp}_${normalizedEmail}`;
+    const clientIp = getSafeClientIp(headerList);
+    const staffTargetKey = `staff_${normalizedEmail}`;
 
-    const { allowed, retryAfterSeconds } = checkRateLimit(staffRateKey);
+    const { allowed, retryAfterSeconds, reason } = await checkDualRateLimit(clientIp, staffTargetKey, {
+      ipLimit: 40,
+      ipWindowMs: 15 * 60 * 1000,
+      targetLimit: 5,
+      targetWindowMs: 5 * 60 * 1000
+    });
     if (!allowed) {
       return {
         field: "password",
-        error: `Account temporarily locked due to repeated failed logins. Please wait ${retryAfterSeconds} seconds before retrying.`
+        error: reason === "ip_limit"
+          ? `IP temporarily locked due to excessive failed attempts. Please wait ${retryAfterSeconds} seconds.`
+          : `Account temporarily locked due to repeated failed logins. Please wait ${retryAfterSeconds} seconds before retrying.`
       };
     }
 
-    // 1. Check Owner Accounts
-    if (OWNER_EMAILS.includes(normalizedEmail)) {
-      let ownerUser = await prisma.user.findUnique({
-        where: { email: normalizedEmail }
-      });
-
-      let isValid = false;
-      if (ownerUser?.passwordHash) {
-        isValid = verifyPassword(password, ownerUser.passwordHash) || password === DEFAULT_OWNER_PASSWORD;
-      } else {
-        isValid = password === DEFAULT_OWNER_PASSWORD;
-      }
-
-      if (!isValid) {
-        recordFailedAttempt(staffRateKey);
-        return { field: "password", error: "Incorrect password. Please verify your credentials and try again." };
-      }
-
-      resetRateLimit(staffRateKey);
-
-      // Auto-seed/update password hash and role
-      if (!ownerUser) {
-        ownerUser = await prisma.user.create({
-          data: {
-            name: normalizedEmail.split("@")[0].toUpperCase(),
-            email: normalizedEmail,
-            role: "OWNER",
-            passwordHash: hashPassword(password)
-          }
-        });
-      } else if (ownerUser.role !== "OWNER" || !ownerUser.passwordHash) {
-        ownerUser = await prisma.user.update({
-          where: { email: normalizedEmail },
-          data: { role: "OWNER", passwordHash: hashPassword(password) }
-        });
-      }
-
-      const token = await signToken({
-        userId: ownerUser.id,
-        role: "OWNER",
-        email: normalizedEmail,
-        name: ownerUser.name
-      });
-
-      cookies().set("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {})
-      });
-
-      return { success: true, redirectUrl: "/dashboard/owner" };
-    }
-
-    // 2. Check Other Registered Accounts
+    // 1. Authenticate Staff / Owner Accounts via Database
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail }
     });
 
     if (!existingUser) {
+      await recordDualFailedAttempt(clientIp, staffTargetKey);
       return { 
         field: "email", 
-        error: "No staff account registered with this email address. Please contact your administrator." 
+        error: "Invalid email or password." 
       };
     }
 
@@ -319,41 +376,32 @@ export async function staffLoginAction(formData: FormData) {
     if (existingUser.role !== "SETTER" && existingUser.role !== "OWNER") {
       return { 
         field: "email", 
-        error: "Access denied. Only authorized examiners and staff can access this portal." 
+        error: "Access denied. Only authorized staff and owners can access this portal." 
       };
     }
 
-    const setter = existingUser;
-
-    let isSetterValid = false;
-    if (setter.passwordHash) {
-      isSetterValid = verifyPassword(password, setter.passwordHash);
-    } else {
-      isSetterValid = password === DEFAULT_OWNER_PASSWORD;
+    // Verify Password against cryptographic scrypt hash
+    let isValid = false;
+    if (existingUser.passwordHash) {
+      isValid = verifyPassword(password, existingUser.passwordHash);
     }
 
-    if (!isSetterValid) {
-      recordFailedAttempt(staffRateKey);
-      return { field: "password", error: "Incorrect password. Please verify your credentials and try again." };
+    if (!isValid) {
+      await recordDualFailedAttempt(clientIp, staffTargetKey);
+      return { field: "password", error: "Invalid email or password." };
     }
 
-    resetRateLimit(staffRateKey);
-
-    if (!setter.passwordHash) {
-      await prisma.user.update({
-        where: { id: setter.id },
-        data: { passwordHash: hashPassword(password) }
-      });
-    }
+    await resetDualRateLimit(clientIp, staffTargetKey);
 
     const userRole = existingUser.role;
 
     const token = await signToken({
-      userId: setter.id,
+      userId: existingUser.id,
       role: userRole,
+      tokenVersion: existingUser.tokenVersion ?? 0,
       email: normalizedEmail,
-      name: setter.name,
-      mustChangePassword: setter.mustChangePassword === true
+      name: existingUser.name,
+      mustChangePassword: existingUser.mustChangePassword === true
     });
 
     cookies().set("token", token, {
@@ -364,7 +412,7 @@ export async function staffLoginAction(formData: FormData) {
       ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {})
     });
 
-    if (setter.mustChangePassword) {
+    if (existingUser.mustChangePassword) {
       return { success: true, redirectUrl: "/admin/setup-password" };
     } else if (userRole === "OWNER") {
       return { success: true, redirectUrl: "/dashboard/owner" };
@@ -397,8 +445,9 @@ export async function setupFirstTimePasswordAction(formData: FormData) {
   const newPassword = (formData.get("newPassword") as string)?.trim();
   const confirmPassword = (formData.get("confirmPassword") as string)?.trim();
 
-  if (!newPassword || newPassword.length < 6) {
-    return { error: "Password must be at least 6 characters long." };
+  const policy = validatePasswordPolicy(newPassword);
+  if (!policy.valid) {
+    return { error: policy.error || "Password does not meet security requirements." };
   }
 
   if (newPassword !== confirmPassword) {
@@ -414,12 +463,15 @@ export async function setupFirstTimePasswordAction(formData: FormData) {
     return { error: "User account not found." };
   }
 
-  // Update password and clear mustChangePassword flag
+  const nextVersion = (user.tokenVersion ?? 0) + 1;
+
+  // Update password, clear mustChangePassword flag, and revoke stale sessions
   await prisma.user.update({
     where: { id: userId },
     data: {
       passwordHash: hashPassword(newPassword),
-      mustChangePassword: false
+      mustChangePassword: false,
+      tokenVersion: nextVersion
     }
   });
 
@@ -429,6 +481,7 @@ export async function setupFirstTimePasswordAction(formData: FormData) {
     role: user.role,
     email: user.email,
     name: user.name,
+    tokenVersion: nextVersion,
     mustChangePassword: false
   });
 
@@ -447,6 +500,19 @@ export async function setupFirstTimePasswordAction(formData: FormData) {
 
 export async function logoutAction() {
   const cookieStore = cookies();
+  const token = cookieStore.get("token")?.value;
+  if (token) {
+    try {
+      const payload = await verifyToken(token);
+      if (payload?.userId) {
+        await prisma.user.update({
+          where: { id: payload.userId as string },
+          data: { tokenVersion: { increment: 1 } }
+        }).catch(() => {});
+      }
+    } catch {}
+  }
+
   cookieStore.set("token", "", {
     path: "/",
     expires: new Date(0),
@@ -457,5 +523,84 @@ export async function logoutAction() {
   });
   redirect("/");
 }
+
+/**
+ * Staff SSO login: exchanges a verified Google session for an Aptix staff JWT.
+ * Only succeeds if the Google email already belongs to an OWNER/SETTER account.
+ * Never auto-provisions staff (prevents privilege escalation).
+ */
+export async function staffSsoLoginAction(rememberMe = false) {
+  const { auth: ssoAuth } = await import("@/auth");
+  const ssoSession = await ssoAuth().catch(() => null);
+  const email = ssoSession?.user?.email?.toLowerCase().trim();
+  if (!email) return { error: "College Google sign-in required. Click 'Continue with college Google' first." };
+
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (!existingUser) return { error: "Invalid email or password." };
+  if (existingUser.role !== "SETTER" && existingUser.role !== "OWNER") {
+    return { error: "Access denied. Only authorized staff and owners can access this portal." };
+  }
+
+  const token = await signToken({
+    userId: existingUser.id,
+    role: existingUser.role,
+    tokenVersion: existingUser.tokenVersion ?? 0,
+    email,
+    name: existingUser.name,
+    ssoVerified: true,
+    emailVerified: true,
+    mustChangePassword: existingUser.mustChangePassword === true,
+  });
+
+  cookies().set("token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {}),
+  });
+
+  if (!existingUser.emailVerifiedAt) {
+    await prisma.user.update({ where: { id: existingUser.id }, data: { emailVerifiedAt: new Date() } }).catch(() => {});
+  }
+
+  if (existingUser.mustChangePassword) return { success: true, redirectUrl: "/admin/setup-password" };
+  return { success: true, redirectUrl: existingUser.role === "OWNER" ? "/dashboard/owner" : "/dashboard/setter" };
+}
+
+/**
+ * Returns the verified college Google identity for the current browser, if any.
+ */
+export async function getSsoIdentityAction() {
+  const { auth: ssoAuth } = await import("@/auth");
+  const ssoSession = await ssoAuth().catch(() => null);
+  const email = ssoSession?.user?.email?.toLowerCase().trim();
+  if (!email) return { signedIn: false as const };
+  return { signedIn: true as const, email, name: ssoSession?.user?.name || null };
+}
+
+/**
+ * Owner-only: Delete a fraudulent or test submission from the leaderboard.
+ * Removes all candidate responses and the attempt row itself.
+ */
+export async function deleteAttemptAction(attemptId: string) {
+  const token = cookies().get("token")?.value;
+  if (!token) return { error: "Unauthorized" };
+
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "OWNER") {
+    return { error: "Forbidden: Only exam owners can delete submissions." };
+  }
+
+  try {
+    await prisma.candidateResponse.deleteMany({ where: { attemptId } });
+    await prisma.candidateAttempt.delete({ where: { id: attemptId } });
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteAttemptAction error:", err);
+    return { error: "Failed to delete attempt. It may already be removed." };
+  }
+}
+
 
 

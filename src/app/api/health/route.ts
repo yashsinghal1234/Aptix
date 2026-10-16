@@ -30,38 +30,19 @@ export async function GET() {
 
   const start = Date.now();
   try {
-    const userCount = await prisma.user.count();
-    const durationMs = Date.now() - start;
+    await prisma.$queryRaw`SELECT 1`;
     return NextResponse.json({
       status: "ok",
-      database: "connected",
-      host,
-      hasQuotesInEnv: hasQuotes,
-      latencyMs: durationMs,
-      userCount,
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
-    const durationMs = Date.now() - start;
     return NextResponse.json(
       {
         status: "error",
-        database: "unreachable",
-        host,
-        hasQuotesInEnv: hasQuotes,
-        latencyMs: durationMs,
-        errorCode: error?.code || null,
-        errorMessage: error?.message || String(error),
-        hint:
-          error?.code === "P1001"
-            ? "Database server is unreachable. Verify your Neon database is active (not paused/deleted) and host is correct."
-            : error?.code === "P1000"
-            ? "Authentication failed. Double check your database user and password in DATABASE_URL."
-            : error?.code === "P1003"
-            ? "Database does not exist. Check database name in DATABASE_URL."
-            : "Check deployment environment variables and Neon connectivity."
+        message: "Database check failed"
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 }
+

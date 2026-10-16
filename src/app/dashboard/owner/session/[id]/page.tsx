@@ -16,8 +16,10 @@ import {
   CandidateTable,
   IntegrityFeed,
   ResultReleaseControl,
+  AutoRefresher,
 } from "@/components/owner/SessionMonitor";
 import { TeacherPodiumLeaderboard } from "@/components/owner/TeacherPodiumLeaderboard";
+import RosterManager from "@/components/owner/RosterManager";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,8 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
       questions: true,
       cheatFlags: { include: { user: true } },
       attempts: { include: { user: true, responses: true } },
+      rosters: { orderBy: { email: "asc" }, take: 5000 },
+      blocked: { orderBy: { email: "asc" }, take: 5000 },
     },
   });
 
@@ -140,9 +144,15 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
           <span className="text-neutral-400 font-semibold">· Auto-sync every 8 seconds ·</span>
           <RefreshClock />
         </p>
-        <p className="text-[11px] font-semibold text-neutral-300 tabular-nums">
-          {inProgressCount} in progress · {submittedCount} submitted · {totalCount} total
-        </p>
+        <div className="flex items-center gap-2">
+          <AutoRefresher active={live} />
+          <p className="text-[11px] font-semibold text-neutral-300 tabular-nums">
+            {inProgressCount} in progress · {submittedCount} submitted · {totalCount} total
+            {(session.blocked?.length || 0) > 0 && (
+              <span className="text-red-300"> · {session.blocked.length} blocked</span>
+            )}
+          </p>
+        </div>
       </div>
 
       {/* Info cards */}
@@ -188,6 +198,10 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
       />
 
       {/* ── TEACHER EXCLUSIVE: Live Podium & Leaderboard ── */}
+      <RosterManager
+        sessionId={session.id}
+        initialRosters={(session.rosters || []).map((r) => ({ email: r.email, name: r.name }))}
+      />
       <TeacherPodiumLeaderboard
         sessionId={session.id}
         candidates={attempts.map((a) => ({
@@ -293,7 +307,13 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
 
       {/* Candidate table */}
       <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-        <CandidateTable attempts={attempts} totalQuestions={totalQuestions} totalMarks={totalMarks} sessionId={session.id} />
+        <CandidateTable
+          attempts={attempts}
+          totalQuestions={totalQuestions}
+          totalMarks={totalMarks}
+          sessionId={session.id}
+          blockedEmails={(session.blocked || []).map((b) => b.email)}
+        />
       </div>
 
       {/* Integrity feed */}

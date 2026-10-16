@@ -9,23 +9,23 @@ import { ParsedQuestionWithAI } from "@/lib/ai-question-analyzer";
 const DEFAULT_RAW_TEXT = `1. What is 15% of 200?
 A. 15 B. 20 C. 30 D. 45
 Answer: C
-Arithmetic, Easy, 2 points
+Arithmetic, Easy, 1 point
 Explanation: 15 / 100 × 200 = 30.
 
 2. Choose all roots of x² - 5x + 6 = 0.
 A. 1 B. 2 C. 3 D. 6
 Answer: B, C
-Algebra, Medium, 2 points
+Algebra, Medium, 1 point
 Explanation: (x - 2)(x - 3) = 0.
 
 3. Find the mean of 6, 8 and 10.
 Answer: 8
-Data Interpretation, Easy, 2 points
+Data Interpretation, Easy, 1 point
 
 4. For a non-zero real x, x + 1/x = 5. Find x² + 1/x².
 A. 21 B. 23 C. 25 D. 27
 Answer: B
-Algebra, Medium, 2 points`;
+Algebra, Medium, 1 point`;
 
 interface EditableItem {
   id: string;
@@ -52,7 +52,7 @@ const DEFAULT_PARSED_ITEMS: EditableItem[] = [
     stem: "What is 15% of 200?",
     options: "A: 15 | B: 20 | C: 30 | D: 45",
     answerKey: "C · 30",
-    points: 2,
+    points: 1,
     category: "Arithmetic",
     difficulty: "Easy",
     explanation: "15 ÷ 100 × 200 = 30.",
@@ -65,7 +65,7 @@ const DEFAULT_PARSED_ITEMS: EditableItem[] = [
     stem: "Choose all roots of x² - 5x + 6 = 0.",
     options: "A: 1 | B: 2 | C: 3 | D: 6",
     answerKey: "B, C · 2 and 3",
-    points: 2,
+    points: 1,
     category: "Algebra",
     difficulty: "Medium",
     explanation: "(x - 2)(x - 3) = 0, so x = 2 or 3.",
@@ -78,7 +78,7 @@ const DEFAULT_PARSED_ITEMS: EditableItem[] = [
     stem: "Find the mean of 6, 8 and 10.",
     options: "Not applicable · numerical response",
     answerKey: "8 · tolerance 0",
-    points: 2,
+    points: 1,
     category: "Data Interpretation",
     difficulty: "Easy",
     explanation: "(6 + 8 + 10) ÷ 3 = 8.",

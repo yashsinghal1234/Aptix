@@ -9,17 +9,36 @@ function hashPassword(password) {
   return `${salt}:${hash}`;
 }
 
-function generatePin(index = 1) {
-  return `APT-${1000 + index}`;
+function generatePin() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(crypto.randomInt(0, chars.length));
+  }
+  return `APT-${code}`;
 }
 
 async function main() {
-  const defaultPassword = "282007@aA";
+  const bootstrapEmails = process.env.OWNER_BOOTSTRAP_EMAILS;
+  if (!bootstrapEmails) {
+    console.error("FATAL ERROR: OWNER_BOOTSTRAP_EMAILS environment variable is required to run seed-init.js.");
+    process.exit(1);
+  }
+
+  const defaultPassword = process.env.OWNER_INITIAL_PASSWORD || crypto.randomBytes(16).toString("hex");
   const passwordHash = hashPassword(defaultPassword);
 
-  const adminEmails = ["admin@aptix.com", "singhalyash307@gmail.com"];
+  const envEmails = bootstrapEmails
+    .split(",")
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean);
 
-  for (const email of adminEmails) {
+  console.log(`Seeding owner accounts for: ${envEmails.join(", ")}`);
+  if (!process.env.OWNER_INITIAL_PASSWORD) {
+    console.log(`[BOOTSTRAP] Generated random initial owner password: ${defaultPassword}`);
+  }
+
+  for (const email of envEmails) {
     const user = await prisma.user.upsert({
       where: { email },
       update: {

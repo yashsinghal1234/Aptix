@@ -2,7 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { randomInt } from "crypto";
 
 // In-memory registry of active device sessions per attempt:
 // attemptId -> { deviceSessionId: string, lastSeen: number }
@@ -13,12 +14,12 @@ export async function clearAttemptSession(attemptId: string) {
 }
 
 export async function startAttemptAction(sessionId: string, clientDeviceId?: string) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || !payload.userId) return { error: "Unauthorized" };
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) {
+    return { error: "error" in auth ? auth.error : "Unauthorized" };
+  }
 
-  const userId = payload.userId as string;
+  const userId = auth.user.id;
 
   let attempt = await prisma.candidateAttempt.findFirst({
     where: { userId, examSessionId: sessionId }
@@ -29,7 +30,7 @@ export async function startAttemptAction(sessionId: string, clientDeviceId?: str
       data: {
         userId,
         examSessionId: sessionId,
-        shuffleSeed: Math.floor(Math.random() * 1000000),
+        shuffleSeed: randomInt(100000, 9999999),
         status: "IN_PROGRESS"
       }
     });
@@ -55,7 +56,11 @@ export async function startAttemptAction(sessionId: string, clientDeviceId?: str
 }
 
 export async function getAttemptStatusAction(attemptId: string, clientDeviceId?: string) {
-  const attempt = await prisma.candidateAttempt.findUnique({
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) return null;
+  const { user } = auth;
+
+  let attempt = await prisma.candidateAttempt.findUnique({
     where: { id: attemptId },
     include: { 
       session: { include: { exam: true } },
@@ -64,6 +69,43 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
   });
   
   if (!attempt) return null;
+
+  const blockedUser = await prisma.user.findUnique({ where: { id: attempt.userId }, select: { email: true } });
+  if (blockedUser) {
+    const blocked = await prisma.sessionBlocked.findUnique({
+      where: { examSessionId_email: { examSessionId: attempt.examSessionId, email: blockedUser.email.toLowerCase() } },
+    });
+    if (blocked) {
+      if (attempt.status === "IN_PROGRESS") {
+        await prisma.candidateAttempt.update({ where: { id: attemptId }, data: { status: "SUBMITTED", submittedAt: new Date() } });
+        attempt = { ...attempt, status: "SUBMITTED", submittedAt: new Date() } as typeof attempt;
+      }
+      return {
+        status: attempt.status,
+        sessionStatus: attempt.session.status,
+        blocked: true,
+        error: "You have been blocked by the proctor. Contact support.",
+        score: null,
+        totalMarks: 1,
+        canViewResults: false,
+        canViewPodium: false,
+        cohort: null,
+        detailedResults: null,
+      } as any;
+    }
+  }
+
+  // Authorization check: 
+  // 1. OWNER can view any attempt
+  // 2. SETTER can only view if they are the author of the exam template (exam.createdBySetterId)
+  // 3. CANDIDATE can only view their own attempt
+  const isOwner = user.role === "OWNER";
+  const isAssignedSetter = user.role === "SETTER" && attempt.session.exam.createdBySetterId === user.id;
+  const isCandidateAttemptOwner = user.id === attempt.userId;
+
+  if (!isOwner && !isAssignedSetter && !isCandidateAttemptOwner) {
+    return { error: "Forbidden: You do not have permission to view this attempt status." } as any;
+  }
   
   // Check-on-Access (Lazy Auto-Submit on Deadline)
   const now = new Date();
@@ -196,8 +238,10 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
       });
 
       const ranked = allAttempts.map(a => {
-        const timeTakenSeconds = a.submittedAt && a.createdAt
-          ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.createdAt).getTime()) / 1000))
+        const timeTakenSeconds = a.submittedAt && (a.startedAt || a.createdAt)
+          ? Math.max(0, Math.round(
+              (new Date(a.submittedAt).getTime() - new Date(a.startedAt || a.createdAt).getTime()) / 1000
+            ))
           : null;
         return {
           id: a.id,
@@ -289,10 +333,15 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
     totalMarks: totalMarks || 1,
     startTime: attempt.session.startTime,
     durationMinutes: attempt.session.durationMinutes,
-    timeTakenSeconds: attempt.submittedAt && attempt.createdAt
+    // Use startedAt (click "Start Exam") as the reference, not createdAt (login time).
+    // This prevents pre-exam instruction-reading time from inflating the time-taken figure.
+    timeTakenSeconds: attempt.submittedAt && (attempt.startedAt || attempt.createdAt)
       ? Math.min(
           attempt.session.durationMinutes * 60,
-          Math.max(1, Math.round((new Date(attempt.submittedAt).getTime() - new Date(attempt.createdAt).getTime()) / 1000))
+          Math.max(1, Math.round(
+            (new Date(attempt.submittedAt).getTime() -
+              new Date((attempt as any).startedAt || attempt.createdAt).getTime()) / 1000
+          ))
         )
       : null,
     cohort: canViewResults ? cohort : null,

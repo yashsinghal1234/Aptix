@@ -1,7 +1,5 @@
 "use server";
 
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 
@@ -10,6 +8,29 @@ async function isAuthorized() {
   if (!token) return false;
   const payload = await verifyToken(token);
   return payload?.role === "OWNER" || payload?.role === "SETTER";
+}
+
+function detectImageMimeType(buffer: Buffer): string | null {
+  // Check magic bytes for allowed raster formats
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+    return "image/png";
+  }
+  // JPEG: FF D8 FF
+  if (buffer.length >= 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return "image/jpeg";
+  }
+  // WebP: RIFF ... WEBP
+  if (buffer.length >= 12 &&
+      buffer.toString("ascii", 0, 4) === "RIFF" &&
+      buffer.toString("ascii", 8, 12) === "WEBP") {
+    return "image/webp";
+  }
+  // GIF: GIF87a or GIF89a
+  if (buffer.length >= 6 && buffer.toString("ascii", 0, 3) === "GIF") {
+    return "image/gif";
+  }
+  return null;
 }
 
 export async function uploadImageAction(formData: FormData) {
@@ -27,9 +48,15 @@ export async function uploadImageAction(formData: FormData) {
   try {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const mimeType = file.type || "image/png";
+
+    // Verify true binary format via magic bytes — strictly reject SVG, HTML, or executable payloads
+    const detectedMime = detectImageMimeType(buffer);
+    if (!detectedMime) {
+      return { error: "Invalid file type. Only standard raster images (PNG, JPEG, WebP, GIF) are allowed. SVGs and scripts are prohibited." };
+    }
+
     const base64 = buffer.toString("base64");
-    const dataUrl = `data:${mimeType};base64,${base64}`;
+    const dataUrl = `data:${detectedMime};base64,${base64}`;
 
     return { success: true, url: dataUrl };
   } catch (e) {

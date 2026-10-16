@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { candidateLoginAction, staffLoginAction } from "@/app/actions/auth";
+import { candidateLoginAction, staffLoginAction, getSsoIdentityAction, staffSsoLoginAction } from "@/app/actions/auth";
+import { signIn, signOut } from "next-auth/react";
 import Link from "next/link";
 import { ChunkedVideo } from "@/components/ChunkedVideo";
 
@@ -48,6 +49,9 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [rememberStaff, setRememberStaff] = useState(true);
   const [rememberCandidate, setRememberCandidate] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [ssoEmail, setSsoEmail] = useState<string | null>(null);
+  const [ssoName, setSsoName] = useState<string | null>(null);
+  const [ssoLoading, setSsoLoading] = useState(false);
   const router = useRouter();
 
   // Instant route prefetching for seamless post-login navigation
@@ -94,6 +98,68 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     return () => clearInterval(timer);
   }, []);
 
+  // College SSO identity (Google Workspace, SSO-first-then-PIN)
+  useEffect(() => {
+    getSsoIdentityAction()
+      .then((res) => {
+        if (res.signedIn) {
+          setSsoEmail(res.email);
+          setSsoName(res.name);
+          setCandidateEmail((prev) => prev || res.email);
+        }
+      })
+      .catch(() => {});
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get("sso_error") === "domain") {
+        triggerCandidateError("This exam requires a college @kiet.edu Google account. Please use your institutional email.");
+      }
+    }
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setSsoLoading(true);
+    try {
+      await signIn("google", { callbackUrl: typeof window !== "undefined" ? window.location.pathname : "/" });
+    } finally {
+      setSsoLoading(false);
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    try {
+      await signOut({ redirect: false });
+    } catch {}
+    setSsoEmail(null);
+    setSsoName(null);
+  };
+
+  const handleStaffSso = async () => {
+    setLoading(true);
+    setStaffError(null);
+    try {
+      let id = await getSsoIdentityAction().catch(() => ({ signedIn: false as const }));
+      if (!id.signedIn) {
+        await signIn("google", { callbackUrl: "/admin/login" });
+        return;
+      }
+      const res = await staffSsoLoginAction(rememberStaff);
+      if ("error" in res && res.error) {
+        triggerStaffError(res.error);
+        setLoading(false);
+        return;
+      }
+      if ("redirectUrl" in res && res.redirectUrl) {
+        window.location.href = res.redirectUrl as string;
+        return;
+      }
+      setLoading(false);
+    } catch (err: any) {
+      setLoading(false);
+      triggerStaffError(err?.message || "Staff SSO failed. Please try again.");
+    }
+  };
+
   // Real-time network connectivity monitoring
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -124,11 +190,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     if (typeof window !== "undefined") {
       try {
         const savedStaffEmail = localStorage.getItem("aptix_saved_staff_email");
-        const savedStaffPassword = localStorage.getItem("aptix_saved_staff_password");
         const savedStaffRemember = localStorage.getItem("aptix_remember_staff");
 
+        // Never read or store plaintext passwords in client localStorage
+        localStorage.removeItem("aptix_saved_staff_password");
+
         if (savedStaffEmail) setStaffEmail(savedStaffEmail);
-        if (savedStaffPassword) setStaffPassword(savedStaffPassword);
         if (savedStaffRemember !== null) {
           setRememberStaff(savedStaffRemember === "true");
         }
@@ -278,16 +345,15 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
       return;
     }
 
-    // Persist or clear remembered staff credentials
+    // Persist or clear remembered staff email only (NEVER plaintext password)
     if (typeof window !== "undefined") {
       try {
+        localStorage.removeItem("aptix_saved_staff_password");
         if (rememberStaff) {
           localStorage.setItem("aptix_saved_staff_email", email);
-          if (password) localStorage.setItem("aptix_saved_staff_password", password);
           localStorage.setItem("aptix_remember_staff", "true");
         } else {
           localStorage.removeItem("aptix_saved_staff_email");
-          localStorage.removeItem("aptix_saved_staff_password");
           localStorage.setItem("aptix_remember_staff", "false");
         }
       } catch {}
@@ -456,6 +522,28 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
               )}
 
               <form onSubmit={handleCandidateSubmit} className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 mb-2">STEP 1 · VERIFY COLLEGE EMAIL</p>
+                  {ssoEmail ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-lime-200 truncate">✓ {ssoEmail}{ssoName ? ` · ${ssoName}` : ""}</p>
+                      <button type="button" onClick={handleGoogleSignOut} className="text-[11px] font-bold text-neutral-400 hover:text-white shrink-0">
+                        Switch
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={ssoLoading}
+                      className="w-full py-3 px-4 rounded-full bg-white hover:bg-neutral-200 text-black font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9z"/><path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.5 24 12 24z"/><path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.5-2.7-.1.1C.6 8.7 0 10.2 0 12s.6 3.3 1.5 4.8l3.7-2.4z"/><path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.9l3.7 2.9c1-2.9 3.7-5.1 6.8-5.1z"/></svg>
+                      {ssoLoading ? "Opening Google..." : "Continue with college Google"}
+                    </button>
+                  )}
+                  <p className="mt-2 text-[10px] text-neutral-500 leading-relaxed">Institutional inbox ownership is proven by Google. Step 2 PIN still required. {ssoEmail ? "Email locked to verified account." : ""}</p>
+                </div>
                 <div>
                   <label htmlFor="candidate-exam-pin" className="sr-only">
                     Exam PIN
@@ -528,12 +616,14 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     autoComplete="email"
                     aria-invalid={errorField === "email"}
                     onChange={(e) => {
+                      if (ssoEmail) return;
                       setCandidateEmail(e.target.value);
                       if (candidateError) {
                         setCandidateError(null);
                         setErrorField(null);
                       }
                     }}
+                    readOnly={!!ssoEmail}
                     className={`w-full px-6 py-4 bg-[#0d0f14] border rounded-full text-white text-sm sm:text-base placeholder:text-neutral-500 focus:outline-none transition-all ${
                       errorField === "email"
                         ? "border-rose-500/80 ring-1 ring-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
@@ -649,6 +739,17 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
               )}
 
               <form onSubmit={handleStaffSubmit} className="space-y-4">
+                <button
+                  type="button"
+                  onClick={handleStaffSso}
+                  disabled={loading}
+                  className="w-full py-3 px-4 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/15 text-white font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  Continue with college Google (staff)
+                </button>
+                <div className="flex items-center gap-3 text-[10px] text-neutral-600">
+                  <span className="flex-1 h-px bg-white/10" /> or password <span className="flex-1 h-px bg-white/10" />
+                </div>
                 <div>
                   <label htmlFor="staff-email" className="sr-only">
                     Staff Email Address

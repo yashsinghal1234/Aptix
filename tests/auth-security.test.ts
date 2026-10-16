@@ -1,3 +1,5 @@
+import { validatePasswordPolicy } from "../src/lib/password";
+
 export function runAuthSecurityTests() {
   console.log("\n🧪 Running Auth & Security Boundary Tests...");
   let passed = 0;
@@ -41,6 +43,14 @@ export function runAuthSecurityTests() {
   assert("Setter with mustChangePassword=true redirects to setup", mustRedirectToPasswordSetup({ role: "SETTER", mustChangePassword: true }));
   assert("Setter with mustChangePassword=false proceeds to dashboard", !mustRedirectToPasswordSetup({ role: "SETTER", mustChangePassword: false }));
   assert("Candidate never redirected to admin setup", !mustRedirectToPasswordSetup({ role: "CANDIDATE", mustChangePassword: true }));
+
+  // Robust Password Policy Tests (NIST SP 800-63B / >=8 chars, alphanumeric/symbols)
+  assert("Accept strong password 'SuperSecret123!'", validatePasswordPolicy("SuperSecret123!").valid);
+  assert("Accept 8-character mixed password 'Alpha890'", validatePasswordPolicy("Alpha890").valid);
+  assert("Reject short password <8 chars 'Pass1'", !validatePasswordPolicy("Pass1").valid);
+  assert("Reject numbers-only password '1234567890'", !validatePasswordPolicy("1234567890").valid);
+  assert("Reject letters-only password 'NoNumbersHere'", !validatePasswordPolicy("NoNumbersHere").valid);
+  assert("Reject empty password", !validatePasswordPolicy("").valid);
 
   return { passed, total };
 }

@@ -62,28 +62,44 @@ export async function GET(request: Request) {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  // CSV cell sanitizer preventing formula injection (=, +, -, @, tab, CR)
+  const sanitizeCell = (val: any): string => {
+    if (val === null || val === undefined) return "";
+    let str = String(val);
+    // If the cell begins with formula characters (including with leading spaces/newlines), prefix with single quote
+    if (/^[\s]*[=+\-@\t\r]/.test(str)) {
+      str = `'${str}`;
+    }
+    return str.replace(/"/g, '""');
+  };
+
   rankedAttempts.forEach((a, i) => {
     const percentage = (a.score / totalMarks) * 100;
     const submittedTime = a.submittedAt ? new Date(a.submittedAt).toISOString() : "N/A";
-    csv += `"${i+1}","${a.user.name}","${a.user.email}",${a.score.toFixed(1)},${totalMarks},${percentage.toFixed(2)}%,"${a.status}",${a.flagsCount},${a.time},"${submittedTime}"\n`;
+    csv += `"${i+1}","${sanitizeCell(a.user.name)}","${sanitizeCell(a.user.email)}",${a.score.toFixed(1)},${totalMarks},${percentage.toFixed(2)}%,"${sanitizeCell(a.status)}",${a.flagsCount},${a.time},"${submittedTime}"\n`;
   });
 
   csv += "\n\nITEM ANALYSIS (QUESTION PERFORMANCE)\n";
   csv += "Question ID,Question Text,p-value (Difficulty),Discrimination Index,Avg Time Spent (s),Distractors\n";
 
   session.questionStats.forEach(stat => {
-    // Escape quotes in text
-    const cleanText = stat.question.text.replace(/"/g, '""');
-    const distractors = stat.distractors.replace(/"/g, '""');
+    const cleanText = sanitizeCell(stat.question.text);
+    const distractors = sanitizeCell(stat.distractors);
     
     csv += `"${stat.questionId}","${cleanText}",${stat.pValue.toFixed(3)},${stat.discrimination.toFixed(3)},${stat.avgTimeSpent.toFixed(1)},"${distractors}"\n`;
   });
 
+  // Sanitize filename preventing HTTP response splitting and path traversal
+  const safeTitle = (session.exam?.title || "report")
+    .replace(/[\r\n]/g, "")
+    .replace(/[^a-zA-Z0-9_\-]/g, "_")
+    .slice(0, 50);
+
   // Return as downloadable file
   return new NextResponse(csv, {
     headers: {
-      "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="exam_report_${session.exam.title.replace(/\s+/g, '_')}_${session.id}.csv"`
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="exam_report_${safeTitle}_${session.id}.csv"`
     }
   });
 }

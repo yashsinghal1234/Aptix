@@ -2,7 +2,8 @@
 
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { randomUUID } from "crypto";
 
 import { gradeResponse } from "@/lib/scoring";
 import {
@@ -22,13 +23,19 @@ export async function saveDraftAnswerAction(
   selectedOption: string,
   timeTakenSeconds = 0
 ) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) return { error: "error" in auth ? auth.error : "Unauthorized" };
+  const userId = auth.user.id;
 
-  const payload = await verifyToken(token);
-  if (!payload || !payload.userId) return { error: "Unauthorized" };
-
-  const userId = payload.userId as string;
+  {
+    const _att = await prisma.candidateAttempt.findUnique({ where: { id: attemptId }, select: { examSessionId: true } });
+    if (_att) {
+      const _b = await prisma.sessionBlocked.findUnique({
+        where: { examSessionId_email: { examSessionId: _att.examSessionId, email: String(auth.user.email).toLowerCase() } },
+      });
+      if (_b) return { error: "You have been blocked by the proctor.", blocked: true };
+    }
+  }
 
   // Check in-memory attempt deadline cache first (0ms)
   const cachedAttempt = getCachedAttemptStatus(attemptId);
@@ -119,13 +126,19 @@ export async function batchSyncDraftAnswersAction(
   answers: Record<string, string>,
   timeSpent?: Record<string, number>
 ) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) return { error: "error" in auth ? auth.error : "Unauthorized" };
+  const userId = auth.user.id;
 
-  const payload = await verifyToken(token);
-  if (!payload || !payload.userId) return { error: "Unauthorized" };
-
-  const userId = payload.userId as string;
+  {
+    const _att = await prisma.candidateAttempt.findUnique({ where: { id: attemptId }, select: { examSessionId: true } });
+    if (_att) {
+      const _b = await prisma.sessionBlocked.findUnique({
+        where: { examSessionId_email: { examSessionId: _att.examSessionId, email: String(auth.user.email).toLowerCase() } },
+      });
+      if (_b) return { error: "You have been blocked by the proctor.", blocked: true };
+    }
+  }
 
   const attempt = await prisma.candidateAttempt.findUnique({
     where: { id: attemptId },
@@ -163,7 +176,7 @@ export async function batchSyncDraftAnswersAction(
     const timeTakenSeconds = timeSpent ? Math.floor((timeSpent[q.id] || 0) / 1000) : 0;
 
     responsesToUpsert.push({
-      id: `resp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      id: `resp_${randomUUID()}`,
       userId,
       attemptId,
       questionId: q.id,
@@ -236,15 +249,22 @@ export async function batchSyncDraftAnswersAction(
 export async function submitExamAction(
   attemptId: string,
   answers: Record<string, string>,
-  timeSpent?: Record<string, number>
+  timeSpent?: Record<string, number>,
+  clientStartedAtMs?: number  // When candidate clicked "Start Exam" (not login time)
 ) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Not logged in" };
-  
-  const payload = await verifyToken(token);
-  if (!payload || !payload.userId) return { error: "Not logged in" };
-  
-  const userId = payload.userId as string;
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) return { error: "Not logged in" };
+  const userId = auth.user.id;
+
+  {
+    const _att = await prisma.candidateAttempt.findUnique({ where: { id: attemptId }, select: { examSessionId: true } });
+    if (_att) {
+      const _b = await prisma.sessionBlocked.findUnique({
+        where: { examSessionId_email: { examSessionId: _att.examSessionId, email: String(auth.user.email).toLowerCase() } },
+      });
+      if (_b) return { error: "You have been blocked by the proctor.", blocked: true };
+    }
+  }
 
   const attempt = await prisma.candidateAttempt.findUnique({
     where: { id: attemptId },
@@ -278,10 +298,24 @@ export async function submitExamAction(
     await batchSyncDraftAnswersAction(attemptId, answers, timeSpent);
   }
 
-  // Mark attempt as SUBMITTED
+  // Mark attempt as SUBMITTED and stamp startedAt for accurate time tracking
+  const createdMs = attempt.createdAt.getTime();
+  const submittedMs = finalSubmittedAt.getTime();
+  // Accept clientStartedAtMs only if it's a sensible value between createdAt and submittedAt
+  const resolvedStartedAt =
+    clientStartedAtMs &&
+    clientStartedAtMs > createdMs &&
+    clientStartedAtMs < submittedMs
+      ? new Date(clientStartedAtMs)
+      : null;
+
   await prisma.candidateAttempt.update({
     where: { id: attemptId },
-    data: { status: "SUBMITTED", submittedAt: finalSubmittedAt }
+    data: {
+      status: "SUBMITTED",
+      submittedAt: finalSubmittedAt,
+      ...(resolvedStartedAt ? { startedAt: resolvedStartedAt } : {}),
+    },
   });
   markCachedAttemptSubmitted(attemptId);
 

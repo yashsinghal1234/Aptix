@@ -2,8 +2,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { parseRosterText } from "@/lib/roster-parser";
+import { randomInt } from "crypto";
 import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
 import { invalidateSessionQuestionsCache } from "@/lib/exam-cache";
 
@@ -40,10 +41,8 @@ function normalizeCategory(cat: string): string {
 }
 
 export async function createSessionAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const examId = formData.get("examId") as string;
   if (!examId) return { error: "Missing examId" };
@@ -54,7 +53,7 @@ export async function createSessionAction(formData: FormData) {
 
   const template = await prisma.exam.findUnique({
     where: { id: examId },
-    include: { questions: true, rules: true }
+    include: { questions: true, rules: true, rosters: true }
   });
 
   if (!template) return { error: "Template not found" };
@@ -98,8 +97,12 @@ export async function createSessionAction(formData: FormData) {
         eligibleQs = [...eligibleQs, ...fallbackQs];
       }
 
-      // Randomly pick 'count' questions
-      const shuffled = eligibleQs.sort(() => 0.5 - Math.random());
+      // Randomly pick 'count' questions using CSPRNG Fisher-Yates shuffle
+      const shuffled = [...eligibleQs];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = randomInt(0, i + 1);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
       const picked = shuffled.slice(0, rule.count);
       
       // Ensure we don't add duplicates if manual picks overlap
@@ -165,16 +168,33 @@ export async function createSessionAction(formData: FormData) {
 
   invalidateOwnerDashboardCache();
   revalidatePath("/dashboard/owner");
-  return { success: true, sessionId: session.id, pin };
+
+  let rosterAdded = 0;
+  const inherited = (template.rosters || []).map((r) => ({ examSessionId: session.id, email: r.email, name: r.name }));
+  const extraText = ((formData.get("rosterText") as string) || "").slice(0, 500_000);
+  let extra: { examSessionId: string; email: string; name: string | null }[] = [];
+  if (extraText.trim()) {
+    extra = parseRosterText(extraText).entries
+      .slice(0, 5000)
+      .map((e) => ({ examSessionId: session.id, email: e.email, name: e.name }));
+  }
+  const combined = new Map<string, { examSessionId: string; email: string; name: string | null }>();
+  for (const r of [...inherited, ...extra]) if (!combined.has(r.email)) combined.set(r.email, r);
+  if (combined.size > 0) {
+    await prisma.sessionRoster.createMany({ data: [...combined.values()], skipDuplicates: true });
+    rosterAdded = combined.size;
+  }
+
+  invalidateOwnerDashboardCache();
+  revalidatePath("/dashboard/owner");
+  return { success: true, sessionId: session.id, pin, rosterAdded };
 }
 
 import { computeSessionAnalytics } from "./analytics";
 
 export async function setSessionStatusAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const sessionId = formData.get("sessionId") as string;
   const status = formData.get("status") as string;
@@ -206,10 +226,8 @@ export async function setSessionStatusAction(formData: FormData) {
 }
 
 export async function extendSessionTimeAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const sessionId = formData.get("sessionId") as string;
   const minutes = parseInt(formData.get("minutes") as string, 10);
@@ -235,10 +253,8 @@ export async function extendSessionTimeAction(formData: FormData) {
 }
 
 export async function extendCandidateTimeAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const attemptId = formData.get("attemptId") as string;
   const minutes = parseInt(formData.get("minutes") as string, 10);
@@ -266,10 +282,8 @@ export async function extendCandidateTimeAction(formData: FormData) {
 }
 
 export async function endSessionAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const sessionId = formData.get("sessionId") as string;
 
@@ -294,10 +308,8 @@ export async function endSessionAction(formData: FormData) {
 }
 
 export async function reopenCandidateAttemptAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const attemptId = formData.get("attemptId") as string;
   const minutes = parseInt(formData.get("minutes") as string || "10", 10);
@@ -333,10 +345,8 @@ export async function reopenCandidateAttemptAction(formData: FormData) {
 }
 
 export async function resetCandidateAttemptAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const attemptId = formData.get("attemptId") as string;
   const minutes = parseInt(formData.get("minutes") as string || "0", 10);
@@ -362,7 +372,7 @@ export async function resetCandidateAttemptAction(formData: FormData) {
       status: "IN_PROGRESS",
       submittedAt: null,
       createdAt: new Date(),
-      shuffleSeed: Math.floor(Math.random() * 1000000),
+      shuffleSeed: randomInt(100000, 9999999),
       extendedUntil: newExtendedUntil
     }
   });
@@ -380,10 +390,9 @@ export async function resetCandidateAttemptAction(formData: FormData) {
 }
 
 export async function rescheduleSessionAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
+  const { payload } = auth;
 
   const sessionId = formData.get("sessionId") as string;
   const startTimeStr = formData.get("startTime") as string;
@@ -432,13 +441,9 @@ export async function rescheduleSessionAction(formData: FormData) {
 }
 
 export async function toggleReleaseResultsAction(formData: FormData) {
-  const cookieStore = cookies();
-  const token = cookieStore.get("token")?.value || cookieStore.get("auth_session")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
-    return { error: "Unauthorized" };
-  }
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return { error: auth.error };
+  const { payload } = auth;
 
   const sessionId = formData.get("sessionId") as string;
   const released = formData.get("released") === "true";
@@ -478,13 +483,9 @@ export async function toggleReleaseResultsAction(formData: FormData) {
 }
 
 export async function togglePodiumRevealAction(formData: FormData) {
-  const cookieStore = cookies();
-  const token = cookieStore.get("token")?.value || cookieStore.get("auth_session")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
-    return { error: "Forbidden" };
-  }
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return { error: auth.error };
+  const { payload } = auth;
 
   const sessionId = String(formData.get("sessionId") || "");
   const revealed = formData.get("revealed") === "true";
@@ -524,13 +525,9 @@ export async function togglePodiumRevealAction(formData: FormData) {
 }
 
 export async function toggleGamifiedModeAction(formData: FormData) {
-  const cookieStore = cookies();
-  const token = cookieStore.get("token")?.value || cookieStore.get("auth_session")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
-    return { error: "Unauthorized" };
-  }
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return { error: auth.error };
+  const { payload } = auth;
 
   const sessionId = formData.get("sessionId") as string;
   const gamified = formData.get("gamified") === "true";

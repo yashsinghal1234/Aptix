@@ -1,4 +1,10 @@
-import { checkRateLimit, recordFailedAttempt, resetRateLimit } from "../src/lib/rate-limiter";
+import { 
+  checkRateLimit, 
+  recordFailedAttempt, 
+  resetRateLimit,
+  getSafeClientIp
+} from "../src/lib/rate-limiter";
+import { generateSecureTemporaryPassword } from "../src/lib/password-generator";
 
 export function runRateLimiterTests(): { passed: number; total: number } {
   console.log("\n🧪 Running Rate Limiter & Anti-Brute-Force Tests...");
@@ -36,6 +42,25 @@ export function runRateLimiterTests(): { passed: number; total: number } {
   // 4. Successful login resets the rate limit
   resetRateLimit(testId);
   assert("Reset rate limit allows immediate retry", checkRateLimit(testId).allowed === true);
+
+  // 5. Safe IP Extraction tests
+  const mockHeaders1 = { get: (k: string) => k === "x-vercel-ip" ? "203.0.113.195" : null };
+  assert("Safe IP extracts x-vercel-ip", getSafeClientIp(mockHeaders1) === "203.0.113.195");
+
+  const mockHeaders2 = { get: (k: string) => k === "x-forwarded-for" ? "198.51.100.42:8080, 10.0.0.1" : null };
+  assert("Safe IP strips port and extracts first hop from x-forwarded-for", getSafeClientIp(mockHeaders2) === "198.51.100.42");
+
+  const mockHeaders3 = { get: (k: string) => k === "x-forwarded-for" ? "invalid;injection<payload>" : null };
+  assert("Safe IP rejects header injection payload and falls back safely", getSafeClientIp(mockHeaders3) === "127.0.0.1");
+
+  // 6. Secure Client-side Password Generator tests
+  const p1 = generateSecureTemporaryPassword("Setter");
+  assert("Password starts with requested prefix", p1.startsWith("Setter#"));
+  assert("Password has at least 16 characters of entropy", p1.length >= 16);
+  assert("Password contains diverse character classes", /[a-z]/.test(p1) || /[A-Z]/.test(p1) || /[0-9]/.test(p1));
+
+  const p2 = generateSecureTemporaryPassword("Reset");
+  assert("Subsequent passwords are distinct and non-deterministic", p1 !== p2);
 
   return { passed, total };
 }

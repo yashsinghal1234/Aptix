@@ -137,8 +137,8 @@ export function ChangePasswordModal({
                   type="password"
                   name="newPassword"
                   required
-                  minLength={6}
-                  placeholder="At least 6 characters"
+                  minLength={8}
+                  placeholder="At least 8 characters (letters & numbers)"
                   className="w-full px-3.5 py-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 outline-none transition-all font-medium text-white placeholder-neutral-600"
                 />
               </div>
@@ -151,7 +151,7 @@ export function ChangePasswordModal({
                   type="password"
                   name="confirmPassword"
                   required
-                  minLength={6}
+                  minLength={8}
                   placeholder="Re-enter new password"
                   className="w-full px-3.5 py-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl focus:border-neutral-500 focus:ring-1 focus:ring-neutral-500 outline-none transition-all font-medium text-white placeholder-neutral-600"
                 />

@@ -330,7 +330,7 @@ export async function analyzeQuestionWithAI(
       distractorCritique: distractorAnalysis.critiques,
       ambiguityStatus: ambiguity.status,
       ambiguityMessage: ambiguity.message,
-      suggestedPoints: taxonomy.difficulty === "HARD" ? 2.0 : 1.0,
+      suggestedPoints: 1.0,
       duplicateMatch
     }
   };

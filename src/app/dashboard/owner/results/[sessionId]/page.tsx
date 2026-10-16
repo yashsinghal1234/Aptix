@@ -64,8 +64,8 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
 
   const ranked = attemptsWithScores
     .map((a) => {
-      const timeTakenSeconds = a.submittedAt && a.createdAt
-        ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.createdAt).getTime()) / 1000))
+      const timeTakenSeconds = a.submittedAt && (a.startedAt || a.createdAt)
+        ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.startedAt || a.createdAt).getTime()) / 1000))
         : null;
       return {
         ...a,
@@ -110,8 +110,8 @@ export default async function SessionAnalyticsPage({ params }: { params: { sessi
     const score = a.responses.reduce((s, r) => s + r.earnedPoints, 0);
     const mId = sessionMascots[a.userId];
     const m = mId ? getMascotById(mId) : null;
-    const timeTakenSeconds = a.submittedAt && a.createdAt
-      ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.createdAt).getTime()) / 1000))
+    const timeTakenSeconds = a.submittedAt && (a.startedAt || a.createdAt)
+      ? Math.max(0, Math.round((new Date(a.submittedAt).getTime() - new Date(a.startedAt || a.createdAt).getTime()) / 1000))
       : null;
     return {
       id: a.id,

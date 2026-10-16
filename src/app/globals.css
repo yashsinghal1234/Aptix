@@ -14,6 +14,7 @@ body {
   letter-spacing: -0.012em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-x: none;
 }
 
 ::selection {
@@ -167,6 +168,20 @@ body {
     transform: none;
     transition: none;
   }
+}
+
+/* Question Stem & Formula Responsive Wrapping Rules */
+.question-stem-wrap {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+  max-width: 100%;
+}
+.question-stem-wrap img, 
+.question-stem-wrap canvas, 
+.question-stem-wrap svg {
+  max-width: 100%;
+  height: auto;
 }
 
 

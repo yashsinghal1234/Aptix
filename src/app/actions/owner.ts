@@ -1,26 +1,21 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
-import { hashPassword, verifyPassword } from "@/lib/password";
+import { requireAuth } from "@/lib/auth";
+import { hashPassword, verifyPassword, validatePasswordPolicy } from "@/lib/password";
 import { invalidateSettersCache } from "@/lib/dashboard-cache";
 
-async function getAuthPayload() {
-  const token = cookies().get("token")?.value;
-  if (!token) return null;
-  return await verifyToken(token);
-}
-
 async function isOwner() {
-  const payload = await getAuthPayload();
-  return payload?.role === "OWNER";
+  const auth = await requireAuth(["OWNER"]);
+  return !("error" in auth);
 }
 
 function generateRandomPassword() {
-  const num = Math.floor(1000 + Math.random() * 9000);
-  return `Setter@${num}`;
+  const bytes = randomBytes(12).toString("base64url");
+  return `Set!${bytes}`;
 }
 
 export async function createSetterAction(formData: FormData) {
@@ -34,6 +29,11 @@ export async function createSetterAction(formData: FormData) {
 
   if (!password) {
     password = generateRandomPassword();
+  } else {
+    const policy = validatePasswordPolicy(password);
+    if (!policy.valid) {
+      return { error: policy.error };
+    }
   }
 
   const normalizedEmail = email.toLowerCase().trim();
@@ -92,17 +92,19 @@ export async function removeSetterAction(id: string) {
  * Allows any logged-in staff member (Owner or Setter) to change their password
  */
 export async function changePasswordAction(formData: FormData) {
-  const payload = await getAuthPayload();
-  if (!payload || !["OWNER", "SETTER"].includes(payload.role as string)) {
-    return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) {
+    return { error: auth.error };
   }
+  const { user: authUser } = auth;
 
   const currentPassword = formData.get("currentPassword") as string;
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
-  if (!newPassword || newPassword.length < 6) {
-    return { error: "New password must be at least 6 characters long." };
+  const policy = validatePasswordPolicy(newPassword);
+  if (!policy.valid) {
+    return { error: policy.error || "Password does not meet security requirements." };
   }
 
   if (newPassword !== confirmPassword) {
@@ -110,7 +112,7 @@ export async function changePasswordAction(formData: FormData) {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: payload.userId as string }
+    where: { id: authUser.id }
   });
 
   if (!user) {
@@ -128,12 +130,13 @@ export async function changePasswordAction(formData: FormData) {
     }
   }
 
-  // Update with new hashed password
+  // Update with new hashed password and revoke old sessions
   await prisma.user.update({
     where: { id: user.id },
     data: { 
       passwordHash: hashPassword(newPassword),
-      mustChangePassword: false
+      mustChangePassword: false,
+      tokenVersion: { increment: 1 }
     }
   });
 
@@ -154,9 +157,16 @@ export async function adminResetUserPasswordAction(userId: string, customPasswor
     return { error: "User account not found" };
   }
 
-  const temporaryPassword = (customPassword && customPassword.trim().length >= 6)
+  if (customPassword && customPassword.trim()) {
+    const policy = validatePasswordPolicy(customPassword.trim());
+    if (!policy.valid) {
+      return { error: policy.error };
+    }
+  }
+
+  const temporaryPassword = (customPassword && customPassword.trim().length >= 8)
     ? customPassword.trim()
-    : `Reset@${Math.floor(1000 + Math.random() * 9000)}`;
+    : `Rst!${randomBytes(12).toString("base64url")}`;
 
   const passwordHash = hashPassword(temporaryPassword);
 
@@ -164,7 +174,8 @@ export async function adminResetUserPasswordAction(userId: string, customPasswor
     where: { id: userId },
     data: {
       passwordHash: passwordHash,
-      mustChangePassword: requireChange
+      mustChangePassword: requireChange,
+      tokenVersion: { increment: 1 }
     }
   });
 

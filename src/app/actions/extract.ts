@@ -151,7 +151,7 @@ export async function saveVerifiedQuestionsAction(
         isExtracted: true,
         authorId: user.userId as string,
         type: "MCQ_SINGLE",
-        points: q.difficultyLevel === "HARD" ? 2.0 : 1.0,
+        points: 1.0,
         negativePoints: 0.0
       }
     });

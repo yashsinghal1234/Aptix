@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
 
 export async function middleware(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
+  // CVE-2025-29927 mitigation: Drop and reject spoofed internal middleware subrequest headers
+  if (request.headers.get('x-middleware-subrequest')) {
+    return new NextResponse('Bad Request: Malformed internal routing header', { status: 400 });
+  }
+
   const path = request.nextUrl.pathname;
+
+  // Auth.js (Google SSO) endpoints manage their own state/nonce cookies
+  if (path.startsWith('/api/auth')) {
+    return NextResponse.next();
+  }
+
+  const token = request.cookies.get('token')?.value;
 
   if (!token) {
     // Redirect unauthenticated users trying to access staff dashboard to staff login
@@ -14,9 +25,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const payload = await verifyToken(token);
+  const authResult = await requireAuth(undefined, token);
 
-  if (!payload) {
+  if ('error' in authResult || !authResult.user) {
     const response = path.startsWith('/dashboard') 
       ? NextResponse.redirect(new URL('/admin/login', request.url))
       : NextResponse.redirect(new URL('/', request.url));
@@ -24,7 +35,8 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const role = payload.role as string;
+  const { user, payload } = authResult;
+  const role = user.role;
   const mustChangePassword = payload.mustChangePassword === true;
 
   // If user must change password, lock them to /admin/setup-password until completed
@@ -65,6 +77,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/login', '/admin/setup-password', '/'],
+  matcher: ['/dashboard/:path*', '/admin/login', '/admin/setup-password', '/', '/api/:path*'],
 };
+
 

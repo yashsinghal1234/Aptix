@@ -67,11 +67,11 @@ export default function SetupPasswordPage() {
               type="password" 
               name="newPassword"
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               autoFocus
               className="w-full px-3.5 py-2.5 text-white bg-neutral-900 border border-neutral-800 rounded-xl focus:bg-black focus:ring-1 focus:ring-neutral-700 outline-none transition-all text-xs font-medium placeholder-neutral-600"
-              placeholder="Minimum 6 characters"
+              placeholder="Minimum 8 characters (letters & numbers)"
             />
           </div>
 
@@ -83,7 +83,7 @@ export default function SetupPasswordPage() {
               type="password" 
               name="confirmPassword"
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               className="w-full px-3.5 py-2.5 text-white bg-neutral-900 border border-neutral-800 rounded-xl focus:bg-black focus:ring-1 focus:ring-neutral-700 outline-none transition-all text-xs font-medium placeholder-neutral-600"
               placeholder="Re-enter your password"

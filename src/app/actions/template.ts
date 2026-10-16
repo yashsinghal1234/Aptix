@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
+import { parseRosterText } from "@/lib/roster-parser";
 import { z } from "zod";
 
 const templateSchema = z.object({
@@ -132,11 +133,27 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
     }
   });
 
+  invalidateOwnerDashboardCache();
+  revalidatePath("/dashboard/owner");
+
+  const rosterText = ((formData.get("rosterText") as string) || "").slice(0, 500_000);
+  let rosterCount = 0;
+  if (rosterText.trim()) {
+    const { entries } = parseRosterText(rosterText);
+    if (entries.length > 0) {
+      await prisma.examRoster.createMany({
+        data: entries.slice(0, 5000).map((e) => ({ examId: template.id, email: e.email, name: e.name })),
+        skipDuplicates: true,
+      });
+      rosterCount = entries.length;
+    }
+  }
+
   await prisma.auditLog.create({
     data: {
       userId: payload.userId as string,
       action: "CREATE_TEMPLATE",
-      details: `Created exam template: ${data.title}`,
+      details: `Created exam template: ${data.title}${rosterCount ? ` with ${rosterCount} roster emails` : ""}`,
     }
   });
 
@@ -186,7 +203,8 @@ export async function duplicateTemplateAction(id: string) {
       where: { id },
       include: {
         questions: true,
-        rules: true
+        rules: true,
+        rosters: true
       }
     });
 
@@ -232,6 +250,9 @@ export async function duplicateTemplateAction(id: string) {
             difficultyLevel: r.difficultyLevel,
             count: r.count
           }))
+        },
+        rosters: {
+          create: (existing.rosters || []).map(r => ({ email: r.email, name: r.name }))
         }
       }
     });

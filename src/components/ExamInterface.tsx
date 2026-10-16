@@ -69,6 +69,8 @@ export function ExamInterface({
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sessionStatus, setSessionStatus] = useState(session.status);
   const [tabSwitchWarning, setTabSwitchWarning] = useState<string | null>(null);
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false);
+  const [submittingReason, setSubmittingReason] = useState<string>("");
   
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [finalTotalMarks, setFinalTotalMarks] = useState<number | null>(null);
@@ -182,8 +184,12 @@ export function ExamInterface({
   const answersRef = useRef(answers);
   const timeSpentRef = useRef<Record<string, number>>({});
   const isFinishingRef = useRef(isAlreadySubmitted);
-  const blurCountRef = useRef(0);
+  const blurCountRef = useRef(0);           // All infractions (for logging)
+  const tabSwitchCountRef = useRef(0);      // Only WINDOW_BLUR tab switches (for limit enforcement)
+  const lastInfractionTimestampRef = useRef<number>(0);
+  const lastInfractionKeyRef = useRef<string>(""); // Composite dedup key: "TYPE_secondsEpoch"
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const executeSubmitRef = useRef<((msg?: string) => Promise<void>) | null>(null);
 
   const config = useMemo(() => {
     try {
@@ -561,12 +567,22 @@ export function ExamInterface({
     return () => clearInterval(timer);
   }, [session, currentExtendedUntil, isFinished, hasStarted, isForcedLive, sessionStatus, synced, getServerTime, attempt.id]);
 
-  const executeSubmit = useCallback(async () => {
+  const executeSubmit = useCallback(async (reasonMessage?: string) => {
     if (isFinishingRef.current && isFinished) return;
+    // Always update the ref so anti-cheat listeners always call latest version
+    // (ref is updated below after definition)
     isFinishingRef.current = true;
+    setIsSubmittingExam(true);
+    if (reasonMessage) {
+      setSubmittingReason(reasonMessage);
+    }
     setShowSubmitConfirm(false);
     
+    // Stamp startedAt from localStorage before clearing it
+    let clientStartedAtMs: number | undefined;
     try {
+      const storedStart = localStorage.getItem(`aptix_attempt_start_${attempt.id}`);
+      if (storedStart) clientStartedAtMs = Number(storedStart);
       localStorage.removeItem(`aptix_attempt_start_${attempt.id}`);
     } catch (e) {}
 
@@ -580,9 +596,36 @@ export function ExamInterface({
       : (attempt.createdAt ? Math.round((Date.now() - new Date(attempt.createdAt).getTime()) / 1000) : 180);
     setFinalTimeSpent(finalElapsed);
 
-    await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current);
+    try {
+      await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current, clientStartedAtMs);
+    } catch (err) {
+      console.error("Submission failed, retrying once...", err);
+      try {
+        await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current, clientStartedAtMs);
+      } catch (e) {}
+    }
     clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
+
+    // Guaranteed sequence: SUBMIT FIRST, THEN EXIT FULLSCREEN
+    if (typeof document !== "undefined") {
+      const doc = document as any;
+      if (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement) {
+        try {
+          if (doc.exitFullscreen) {
+            await doc.exitFullscreen().catch(() => {});
+          } else if (doc.webkitExitFullscreen) {
+            await doc.webkitExitFullscreen();
+          } else if (doc.mozCancelFullScreen) {
+            await doc.mozCancelFullScreen();
+          } else if (doc.msExitFullscreen) {
+            await doc.msExitFullscreen();
+          }
+        } catch (e) {}
+      }
+    }
+    setIsFullscreen(false);
     setIsFinished(true);
+    setIsSubmittingExam(false);
 
     if (canViewResults) {
       const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
@@ -602,15 +645,19 @@ export function ExamInterface({
     }
   }, [attempt.id, canViewResults, isFinished, session.durationMinutes, timeLeft, attempt.createdAt]);
 
+  // Always keep ref in sync so stale closure never prevents auto-submit
+  useEffect(() => { executeSubmitRef.current = executeSubmit; }, [executeSubmit]);
+
   useEffect(() => {
     if (shouldAutoSubmit && !isFinishingRef.current) {
-      executeSubmit();
+      isFinishingRef.current = true; // Set synchronously before the async call
+      (executeSubmitRef.current ?? executeSubmit)("Assessment time expired. Automatically submitting...");
     }
   }, [shouldAutoSubmit, executeSubmit]);
 
   const handleFinishTest = useCallback(async (force = false) => {
     if (force) {
-      executeSubmit();
+      executeSubmit("Assessment concluded. Finalizing submission...");
     } else {
       setShowSubmitConfirm(true);
     }
@@ -626,27 +673,63 @@ export function ExamInterface({
     ) => {
       if (isFinishingRef.current || isFinished || !hasStarted) return;
 
+      const now = Date.now();
+
+      // ── Deduplication ─────────────────────────────────────────────────────────
+      // Both window.blur and visibilitychange fire for the same tab switch.
+      // Use a composite key (type + second-resolution timestamp) to count each
+      // real event only once regardless of how many DOM events arrive.
+      if (type === "WINDOW_BLUR" || type === "FULLSCREEN_EXIT") {
+        const dedupKey = `${type}_${Math.floor(now / 1000)}`;
+        if (dedupKey === lastInfractionKeyRef.current) return;
+        lastInfractionKeyRef.current = dedupKey;
+        lastInfractionTimestampRef.current = now;
+      }
+
+      // ── Global infraction counter (for logging only) ───────────────────────────
       blurCountRef.current += 1;
-      const count = blurCountRef.current;
-      const maxLimit = config.tabSwitchLimit !== undefined ? parseInt(String(config.tabSwitchLimit), 10) : 0;
+      const totalInfractions = blurCountRef.current;
+
+      // ── Tab-switch-specific counter (for limit enforcement) ───────────────────
+      // Only WINDOW_BLUR counts against the tabSwitchLimit.
+      // Right-clicks, copy attempts, and F12 presses do NOT eat the tab switch budget.
+      if (type === "WINDOW_BLUR") {
+        tabSwitchCountRef.current += 1;
+      }
+      const tabSwitchCount = tabSwitchCountRef.current;
+
+      const tabLimit = config.tabSwitchLimit !== undefined ? parseInt(String(config.tabSwitchLimit), 10) : 0;
 
       // Log cheat signal to database in real-time
-      logCheatSignalAction(session.id, type, `${description} (Infraction #${count}).`);
-      
-      if (maxLimit > 0) {
-        if (count >= maxLimit) {
-          isFinishingRef.current = true;
-          setTabSwitchWarning(`Maximum allowed security infractions exceeded. Auto-submitting assessment now.`);
-          executeSubmit();
+      logCheatSignalAction(session.id, type, `${description} (Tab switch #${tabSwitchCount}, Total infraction #${totalInfractions}).`);
+
+      if (tabLimit > 0 && type === "WINDOW_BLUR") {
+        // ── Tab switch limit enforcement ───────────────────────────────────────
+        if (tabSwitchCount >= tabLimit) {
+          if (!isFinishingRef.current) {
+            isFinishingRef.current = true;
+            const msg = `Tab switch limit reached (${tabSwitchCount}/${tabLimit}). Auto-submitting assessment now.`;
+            setTabSwitchWarning(msg);
+            (executeSubmitRef.current ?? executeSubmit)(msg);
+          }
         } else {
-          setTabSwitchWarning(`Security Warning: Focus violation #${count} recorded (${description}). Continued infractions will result in automatic submission.`);
+          setTabSwitchWarning(
+            `⚠️ Focus Warning: Tab switch ${tabSwitchCount}/${tabLimit} recorded. ` +
+            `Reaching ${tabLimit} will automatically submit your exam.`
+          );
         }
       } else if (config.autoSubmitOnFullscreenExit && type === "FULLSCREEN_EXIT") {
-        isFinishingRef.current = true;
-        setTabSwitchWarning("Exited full-screen mode. Assessment automatically submitted.");
-        executeSubmit();
+        if (!isFinishingRef.current) {
+          isFinishingRef.current = true;
+          const msg = "Exited full-screen mode. Assessment automatically submitted.";
+          setTabSwitchWarning(msg);
+          (executeSubmitRef.current ?? executeSubmit)(msg);
+        }
       } else {
-        setTabSwitchWarning(`Security Alert: Infraction #${count} logged to examiner (${description}).`);
+        // Non-tab-switch infraction: warn but don't auto-submit based on tab limit
+        if (type !== "WINDOW_BLUR" || tabLimit === 0) {
+          setTabSwitchWarning(`Security Alert: Infraction #${totalInfractions} logged to examiner (${description}).`);
+        }
       }
     };
 
@@ -677,7 +760,9 @@ export function ExamInterface({
       if (isFinishingRef.current || isFinished || !hasStarted) return;
       if (config.requireFullscreen === false) return;
       
-      if (!document.fullscreenElement) {
+      const doc = document as any;
+      const activeFs = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+      if (!activeFs) {
         setIsFullscreen(false);
         handleSecurityInfraction("FULLSCREEN_EXIT", "Candidate exited full-screen mode");
       } else {
@@ -776,25 +861,28 @@ export function ExamInterface({
     } catch (_) {}
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Intercept F12 and common DevTools shortcuts
-      if (
-        e.key === "F12" ||
-        (e.ctrlKey && (e.key === "u" || e.key === "U")) ||
-        (e.ctrlKey && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key))
-      ) {
+      // Intercept F12 and common DevTools shortcuts (Windows/Linux: Ctrl+Shift+I/J/C, Ctrl+U; Mac: Cmd+Option+I/J/C, Cmd+Option+U)
+      const isMacDevTools = (e.metaKey && e.altKey && ["i", "j", "c", "u"].includes(e.key.toLowerCase())) ||
+                            (e.metaKey && e.shiftKey && ["c", "i", "j"].includes(e.key.toLowerCase()));
+      const isWinDevTools = e.key === "F12" ||
+                            (e.ctrlKey && (e.key === "u" || e.key === "U")) ||
+                            (e.ctrlKey && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key));
+
+      if (isMacDevTools || isWinDevTools) {
         e.preventDefault();
         handleSecurityInfraction("DEV_TOOLS", "Candidate attempted to open browser developer tools / inspect elements");
       }
 
-      // Block PrintScreen capture key
-      if (e.key === "PrintScreen" || e.code === "PrintScreen") {
+      // Block PrintScreen capture key (Windows) and macOS screenshot shortcuts (Cmd+Shift+3/4/5)
+      const isMacScreenshot = e.metaKey && e.shiftKey && ["3", "4", "5"].includes(e.key);
+      if (e.key === "PrintScreen" || e.code === "PrintScreen" || isMacScreenshot) {
         e.preventDefault();
         try {
           if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText("");
           }
         } catch (_) {}
-        handleSecurityInfraction("COPY_PASTE", "Candidate attempted screen capture via PrintScreen key");
+        handleSecurityInfraction("COPY_PASTE", isMacScreenshot ? "Candidate attempted screen capture via macOS shortcut (Cmd+Shift)" : "Candidate attempted screen capture via PrintScreen key");
       }
 
       // Block Ctrl+P (Print/PDF export), Ctrl+S (Save page), Ctrl+A (Select all)
@@ -921,7 +1009,16 @@ export function ExamInterface({
 
     if (config.requireFullscreen !== false) {
       try {
-        await document.documentElement.requestFullscreen();
+        const el = document.documentElement as any;
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          await el.webkitRequestFullscreen();
+        } else if (el.mozRequestFullScreen) {
+          await el.mozRequestFullScreen();
+        } else if (el.msRequestFullscreen) {
+          await el.msRequestFullscreen();
+        }
         setIsFullscreen(true);
       } catch (err) {
         console.warn("Fullscreen request failed", err);
@@ -1571,6 +1668,23 @@ export function ExamInterface({
     );
   }
 
+  if (isSubmittingExam || (isFinishingRef.current && !isFinished)) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center p-6 selection:bg-lime-400 selection:text-black">
+        <div className="bg-[#0a0c10] p-10 rounded-3xl max-w-lg w-full text-center shadow-2xl border border-white/10 animate-in fade-in zoom-in duration-200">
+          <div className="w-16 h-16 border-4 border-lime-400/20 border-t-lime-400 rounded-full animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Submitting Assessment</h2>
+          <p className="text-neutral-400 text-sm mb-4 leading-relaxed">
+            {submittingReason || "Finalizing responses and securely synchronizing with examination servers..."}
+          </p>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-neutral-400 font-mono">
+            <span>Submitting exam securely before exiting fullscreen...</span>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (hasStarted && !isFinished && !isFullscreen && config.requireFullscreen !== false) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black/90 p-6 z-50 fixed inset-0 backdrop-blur-md selection:bg-white selection:text-black">
@@ -1587,7 +1701,16 @@ export function ExamInterface({
           <button 
             onClick={async () => {
               try {
-                await document.documentElement.requestFullscreen();
+                const el = document.documentElement as any;
+                if (el.requestFullscreen) {
+                  await el.requestFullscreen();
+                } else if (el.webkitRequestFullscreen) {
+                  await el.webkitRequestFullscreen();
+                } else if (el.mozRequestFullScreen) {
+                  await el.mozRequestFullScreen();
+                } else if (el.msRequestFullscreen) {
+                  await el.msRequestFullscreen();
+                }
                 setIsFullscreen(true);
               } catch (err) {
                 console.warn(err);
@@ -1798,13 +1921,13 @@ export function ExamInterface({
                     {(() => {
                       const tq = questions[currentQuestion].type || "MCQ_SINGLE";
                       const kind = tq === "MCQ_MULTI" ? "Multiple choice" : tq === "FILL_BLANK" ? "Fill in the blanks" : tq === "NUMERIC" ? "Numerical entry" : "Single choice";
-                      return `${kind} · +${questions[currentQuestion].points || 2} / -${questions[currentQuestion].negativePoints || 0.5}`;
+                      return `${kind} · +${questions[currentQuestion].points || 1} / -${questions[currentQuestion].negativePoints || 0}`;
                     })()}
                   </span>
                 </div>
 
                 {/* Question Stem */}
-                <h2 className="text-xl sm:text-2xl font-semibold text-white leading-relaxed mb-4">
+                <h2 className="text-xl sm:text-2xl font-semibold text-white leading-relaxed mb-4 question-stem-wrap break-words">
                   {questions[currentQuestion].text}
                 </h2>
 
@@ -2100,8 +2223,8 @@ export function ExamInterface({
       <ExamReviewModal
         isOpen={showSubmitConfirm}
         onClose={() => setShowSubmitConfirm(false)}
-        onSubmit={executeSubmit}
-        isSubmitting={isFinishingRef.current}
+        onSubmit={() => executeSubmit("Candidate confirmed final submission.")}
+        isSubmitting={isSubmittingExam || isFinishingRef.current}
         questions={questions}
         answers={answers}
         markedForReview={markedForReview}

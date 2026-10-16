@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { adminResetUserPasswordAction } from "@/app/actions/owner";
+import { generateSecureTemporaryPassword } from "@/lib/password-generator";
 
 export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userId: string; userName: string; userEmail: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,8 +18,7 @@ export function ResetStaffPasswordModal({ userId, userName, userEmail }: { userI
   const [copied, setCopied] = useState(false);
 
   const handleAutoGenerate = () => {
-    const num = Math.floor(1000 + Math.random() * 9000);
-    setCustomPassword(`Reset@${num}`);
+    setCustomPassword(generateSecureTemporaryPassword("Reset"));
   };
 
   const handleReset = async (e: React.FormEvent) => {
