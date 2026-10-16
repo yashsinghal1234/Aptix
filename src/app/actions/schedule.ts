@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { invalidateOwnerDashboardCache, invalidateQuestionBankCache } from "@/lib/dashboard-cache";
 import { z } from "zod";
 
@@ -33,10 +33,9 @@ function parseStartTime(startTimeStr: string | null | undefined, tzOffsetStr: st
 }
 
 export async function createScheduledExamAction(formData: FormData, selectedQuestionIds: string[]) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
+  const { user } = auth;
 
   const tzOffsetStr = formData.get("timezoneOffset") as string;
   const parsed = scheduleSchema.safeParse({
@@ -68,7 +67,7 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
       allowedEmailDomain,
       negativeMarkingEnabled: negativeMarking > 0,
       negativeMarksValue: negativeMarking,
-      createdBySetterId: payload.userId as string,
+      createdBySetterId: user.id,
       questions: {
         connect: selectedQuestionIds.map((id) => ({ id }))
       }
@@ -92,7 +91,7 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
 
   await prisma.auditLog.create({
     data: {
-      userId: payload.userId as string,
+      userId: user.id,
       action: "SCHEDULE_EXAM",
       details: `Scheduled one-off exam: ${title} (PIN: ${pin})`,
     }
@@ -103,10 +102,19 @@ export async function createScheduledExamAction(formData: FormData, selectedQues
 }
 
 export async function reviewQuestionAction(questionId: string, action: "APPROVE" | "REJECT") {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role !== "OWNER" && payload.role !== "SETTER")) return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return { error: auth.error };
+  const { user } = auth;
+
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+  });
+  if (!question) return { error: "Question not found" };
+
+  // Four-eyes principle: Setters cannot approve their own submitted questions
+  if (user.role === "SETTER" && action === "APPROVE" && question.authorId === user.id) {
+    return { error: "Four-eyes principle: Setters cannot approve their own submitted questions. An Owner or peer must review it." };
+  }
 
   await prisma.question.update({
     where: { id: questionId },
@@ -115,7 +123,7 @@ export async function reviewQuestionAction(questionId: string, action: "APPROVE"
 
   await prisma.auditLog.create({
     data: {
-      userId: payload.userId as string,
+      userId: user.id,
       action: "REVIEW_QUESTION",
       details: `${action} question ${questionId}`,
     }
@@ -130,14 +138,21 @@ export async function reviewQuestionAction(questionId: string, action: "APPROVE"
 }
 
 export async function approveAllQuestionsAction() {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role !== "OWNER" && payload.role !== "SETTER")) return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
+  const { user } = auth;
 
   await prisma.question.updateMany({
     where: { status: { in: ["SUBMITTED", "DRAFT"] } },
     data: { status: "APPROVED" }
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "APPROVE_ALL_QUESTIONS",
+      details: "Batch-approved all submitted/draft questions",
+    }
   });
 
   invalidateOwnerDashboardCache();

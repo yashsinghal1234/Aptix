@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await sweepExpiredAttemptsAction();
+    const result = await sweepExpiredAttemptsAction(expectedSecret);
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),

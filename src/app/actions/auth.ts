@@ -93,18 +93,27 @@ export async function candidateLoginAction(formData: FormData) {
 
     const normalizedPin = pin.trim().toUpperCase();
     const normalizedEmail = email.trim().toLowerCase();
-    const trimmedName = name.trim();
+    const ssoName = name.trim();
 
     // ── College SSO verification (Google Workspace, SSO-first-then-PIN) ──
-    // If the browser holds a verified Google session for the same email,
-    // ownership of the inbox is proven - skip fake-name heuristics below.
+    // Identity is proven by Google before any exam access. When Google OAuth
+    // is configured, anonymous PIN login is disabled: the browser must hold a
+    // verified Google session for the same email.
     let ssoVerified = false;
+    let googleName: string | null = null;
     try {
       const { auth: ssoAuth } = await import("@/auth");
       const ssoSession = await ssoAuth().catch(() => null);
       const ssoEmail = ssoSession?.user?.email?.toLowerCase().trim();
-      if (ssoEmail && ssoEmail === normalizedEmail) ssoVerified = true;
+      if (ssoEmail && ssoEmail === normalizedEmail) {
+        ssoVerified = true;
+        googleName = (ssoSession?.user?.name || "").trim() || null;
+      }
     } catch {}
+
+    const ssoEnforced = !!process.env.GOOGLE_CLIENT_ID;
+
+    const trimmedName = (ssoVerified && googleName ? googleName : ssoName) || ssoName || normalizedEmail.split("@")[0];
 
     // ── Name Validation ────────────────────────────────────────────────────────
     // Skipped when SSO proved the identity (Google profile name is trusted).
@@ -215,8 +224,9 @@ export async function candidateLoginAction(formData: FormData) {
     }
 
     // 2b. Session allowlist (roster) enforcement - scales to 500+ without OTP emails.
-    // If owner uploaded a roster for this session, only listed emails may log in.
-    // Empty roster = open session (backward compatible, domain check above still applies).
+    // Two paths in: (A) Google-SSO verified college email, or (B) manual
+    // name+email that matches the uploaded roster for this session's PIN.
+    // Empty roster + SSO configured = SSO required (open sessions stay verified).
     const rosterCount = await prisma.sessionRoster.count({ where: { examSessionId: session.id } });
     if (rosterCount > 0) {
       const allowed = await prisma.sessionRoster.findUnique({
@@ -229,6 +239,22 @@ export async function candidateLoginAction(formData: FormData) {
           error: "This email is not on the approved list for this session. Contact your proctor.",
         };
       }
+      if (!ssoVerified && allowed.name) {
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z ]/g, " ").split(/\s+/).filter(Boolean).sort().join(" ");
+        if (norm(allowed.name) && norm(trimmedName) !== norm(allowed.name)) {
+          await recordDualFailedAttempt(clientIp, candidateTargetKey);
+          return {
+            field: "name",
+            error: "Name does not match the approved list for this email. Enter your name as registered.",
+          };
+        }
+      }
+    } else if (ssoEnforced && !ssoVerified) {
+      await recordDualFailedAttempt(clientIp, candidateTargetKey);
+      return {
+        field: "email",
+        error: "Verify your college Google account first, then enter your exam PIN.",
+      };
     }
 
     const blocked = await prisma.sessionBlocked.findUnique({
@@ -253,8 +279,8 @@ export async function candidateLoginAction(formData: FormData) {
         }
       });
     } else {
-      // Update candidate name if provided
-      if (trimmedName && candidate.name !== trimmedName && candidate.role === "CANDIDATE") {
+      // Only set candidate name if not already set (prevents student impersonation & name tampering)
+      if (trimmedName && !candidate.name && candidate.role === "CANDIDATE") {
         candidate = await prisma.user.update({
           where: { id: candidate.id },
           data: { name: trimmedName }

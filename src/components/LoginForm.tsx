@@ -13,19 +13,19 @@ interface LoginFormProps {
 
 const CAROUSEL_SLIDES = [
   {
-    title: "High-concurrency digital examination engine.",
+    title: "High-Concurrency Digital Examination Engine.",
     subtitle: "Engineered for 1,000+ simultaneous candidates with zero-data-loss crash recovery, in-memory question caching, and progressive autosave.",
     video: "/showcase-video-1.mp4",
     hls: "/hls/showcase-1/index.m3u8",
   },
   {
-    title: "Automated integrity & proctoring suite.",
+    title: "Automated Integrity & Proctoring Suite.",
     subtitle: "Full-screen lockdown enforcement, real-time tab switch tracking, randomized question sets, and server-calibrated NTP timekeeping.",
     video: "/showcase-video-2.mp4",
     hls: "/hls/showcase-2/index.m3u8",
   },
   {
-    title: "Comprehensive question bank & instant evaluation.",
+    title: "Comprehensive Question Bank & Instant Evaluation.",
     subtitle: "Supports single/multi-choice, numerical entry with tolerances, bulk CSV imports, automated grading, and deep topic analytics.",
     video: "/showcase-video-3.mp4",
     hls: "/hls/showcase-3/index.m3u8",
@@ -249,48 +249,51 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     }
   };
 
+  const [pinOpen, setPinOpen] = useState(false);
+
+  const openPinDialog = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setCandidateError(null);
+    setErrorField(null);
+
+    if (ssoEmail) return setPinOpen(true);
+
+    const nm = candidateName.trim();
+    const em = candidateEmail.trim();
+    if (!nm) {
+      triggerCandidateError("Please enter your full candidate name.", "name");
+      return;
+    }
+    if (!em) {
+      triggerCandidateError("Please enter your candidate email address.", "email");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      triggerCandidateError("Please enter a valid email address with a domain name.", "email");
+      return;
+    }
+    setPinOpen(true);
+  };
+
   const handleCandidateSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCandidateError(null);
     setErrorField(null);
 
-    const formData = new FormData(e.currentTarget);
-    const pin = (formData.get("examPin") as string || "").trim();
-    const name = (formData.get("name") as string || "").trim();
-    const email = (formData.get("email") as string || "").trim();
+    const formData = new FormData();
+    // Path A (Google SSO): identity locked to the verified account.
+    // Path B (manual): typed name+email must match the uploaded roster for the PIN.
+    const email = ssoEmail || candidateEmail.trim();
+    const name = ssoName || candidateName.trim() || email;
+    formData.set("email", email);
+    formData.set("name", name);
+    formData.set("examPin", examPin.trim());
+
+    const pin = examPin.trim();
 
     if (!pin) {
       triggerCandidateError("Please enter your Exam PIN to proceed.", "examPin");
       return;
-    }
-    if (!name) {
-      triggerCandidateError("Please enter your full candidate name.", "name");
-      return;
-    }
-    if (!email) {
-      triggerCandidateError("Please enter your candidate email address.", "email");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      triggerCandidateError("Please enter a valid email address with a domain name.", "email");
-      return;
-    }
-
-    // Persist or clear candidate name & email (NEVER exam PIN)
-    if (typeof window !== "undefined") {
-      try {
-        if (rememberCandidate) {
-          localStorage.setItem("aptix_saved_candidate_name", name);
-          localStorage.setItem("aptix_saved_candidate_email", email);
-          localStorage.setItem("aptix_remember_candidate", "true");
-        } else {
-          localStorage.removeItem("aptix_saved_candidate_name");
-          localStorage.removeItem("aptix_saved_candidate_email");
-          localStorage.setItem("aptix_remember_candidate", "false");
-        }
-        // Always ensure pin is NEVER saved in storage
-        localStorage.removeItem("aptix_saved_candidate_pin");
-      } catch {}
     }
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -420,22 +423,11 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
             </div>
           </div>
 
-          {/* Heading & Subtitle tailored to Aptix requirements */}
+          {/* Heading tailored to Aptix requirements */}
           <div className="mb-7">
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
               {mode === "candidate" ? "Candidate Access" : "Faculty Command"}
             </h1>
-            <p className="text-sm text-neutral-400 mt-2 font-normal leading-relaxed">
-              {mode === "candidate" ? (
-                <>
-                  Enter your assigned <strong className="text-white font-medium">Exam PIN</strong>, full name, and institutional email to enter your live proctored session.
-                </>
-              ) : (
-                <>
-                  Sign in with authorized staff credentials to schedule examinations, curate question banks, and review candidate results.
-                </>
-              )}
-            </p>
           </div>
 
           {/* Role Pill Switcher */}
@@ -521,17 +513,16 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 </div>
               )}
 
-              <form onSubmit={handleCandidateSubmit} className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 mb-2">STEP 1 · VERIFY COLLEGE EMAIL</p>
-                  {ssoEmail ? (
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold text-lime-200 truncate">✓ {ssoEmail}{ssoName ? ` · ${ssoName}` : ""}</p>
-                      <button type="button" onClick={handleGoogleSignOut} className="text-[11px] font-bold text-neutral-400 hover:text-white shrink-0">
-                        Switch
-                      </button>
-                    </div>
-                  ) : (
+              <form onSubmit={openPinDialog} className="space-y-4">
+                {ssoEmail ? (
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <p className="text-xs font-bold text-lime-200 truncate">✓ {ssoEmail}{ssoName ? ` · ${ssoName}` : ""}</p>
+                    <button type="button" onClick={handleGoogleSignOut} className="text-[11px] font-bold text-neutral-400 hover:text-white shrink-0">
+                      Switch
+                    </button>
+                  </div>
+                ) : (
+                  <>
                     <button
                       type="button"
                       onClick={handleGoogleSignIn}
@@ -539,44 +530,13 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                       className="w-full py-3 px-4 rounded-full bg-white hover:bg-neutral-200 text-black font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9z"/><path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.5 24 12 24z"/><path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.5-2.7-.1.1C.6 8.7 0 10.2 0 12s.6 3.3 1.5 4.8l3.7-2.4z"/><path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.9l3.7 2.9c1-2.9 3.7-5.1 6.8-5.1z"/></svg>
-                      {ssoLoading ? "Opening Google..." : "Continue with college Google"}
+                      {ssoLoading ? "Opening Google..." : "Continue with Google"}
                     </button>
-                  )}
-                  <p className="mt-2 text-[10px] text-neutral-500 leading-relaxed">Institutional inbox ownership is proven by Google. Step 2 PIN still required. {ssoEmail ? "Email locked to verified account." : ""}</p>
-                </div>
-                <div>
-                  <label htmlFor="candidate-exam-pin" className="sr-only">
-                    Exam PIN
-                  </label>
-                  <input
-                    id="candidate-exam-pin"
-                    type="text"
-                    name="examPin"
-                    value={examPin}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="characters"
-                    spellCheck={false}
-                    maxLength={16}
-                    aria-invalid={errorField === "examPin"}
-                    aria-describedby={candidateError ? "candidate-error-msg" : undefined}
-                    onChange={(e) => {
-                      setExamPin(e.target.value.toUpperCase());
-                      if (candidateError) {
-                        setCandidateError(null);
-                        setErrorField(null);
-                      }
-                    }}
-                    className={`w-full px-6 py-4 bg-[#0d0f14] border rounded-full text-white text-sm sm:text-base font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal placeholder:normal-case placeholder:text-neutral-500 focus:outline-none transition-all ${
-                      errorField === "examPin"
-                        ? "border-rose-500/80 ring-1 ring-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
-                        : "border-[#232733] focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400"
-                    }`}
-                    placeholder="Enter exam pin"
-                    autoFocus
-                  />
-                </div>
-
+                    <div className="flex items-center gap-3 text-[10px] text-neutral-600 px-1">
+                      <span className="flex-1 h-px bg-white/10" /> or enter manually <span className="flex-1 h-px bg-white/10" />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label htmlFor="candidate-full-name" className="sr-only">
                     Candidate Full Name
@@ -585,10 +545,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="candidate-full-name"
                     type="text"
                     name="name"
-                    value={candidateName}
+                    value={ssoName || candidateName}
                     autoComplete="name"
                     aria-invalid={errorField === "name"}
+                    readOnly={!!ssoEmail}
                     onChange={(e) => {
+                      if (ssoEmail) return;
                       setCandidateName(e.target.value);
                       if (candidateError) {
                         setCandidateError(null);
@@ -612,9 +574,10 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="candidate-email"
                     type="email"
                     name="email"
-                    value={candidateEmail}
+                    value={ssoEmail || candidateEmail}
                     autoComplete="email"
                     aria-invalid={errorField === "email"}
+                    readOnly={!!ssoEmail}
                     onChange={(e) => {
                       if (ssoEmail) return;
                       setCandidateEmail(e.target.value);
@@ -623,7 +586,6 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                         setErrorField(null);
                       }
                     }}
-                    readOnly={!!ssoEmail}
                     className={`w-full px-6 py-4 bg-[#0d0f14] border rounded-full text-white text-sm sm:text-base placeholder:text-neutral-500 focus:outline-none transition-all ${
                       errorField === "email"
                         ? "border-rose-500/80 ring-1 ring-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
@@ -633,47 +595,96 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                   />
                 </div>
 
-                {/* Auxiliary links row */}
-                <div className="flex items-center justify-between text-xs sm:text-sm pt-1 px-1">
-                  <label htmlFor="remember-candidate" className="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-300">
-                    <input
-                      id="remember-candidate"
-                      type="checkbox"
-                      name="rememberCandidate"
-                      checked={rememberCandidate}
-                      onChange={(e) => setRememberCandidate(e.target.checked)}
-                      className="w-4 h-4 rounded-md border border-neutral-700 bg-[#0d0f14] text-white accent-white focus:ring-0 cursor-pointer"
-                    />
-                    <span>Remember details</span>
-                  </label>
-                  <Link
-                    href="/practice"
-                    prefetch={true}
-                    className="text-neutral-300 hover:text-white transition font-medium flex items-center gap-1 focus-visible:underline"
-                  >
-                    <span>Practice Arena</span>
-                    <svg className="w-3 h-3 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </Link>
-                </div>
-
                 {/* Primary Pure-White Pill Button */}
                 <button
                   type="submit"
                   disabled={loading}
                   className="w-full mt-3 py-4 px-8 rounded-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-bold text-sm sm:text-base tracking-wide transition-all shadow-[0_4px_24px_rgba(255,255,255,0.2)] cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
-                  {loading ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                      <span>Verifying Exam PIN...</span>
-                    </>
-                  ) : (
-                    <span>Verify PIN & Begin Exam</span>
-                  )}
+                  <span>Verify & Continue</span>
                 </button>
               </form>
+
+              {/* Exam PIN dialog - opens only after identity verification */}
+              {pinOpen && (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+                  onClick={() => { if (!loading) setPinOpen(false); }}
+                  role="presentation"
+                >
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Enter exam PIN"
+                    className="w-full max-w-[400px] rounded-[28px] bg-[#0d0f14] border border-white/10 p-6 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.85)]"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => { if (e.key === "Escape" && !loading) setPinOpen(false); }}
+                  >
+                    <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500">VERIFIED · ENTER EXAM PIN</p>
+                    {(ssoEmail || candidateEmail) && (
+                      <p className="mt-2 text-xs font-bold text-lime-200 truncate">{ssoEmail || candidateEmail.trim()}</p>
+                    )}
+                    <form onSubmit={handleCandidateSubmit} className="mt-4 space-y-4">
+                      <label htmlFor="candidate-exam-pin-dialog" className="sr-only">
+                        Exam PIN
+                      </label>
+                      <input
+                        id="candidate-exam-pin-dialog"
+                        type="text"
+                        name="examPin"
+                        value={examPin}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        maxLength={16}
+                        autoFocus
+                        aria-invalid={errorField === "examPin"}
+                        onChange={(e) => {
+                          setExamPin(e.target.value.toUpperCase());
+                          if (candidateError) {
+                            setCandidateError(null);
+                            setErrorField(null);
+                          }
+                        }}
+                        className={`w-full px-6 py-4 bg-black/60 border rounded-full text-white text-sm sm:text-base font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal placeholder:normal-case placeholder:text-neutral-500 focus:outline-none transition-all ${
+                          errorField === "examPin"
+                            ? "border-rose-500/80 ring-1 ring-rose-500/50"
+                            : "border-[#232733] focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400"
+                        }`}
+                        placeholder="Enter exam pin"
+                      />
+                      {candidateError && (
+                        <p role="alert" className="text-xs text-rose-300 leading-relaxed">{candidateError}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={loading}
+                          onClick={() => setPinOpen(false)}
+                          className="flex-1 py-3.5 px-4 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/15 text-neutral-200 font-bold text-xs sm:text-sm transition-all disabled:opacity-50"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="flex-[2] py-3.5 px-4 rounded-full bg-white hover:bg-neutral-200 text-black font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {loading ? (
+                            <>
+                              <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                              <span>Verifying...</span>
+                            </>
+                          ) : (
+                            <span>Verify PIN & Begin Exam</span>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* Mode 2: Staff Form */
@@ -896,7 +907,19 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         </div>
 
         {/* Right Column: Visual Showcase Card */}
-        <div className="lg:col-span-7 xl:col-span-7 flex items-center justify-center w-full">
+        <div className="lg:col-span-7 xl:col-span-7 flex flex-col w-full">
+          <div className="flex items-center justify-end mb-4">
+            <Link
+              href="/practice"
+              prefetch={true}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-white hover:bg-neutral-200 text-black text-xs sm:text-sm font-bold transition-all shadow-[0_4px_24px_rgba(255,255,255,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <span>Practice Arena</span>
+              <svg className="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </Link>
+          </div>
           <div className="relative w-full h-[500px] sm:h-[550px] lg:h-[600px] xl:h-[620px] rounded-[32px] sm:rounded-[36px] overflow-hidden bg-[#07080c] border border-[#1e222d] shadow-[0_20px_60px_rgba(0,0,0,0.85)] flex flex-col justify-end p-8 sm:p-10 lg:p-11 group">
             
             {/* Background Chunked Videos with Smooth HLS Streaming */}

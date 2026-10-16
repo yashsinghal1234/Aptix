@@ -336,7 +336,15 @@ export async function submitExamAction(
  * Periodic O(1) Server-Side Sweeper for Exam Deadline.
  * Sweeps all expired attempts and auto-submits them without spawning individual timers.
  */
-export async function sweepExpiredAttemptsAction() {
+export async function sweepExpiredAttemptsAction(internalSecret?: string) {
+  const auth = await requireAuth(["OWNER"]);
+  const isOwner = !("error" in auth);
+  const isValidCron = internalSecret && process.env.CRON_SECRET && internalSecret === process.env.CRON_SECRET;
+
+  if (!isOwner && !isValidCron) {
+    return { error: "Unauthorized: sweepExpiredAttempts requires Owner privileges or valid Cron secret." };
+  }
+
   const now = new Date();
 
   // Find all LIVE sessions whose duration has elapsed

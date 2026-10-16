@@ -37,6 +37,11 @@ export async function createSetterAction(formData: FormData) {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
+  const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (existingUser && existingUser.role === "OWNER") {
+    return { error: "Cannot modify an Owner account through Setter management." };
+  }
+
   const passwordHash = hashPassword(password);
   const rcField = formData.get("requireChange");
   const mustChange = rcField === null ? true : rcField === "on" || rcField === "true";
@@ -51,6 +56,7 @@ export async function createSetterAction(formData: FormData) {
       passwordHash: passwordHash,
       mustChangePassword: mustChange,
       assignedSubject: assignedSubject || undefined,
+      tokenVersion: { increment: 1 },
     },
     create: { 
       email: normalizedEmail, 
@@ -79,7 +85,12 @@ export async function removeSetterAction(id: string) {
 
   await prisma.user.update({
     where: { id },
-    data: { role: "CANDIDATE" } // Downgrade to candidate rather than delete
+    data: { 
+      role: "CANDIDATE",
+      passwordHash: null,
+      mustChangePassword: false,
+      tokenVersion: { increment: 1 }
+    }
   });
 
   revalidatePath("/dashboard/owner");

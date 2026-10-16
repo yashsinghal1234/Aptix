@@ -55,7 +55,7 @@ export async function requireAuth(allowedRoles?: string[], explicitToken?: strin
   if (!token) {
     try {
       const { cookies } = await import("next/headers");
-      token = cookies().get("token")?.value || cookies().get("auth_session")?.value;
+      token = cookies().get("token")?.value;
     } catch {
       // In contexts where next/headers cookies() is not available
     }

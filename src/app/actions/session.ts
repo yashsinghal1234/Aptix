@@ -454,6 +454,10 @@ export async function toggleReleaseResultsAction(formData: FormData) {
   });
   if (!session) return { error: "Session not found" };
 
+  if (payload.role === "SETTER" && session.exam.createdBySetterId !== payload.userId) {
+    return { error: "Forbidden: You are not authorized to manage this session." };
+  }
+
   let snap: any = {};
   if (session.configSnapshot) {
     try {
@@ -495,6 +499,10 @@ export async function togglePodiumRevealAction(formData: FormData) {
     include: { exam: true }
   });
   if (!session) return { error: "Session not found" };
+
+  if (payload.role === "SETTER" && session.exam.createdBySetterId !== payload.userId) {
+    return { error: "Forbidden: You are not authorized to manage this session." };
+  }
 
   let snap: any = {};
   if (session.configSnapshot) {
