@@ -134,6 +134,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
           setSsoEmail(res.email);
           setSsoName(res.name);
           setCandidateEmail((prev) => prev || res.email);
+          setCandidateName((prev) => prev || res.name || prev);
           if (
             typeof window !== "undefined" &&
             window.location.pathname.startsWith("/admin/login") &&
@@ -177,6 +178,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     } catch {}
     setSsoEmail(null);
     setSsoName(null);
+    ssoPinAuto.current = null;
   };
 
   const handleStaffSso = async () => {
@@ -309,10 +311,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     setErrorField(null);
 
     const formData = new FormData();
-    // Path A (Google SSO): identity locked to the verified account.
+    // Path A (Google SSO): submitted email matches the verified Google session.
     // Path B (manual): typed name+email must match the uploaded roster for the PIN.
-    const email = ssoEmail || candidateEmail.trim();
-    const name = ssoName || candidateName.trim() || email;
+    // Fields stay editable so you are never stuck on one ID - SSO applies only
+    // when the submitted email equals the verified Google account.
+    const email = candidateEmail.trim();
+    const name = (ssoEmail && email.toLowerCase() === ssoEmail ? ssoName : null) || candidateName.trim() || email;
     formData.set("email", email);
     formData.set("name", name);
     formData.set("examPin", examPin.trim());
@@ -518,7 +522,15 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
               )}
 
               <form onSubmit={openPinDialog} className="space-y-4">
-                {!ssoEmail && (
+                {ssoEmail ? (
+                  <p className="px-1 text-[11px] text-neutral-500">
+                    Google connected: <span className="font-bold text-lime-200">{ssoEmail}</span>
+                    {" · "}
+                    <button type="button" onClick={handleGoogleSignOut} className="font-bold text-neutral-400 hover:text-white underline underline-offset-2">
+                      Switch account
+                    </button>
+                  </p>
+                ) : (
                   <>
                     <button
                       type="button"
@@ -542,12 +554,10 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="candidate-full-name"
                     type="text"
                     name="name"
-                    value={ssoName || candidateName}
+                    value={candidateName}
                     autoComplete="name"
                     aria-invalid={errorField === "name"}
-                    readOnly={!!ssoEmail}
                     onChange={(e) => {
-                      if (ssoEmail) return;
                       setCandidateName(e.target.value);
                       if (candidateError) {
                         setCandidateError(null);
@@ -571,12 +581,10 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     id="candidate-email"
                     type="email"
                     name="email"
-                    value={ssoEmail || candidateEmail}
+                    value={candidateEmail}
                     autoComplete="email"
                     aria-invalid={errorField === "email"}
-                    readOnly={!!ssoEmail}
                     onChange={(e) => {
-                      if (ssoEmail) return;
                       setCandidateEmail(e.target.value);
                       if (candidateError) {
                         setCandidateError(null);
@@ -602,108 +610,101 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 </button>
               </form>
 
-              {/* Exam PIN dialog - chat bubble with Aptix logo avatar */}
+              {/* Exam PIN dialog - frosted confirmation card */}
               {pinOpen && (
                 <div
                   className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
                   onClick={() => { if (!loading) setPinOpen(false); }}
                   role="presentation"
                 >
-                  <div className="relative w-full max-w-[400px] ml-5 sm:ml-6">
-                    {/* Aptix logo avatar overlapping top-left */}
-                    <span aria-hidden className="absolute -left-5 sm:-left-6 -top-5 sm:-top-6 z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden ring-2 ring-sky-500 bg-black shrink-0 flex items-center justify-center">
-                      <video
-                        src="/aptix-logo-anim.mp4"
-                        poster="/logo-preview-frame.jpg"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        preload="auto"
-                        className="w-full h-full object-cover mix-blend-screen scale-125"
-                      />
-                    </span>
+                  <div className="relative w-full max-w-[400px]">
                     <div
                       role="dialog"
                       aria-modal="true"
                       aria-label="Enter exam PIN"
-                      className="relative rounded-[22px] border-2 border-sky-500 bg-black pl-12 sm:pl-14 pr-5 sm:pr-6 pt-5 sm:pt-6 pb-5 sm:pb-6"
+                      className="relative overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-b from-white/[0.09] via-[#1a1d24]/95 to-[#101216]/95 backdrop-blur-xl px-6 sm:px-8 pt-10 sm:pt-12 pb-6 sm:pb-7 shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => { if (e.key === "Escape" && !loading) setPinOpen(false); }}
                     >
-                      <p className="text-sm font-black text-white leading-tight">Aptix</p>
-                      <p className="mt-1 text-sm text-neutral-300 leading-snug">Yeah! Let&apos;s go. Enter your exam PIN to begin.</p>
-                    {(ssoEmail || candidateEmail) && (
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <p className="text-xs font-bold text-lime-200 truncate">{ssoEmail || candidateEmail.trim()}</p>
-                        {ssoEmail && (
-                          <button type="button" onClick={() => { handleGoogleSignOut(); setPinOpen(false); }} className="text-[11px] font-bold text-neutral-400 hover:text-white shrink-0">
-                            Switch
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <form onSubmit={handleCandidateSubmit} className="mt-4 space-y-4">
-                      <label htmlFor="candidate-exam-pin-dialog" className="sr-only">
-                        Exam PIN
-                      </label>
-                      <input
-                        id="candidate-exam-pin-dialog"
-                        type="text"
-                        name="examPin"
-                        value={examPin}
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        maxLength={16}
-                        autoFocus
-                        aria-invalid={errorField === "examPin"}
-                        onChange={(e) => {
-                          setExamPin(e.target.value.toUpperCase());
-                          if (candidateError) {
-                            setCandidateError(null);
-                            setErrorField(null);
-                          }
-                        }}
-                        className={`w-full px-6 py-4 bg-black/60 border rounded-full text-white text-sm sm:text-base font-mono tracking-wider placeholder:font-sans placeholder:tracking-normal placeholder:normal-case placeholder:text-neutral-500 focus:outline-none transition-all ${
-                          errorField === "examPin"
-                            ? "border-rose-500/80 ring-1 ring-rose-500/50"
-                            : "border-[#232733] focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400"
-                        }`}
-                        placeholder="Enter exam pin"
-                      />
-                      {candidateError && (
-                        <p role="alert" className="text-xs text-rose-300 leading-relaxed">{candidateError}</p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() => setPinOpen(false)}
-                          className="flex-1 py-3.5 px-4 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/15 text-neutral-200 font-bold text-xs sm:text-sm transition-all disabled:opacity-50"
-                        >
-                          Back
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="flex-[2] py-3.5 px-4 rounded-full bg-white hover:bg-neutral-200 text-black font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          {loading ? (
+                      {/* soft top highlight */}
+                      <span aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-20 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.14),transparent_70%)]" />
+                      <p className="relative text-center text-lg sm:text-xl text-neutral-200 leading-snug">
+                        Enter your exam PIN
+                        <br />
+                        to begin?
+                      </p>
+                      {(ssoEmail || candidateEmail.trim()) && (
+                        <p className="relative mt-2 text-center text-[11px] font-bold text-neutral-500 truncate">
+                          {ssoEmail || candidateEmail.trim()}
+                          {ssoEmail && (
                             <>
-                              <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                              <span>Verifying...</span>
+                              {" · "}
+                              <button type="button" onClick={() => { handleGoogleSignOut(); setPinOpen(false); }} className="underline underline-offset-2 hover:text-white">
+                                Switch
+                              </button>
                             </>
-                          ) : (
-                            <span>Verify PIN & Begin Exam</span>
                           )}
-                        </button>
-                      </div>
-                    </form>
-                    {/* bubble tail dot */}
-                    <span aria-hidden className="absolute -bottom-2 left-10 w-3 h-3 rounded-full bg-sky-500" />
-                  </div>
+                        </p>
+                      )}
+                      <form onSubmit={handleCandidateSubmit} className="relative mt-6 space-y-4">
+                        <label htmlFor="candidate-exam-pin-dialog" className="sr-only">
+                          Exam PIN
+                        </label>
+                        <input
+                          id="candidate-exam-pin-dialog"
+                          type="text"
+                          name="examPin"
+                          value={examPin}
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          maxLength={16}
+                          autoFocus
+                          aria-invalid={errorField === "examPin"}
+                          onChange={(e) => {
+                            setExamPin(e.target.value.toUpperCase());
+                            if (candidateError) {
+                              setCandidateError(null);
+                              setErrorField(null);
+                            }
+                          }}
+                          className={`w-full px-6 py-4 bg-black/50 border rounded-2xl text-center text-white text-base sm:text-lg font-mono tracking-[0.2em] placeholder:font-sans placeholder:tracking-normal placeholder:normal-case placeholder:text-neutral-600 focus:outline-none transition-all ${
+                            errorField === "examPin"
+                              ? "border-rose-500/80 ring-1 ring-rose-500/50"
+                              : "border-white/10 focus:border-white/30"
+                          }`}
+                          placeholder="••••••"
+                        />
+                        {candidateError && (
+                          <p role="alert" className="text-center text-xs text-rose-300 leading-relaxed">{candidateError}</p>
+                        )}
+                        <div className="flex gap-3 pt-1">
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => setPinOpen(false)}
+                            className="flex-1 py-3.5 px-4 rounded-full bg-white/[0.07] hover:bg-white/[0.12] text-neutral-200 font-semibold text-sm transition-all disabled:opacity-50"
+                          >
+                            Back
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex-1 py-3.5 px-4 rounded-full bg-white/[0.07] hover:bg-white/[0.12] text-neutral-200 font-semibold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {loading ? (
+                              <>
+                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                <span>Verifying...</span>
+                              </>
+                            ) : (
+                              <span>Begin Exam</span>
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
                 </div>
               )}
