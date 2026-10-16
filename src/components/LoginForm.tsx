@@ -99,6 +99,10 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   }, []);
 
   // College SSO identity (Google Workspace, SSO-first-then-PIN)
+  // On /admin/login, a returning Google session auto-completes staff SSO -
+  // no per-page permission needed in Google Cloud (only the single
+  // /api/auth/callback/google redirect URI matters).
+  const staffSsoAuto = React.useRef(false);
   useEffect(() => {
     getSsoIdentityAction()
       .then((res) => {
@@ -106,6 +110,30 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
           setSsoEmail(res.email);
           setSsoName(res.name);
           setCandidateEmail((prev) => prev || res.email);
+          if (
+            typeof window !== "undefined" &&
+            window.location.pathname.startsWith("/admin/login") &&
+            !staffSsoAuto.current
+          ) {
+            staffSsoAuto.current = true;
+            setMode("staff");
+            setLoading(true);
+            staffSsoLoginAction(true)
+              .then((sso) => {
+                if ("error" in sso && sso.error) {
+                  triggerStaffError(sso.error);
+                  setLoading(false);
+                } else if ("redirectUrl" in sso && sso.redirectUrl) {
+                  window.location.href = sso.redirectUrl as string;
+                } else {
+                  setLoading(false);
+                }
+              })
+              .catch((err: any) => {
+                triggerStaffError(err?.message || "Staff SSO failed. Please try again.");
+                setLoading(false);
+              });
+          }
         }
       })
       .catch(() => {});
