@@ -107,18 +107,18 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
     return { error: "Forbidden: You do not have permission to view this attempt status." } as any;
   }
   
-  // Check-on-Access (Lazy Auto-Submit on Deadline)
+  // Check-on-Access (Lazy Auto-Submit on Deadline) - fallback if cron misses a run
   const now = new Date();
-  const sessionStart = attempt.session.startTime || attempt.session.createdAt;
-  const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
-  const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
+  const { getEffectiveEnd } = await import("@/lib/deadline");
+  const effectiveEnd = getEffectiveEnd(attempt.session, attempt);
 
   let currentStatus = attempt.status;
   if (currentStatus === "IN_PROGRESS" && now > effectiveEnd) {
     await prisma.candidateAttempt.update({
       where: { id: attemptId },
-      data: { status: "SUBMITTED", submittedAt: now }
+      data: { status: "SUBMITTED", submittedAt: effectiveEnd }
     });
+    attempt = { ...attempt, status: "SUBMITTED", submittedAt: effectiveEnd } as typeof attempt;
     currentStatus = "SUBMITTED";
   }
 

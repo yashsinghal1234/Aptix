@@ -9,6 +9,7 @@ import { runRateLimiterTests } from "./rate-limiter.test";
 import { runAntiCheatDetectorTests } from "./anti-cheat.test";
 import { runQuestionBankIntegrityTests } from "./question-bank.test";
 import { runRosterTests } from "./roster.test";
+import { runDeadlineTests } from "./deadline.test";
 
 console.log("==================================================");
 console.log("🚀 APTIX PLATFORM CRITICAL PATH TEST SUITE");
@@ -25,9 +26,10 @@ const rResults = runRateLimiterTests();
 const acResults = runAntiCheatDetectorTests();
 const qbResults = runQuestionBankIntegrityTests();
 const roResults = runRosterTests();
+const dResults = runDeadlineTests();
 
-const totalPassed = sResults.passed + eResults.passed + aResults.passed + pResults.passed + rngResults.passed + lResults.passed + cResults.passed + rResults.passed + acResults.passed + qbResults.passed + roResults.passed;
-const totalTests = sResults.total + eResults.total + aResults.total + pResults.total + rngResults.total + lResults.total + cResults.total + rResults.total + acResults.total + qbResults.total + roResults.total;
+const totalPassed = sResults.passed + eResults.passed + aResults.passed + pResults.passed + rngResults.passed + lResults.passed + cResults.passed + rResults.passed + acResults.passed + qbResults.passed + roResults.passed + dResults.passed;
+const totalTests = sResults.total + eResults.total + aResults.total + pResults.total + rngResults.total + lResults.total + cResults.total + rResults.total + acResults.total + qbResults.total + roResults.total + dResults.total;
 
 console.log("\n==================================================");
 console.log(`📊 TEST SUITE RESULTS: ${totalPassed} / ${totalTests} PASSED (100%)`);

@@ -230,16 +230,15 @@ export async function extendSessionTimeAction(formData: FormData) {
   if ("error" in auth) return { error: auth.error };
 
   const sessionId = formData.get("sessionId") as string;
-  const minutes = parseInt(formData.get("minutes") as string, 10);
+  const { validateExtensionMinutes, getBaseEnd } = await import("@/lib/deadline");
+  const { minutes, error } = validateExtensionMinutes(formData.get("minutes"), 120);
+  if (error || minutes === undefined) return { error: error || "Invalid minutes" };
 
   const session = await prisma.examSession.findUnique({ where: { id: sessionId } });
   if (!session) return { error: "Session not found" };
 
-  // Calculate new extendedUntil
-  const baseEnd = session.startTime 
-    ? new Date(session.startTime.getTime() + session.durationMinutes * 60000) 
-    : new Date();
-  
+  // Stack onto the current global deadline (never rewrite history)
+  const baseEnd = getBaseEnd(session);
   const currentExtended = session.extendedUntil || baseEnd;
   const newExtendedUntil = new Date(currentExtended.getTime() + minutes * 60000);
 
@@ -247,6 +246,14 @@ export async function extendSessionTimeAction(formData: FormData) {
     where: { id: sessionId },
     data: { extendedUntil: newExtendedUntil }
   });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: (auth.payload.userId as string) || auth.user.id,
+      action: "EXTEND_SESSION",
+      details: `Extended session ${sessionId} by ${minutes}m (new deadline ${newExtendedUntil.toISOString()})`,
+    },
+  }).catch(() => {});
 
   revalidatePath(`/dashboard/owner/session/${sessionId}`);
   return { success: true };
@@ -257,7 +264,9 @@ export async function extendCandidateTimeAction(formData: FormData) {
   if ("error" in auth) return { error: auth.error };
 
   const attemptId = formData.get("attemptId") as string;
-  const minutes = parseInt(formData.get("minutes") as string, 10);
+  const { validateExtensionMinutes, getBaseEnd } = await import("@/lib/deadline");
+  const { minutes, error } = validateExtensionMinutes(formData.get("minutes"), 120);
+  if (error || minutes === undefined) return { error: error || "Invalid minutes" };
 
   const attempt = await prisma.candidateAttempt.findUnique({ 
     where: { id: attemptId },
@@ -265,10 +274,8 @@ export async function extendCandidateTimeAction(formData: FormData) {
   });
   if (!attempt) return { error: "Attempt not found" };
 
-  const baseEnd = attempt.session.startTime 
-    ? new Date(attempt.session.startTime.getTime() + attempt.session.durationMinutes * 60000) 
-    : new Date();
-  
+  // Per-candidate only: never touches the global session deadline
+  const baseEnd = getBaseEnd(attempt.session);
   const currentExtended = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
   const newExtendedUntil = new Date(currentExtended.getTime() + minutes * 60000);
 
@@ -312,7 +319,10 @@ export async function reopenCandidateAttemptAction(formData: FormData) {
   if ("error" in auth) return { error: auth.error };
 
   const attemptId = formData.get("attemptId") as string;
-  const minutes = parseInt(formData.get("minutes") as string || "10", 10);
+  const { validateExtensionMinutes } = await import("@/lib/deadline");
+  const parsed = validateExtensionMinutes((formData.get("minutes") as string) || "10", 120);
+  const minutes = parsed.minutes ?? 10;
+  if (parsed.error && formData.get("minutes")) return { error: parsed.error };
 
   const attempt = await prisma.candidateAttempt.findUnique({
     where: { id: attemptId },
@@ -332,12 +342,23 @@ export async function reopenCandidateAttemptAction(formData: FormData) {
     }
   });
 
+  // Per-candidate only: flip a concluded hall back to LIVE so the client can
+  // resume, but NEVER touch the global session.extendedUntil here, otherwise
+  // every other candidate silently inherits this extension.
   if (attempt.session.status === "COMPLETED") {
     await prisma.examSession.update({
       where: { id: attempt.examSessionId },
-      data: { status: "LIVE", extendedUntil: newExtendedUntil }
+      data: { status: "LIVE" }
     });
   }
+
+  await prisma.auditLog.create({
+    data: {
+      userId: (auth.payload.userId as string) || auth.user.id,
+      action: "REOPEN_ATTEMPT",
+      details: `Reopened attempt ${attemptId} for +${minutes}m (until ${newExtendedUntil.toISOString()})`,
+    },
+  }).catch(() => {});
 
   revalidatePath(`/dashboard/owner/session/${attempt.examSessionId}`);
   revalidatePath("/dashboard/owner/candidates");
@@ -349,7 +370,8 @@ export async function resetCandidateAttemptAction(formData: FormData) {
   if ("error" in auth) return { error: auth.error };
 
   const attemptId = formData.get("attemptId") as string;
-  const minutes = parseInt(formData.get("minutes") as string || "0", 10);
+  const { validateExtensionMinutes } = await import("@/lib/deadline");
+  const rawMinutes = (formData.get("minutes") as string) || "0";
 
   const attempt = await prisma.candidateAttempt.findUnique({
     where: { id: attemptId },
@@ -362,7 +384,7 @@ export async function resetCandidateAttemptAction(formData: FormData) {
   await prisma.candidateResponse.deleteMany({ where: { attemptId } });
   await prisma.cheatFlag.deleteMany({ where: { userId: attempt.userId, examSessionId: attempt.examSessionId } });
 
-  const durationMins = minutes > 0 ? minutes : attempt.session.durationMinutes;
+  const durationMins = rawMinutes !== "0" ? (validateExtensionMinutes(rawMinutes, 180).minutes ?? attempt.session.durationMinutes) : attempt.session.durationMinutes;
   const newExtendedUntil = new Date(Date.now() + durationMins * 60000);
 
   // Reset attempt with fresh shuffle seed and time
@@ -380,9 +402,17 @@ export async function resetCandidateAttemptAction(formData: FormData) {
   if (attempt.session.status === "COMPLETED") {
     await prisma.examSession.update({
       where: { id: attempt.examSessionId },
-      data: { status: "LIVE", extendedUntil: newExtendedUntil }
+      data: { status: "LIVE" }
     });
   }
+
+  await prisma.auditLog.create({
+    data: {
+      userId: (auth.payload.userId as string) || auth.user.id,
+      action: "RESET_ATTEMPT",
+      details: `Reset attempt ${attemptId} with fresh window ${durationMins}m`,
+    },
+  }).catch(() => {});
 
   revalidatePath(`/dashboard/owner/session/${attempt.examSessionId}`);
   revalidatePath("/dashboard/owner/candidates");

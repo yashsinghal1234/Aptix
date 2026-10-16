@@ -190,6 +190,8 @@ export function ExamInterface({
   const lastInfractionKeyRef = useRef<string>(""); // Composite dedup key: "TYPE_secondsEpoch"
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const executeSubmitRef = useRef<((msg?: string) => Promise<void>) | null>(null);
+  const timeUpRef = useRef(false); // mirrors shouldAutoSubmit without stale closures
+  const recalcTimeRef = useRef<(() => void) | null>(null); // foreground timer recalc
 
   const config = useMemo(() => {
     try {
@@ -347,7 +349,7 @@ export function ExamInterface({
 
   // Debounced Autosave to Server + Instant Local Storage & IndexedDB Mirror
   const handleAnswerSelect = useCallback((optValue: any, explicitQId?: string) => {
-    if (isFinished || isFinishingRef.current) return;
+    if (isFinished || isFinishingRef.current || timeUpRef.current) return;
     const qId = explicitQId || questions[currentQuestion]?.id;
     if (!qId) return;
 
@@ -372,6 +374,7 @@ export function ExamInterface({
     }
 
     debounceTimerRef.current = setTimeout(async () => {
+      if (timeUpRef.current || isFinishingRef.current) return;
       const stringifiedValue = typeof optValue === "string" ? optValue : JSON.stringify(optValue);
       const timeSpentSec = Math.floor((timeSpentRef.current[qId] || 0) / 1000);
 
@@ -390,7 +393,7 @@ export function ExamInterface({
 
   // Full checkpoint synchronization across network drops / offline reconnects
   const flushPendingAnswers = useCallback(async () => {
-    if (isFinished || isFinishingRef.current) return;
+    if (isFinished || isFinishingRef.current || timeUpRef.current) return;
     try {
       const stringifiedAnswers: Record<string, string> = {};
       for (const [k, v] of Object.entries(answersRef.current)) {
@@ -479,6 +482,7 @@ export function ExamInterface({
   }, [currentQuestion, questions]);
 
   const handleClearResponse = useCallback(() => {
+    if (isFinished || isFinishingRef.current || timeUpRef.current) return;
     const qId = questions[currentQuestion]?.id;
     if (!qId) return;
 
@@ -558,20 +562,37 @@ export function ExamInterface({
         setTimeLeft(Math.floor((end - now) / 1000));
       } else {
         setTimeLeft(0);
+        timeUpRef.current = true;
         if (!isFinished && hasStarted) setShouldAutoSubmit(true);
       }
     };
 
+    recalcTimeRef.current = calculateTimes;
     calculateTimes();
     const timer = setInterval(calculateTimes, 1000);
     return () => clearInterval(timer);
   }, [session, currentExtendedUntil, isFinished, hasStarted, isForcedLive, sessionStatus, synced, getServerTime, attempt.id]);
 
   const executeSubmit = useCallback(async (reasonMessage?: string) => {
-    if (isFinishingRef.current && isFinished) return;
+    if (isFinishingRef.current || isFinished) return;
     // Always update the ref so anti-cheat listeners always call latest version
     // (ref is updated below after definition)
     isFinishingRef.current = true;
+    // Freeze everything instantly: kill pending debounced saves and mark the
+    // attempt submitted in the local deadline cache so nothing can write
+    // mid-submit while the network request is still loading.
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    try {
+      const { setCachedAttemptStatus } = await import("@/lib/exam-cache");
+      setCachedAttemptStatus(attempt.id, {
+        userId: attempt.userId,
+        effectiveEndMs: Date.now(),
+        isSubmitted: true,
+      });
+    } catch {}
     setIsSubmittingExam(true);
     if (reasonMessage) {
       setSubmittingReason(reasonMessage);
@@ -654,6 +675,17 @@ export function ExamInterface({
       (executeSubmitRef.current ?? executeSubmit)("Assessment time expired. Automatically submitting...");
     }
   }, [shouldAutoSubmit, executeSubmit]);
+
+  // Submitting lock overlay: the instant submit starts, block every
+  // pointer interaction so answers can't change while loading.
+  const submittingLock = isSubmittingExam && (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" role="alert" aria-live="assertive">
+      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#0d0f14] px-6 py-4 shadow-2xl">
+        <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        <span className="text-sm font-bold text-white">Submitting… answers locked</span>
+      </div>
+    </div>
+  );
 
   const handleFinishTest = useCallback(async (force = false) => {
     if (force) {
@@ -753,6 +785,12 @@ export function ExamInterface({
     const handleVisibilityChange = () => {
       if (document.hidden) {
         handleSecurityInfraction("WINDOW_BLUR", "Candidate minimized window or navigated to another tab");
+      } else {
+        // Background throttling stalls setInterval: recompute deadline immediately
+        // on return so expired candidates submit instead of gaining free time.
+        try {
+          recalcTimeRef.current?.();
+        } catch {}
       }
     };
 
@@ -2232,6 +2270,7 @@ export function ExamInterface({
         syncStatus={syncStatus}
         session={session}
       />
+      {submittingLock}
     </>
   );
 }

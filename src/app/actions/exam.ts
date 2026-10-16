@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 
 import { gradeResponse } from "@/lib/scoring";
+import { getEffectiveEnd, getDeadlineState, clampSubmittedAt } from "@/lib/deadline";
 import {
   getCachedQuestionForGrading,
   getCachedAttemptStatus,
@@ -45,13 +46,13 @@ export async function saveDraftAnswerAction(
     if (Date.now() > cachedAttempt.effectiveEndMs) {
       await prisma.candidateAttempt.update({
         where: { id: attemptId },
-        data: { status: "SUBMITTED", submittedAt: new Date() }
+        data: { status: "SUBMITTED", submittedAt: new Date(cachedAttempt.effectiveEndMs) }
       });
       markCachedAttemptSubmitted(attemptId);
       return { error: "Assessment time expired", isSubmitted: true };
     }
   } else {
-    // Check-on-Access: Auto-submit if deadline has passed
+    // Check-on-Access: Auto-submit if deadline has passed (0s grace for saves)
     const attempt = await prisma.candidateAttempt.findUnique({
       where: { id: attemptId },
       include: { session: true }
@@ -64,15 +65,12 @@ export async function saveDraftAnswerAction(
       return { error: "Assessment already submitted", isSubmitted: true };
     }
 
-    const sessionStart = attempt.session.startTime || attempt.session.createdAt;
-    const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
-    const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
-    const now = new Date();
-
-    if (now > effectiveEnd) {
+    const { state } = getDeadlineState(attempt.session, attempt);
+    if (state !== "OPEN") {
+      const effectiveEnd = getEffectiveEnd(attempt.session, attempt);
       await prisma.candidateAttempt.update({
         where: { id: attemptId },
-        data: { status: "SUBMITTED", submittedAt: now }
+        data: { status: "SUBMITTED", submittedAt: new Date(Math.min(Date.now(), effectiveEnd.getTime())) }
       });
       markCachedAttemptSubmitted(attemptId);
       return { error: "Assessment time expired", isSubmitted: true };
@@ -80,7 +78,7 @@ export async function saveDraftAnswerAction(
 
     setCachedAttemptStatus(attemptId, {
       userId,
-      effectiveEndMs: effectiveEnd.getTime(),
+      effectiveEndMs: getEffectiveEnd(attempt.session, attempt).getTime(),
       isSubmitted: false
     });
   }
@@ -151,17 +149,15 @@ export async function batchSyncDraftAnswersAction(
     return { error: "Assessment already submitted", isSubmitted: true };
   }
 
-  // Check-on-Access: deadline enforcement
-  const sessionStart = attempt.session.startTime || attempt.session.createdAt;
-  const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
-  const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
+  // Check-on-Access: saves stop at deadline (0s grace); final submit has its own 60s window below.
+  const { state: batchState, effectiveEnd: batchEnd } = getDeadlineState(attempt.session, attempt);
   const now = new Date();
 
   // If time has expired beyond grace period (60s), auto-submit and lock answers
-  if (now.getTime() > effectiveEnd.getTime() + 60000) {
+  if (batchState === "CLOSED") {
     await prisma.candidateAttempt.update({
       where: { id: attemptId },
-      data: { status: "SUBMITTED", submittedAt: new Date(effectiveEnd.getTime() + 60000) }
+      data: { status: "SUBMITTED", submittedAt: new Date(Math.min(now.getTime(), batchEnd.getTime())) }
     });
     return { error: "Assessment deadline expired", isSubmitted: true };
   }
@@ -273,37 +269,54 @@ export async function submitExamAction(
 
   if (!attempt || attempt.userId !== userId) return { error: "Attempt not found" };
 
-  // Calculate deadline and enforce server-side integrity
-  const sessionStart = attempt.session.startTime || attempt.session.createdAt;
-  const baseEnd = new Date(sessionStart.getTime() + attempt.session.durationMinutes * 60000);
-  const effectiveEnd = attempt.extendedUntil || attempt.session.extendedUntil || baseEnd;
+  // Server-authoritative deadline: saves stop at end, final submit has a 60s
+  // submit-only grace window. Past grace, answers are dropped but the attempt
+  // is still marked submitted so results stay consistent.
+  const { state: submitState, effectiveEnd } = getDeadlineState(attempt.session, attempt);
   const now = new Date();
-  const GRACE_PERIOD_MS = 60 * 1000;
-  
-  let finalSubmittedAt = now;
-  if (now.getTime() > effectiveEnd.getTime() + GRACE_PERIOD_MS) {
-    finalSubmittedAt = new Date(effectiveEnd.getTime() + GRACE_PERIOD_MS);
+
+  let finalSubmittedAt = clampSubmittedAt(attempt.session, attempt, now);
+  let answersDropped = false;
+  if (submitState === "CLOSED") {
+    answersDropped = true;
     await prisma.cheatFlag.create({
       data: {
         userId,
         examSessionId: attempt.examSessionId,
         type: "LATE_SUBMISSION",
-        description: `Late submission detected. Submitted at ${now.toISOString()}, but allotted window expired at ${effectiveEnd.toISOString()} (${Math.round((now.getTime() - effectiveEnd.getTime()) / 1000)}s past window).`
+        description: `Late submission detected. Submitted at ${now.toISOString()}, but allotted window expired at ${effectiveEnd.toISOString()} (${Math.round((now.getTime() - effectiveEnd.getTime()) / 1000)}s past window). Answers after grace were not saved.`
+      }
+    }).catch(e => console.error("Cheat flag error:", e));
+  } else if (submitState === "GRACE") {
+    finalSubmittedAt = now;
+    await prisma.cheatFlag.create({
+      data: {
+        userId,
+        examSessionId: attempt.examSessionId,
+        type: "LATE_SUBMISSION",
+        description: `Submission during 60s grace window at ${now.toISOString()}, window expired at ${effectiveEnd.toISOString()}.`
       }
     }).catch(e => console.error("Cheat flag error:", e));
   }
 
   // Sync any remaining answers (only if not already submitted)
-  if (attempt.status !== "SUBMITTED") {
-    await batchSyncDraftAnswersAction(attemptId, answers, timeSpent);
+  // Past grace the sync is skipped: late answers are dropped, never stored.
+  if (attempt.status !== "SUBMITTED" && !answersDropped) {
+    const syncRes = await batchSyncDraftAnswersAction(attemptId, answers, timeSpent);
+    if (syncRes && "isSubmitted" in syncRes && (syncRes as { isSubmitted?: boolean }).isSubmitted) {
+      answersDropped = true;
+    }
   }
 
   // Mark attempt as SUBMITTED and stamp startedAt for accurate time tracking
   const createdMs = attempt.createdAt.getTime();
   const submittedMs = finalSubmittedAt.getTime();
-  // Accept clientStartedAtMs only if it's a sensible value between createdAt and submittedAt
+  // Accept clientStartedAtMs only if it's a sensible value between the session
+  // start, attempt creation and submission (never trust raw client time).
+  const sessionFloorMs = (attempt.session.startTime || attempt.createdAt).getTime();
   const resolvedStartedAt =
     clientStartedAtMs &&
+    clientStartedAtMs > sessionFloorMs &&
     clientStartedAtMs > createdMs &&
     clientStartedAtMs < submittedMs
       ? new Date(clientStartedAtMs)
@@ -347,41 +360,41 @@ export async function sweepExpiredAttemptsAction(internalSecret?: string) {
 
   const now = new Date();
 
-  // Find all LIVE sessions whose duration has elapsed
+  // Capped per run so the sweeper stays inside serverless timeouts.
+  // Lazy sweep-on-read in getAttemptStatusAction covers anything missed.
   const liveSessions = await prisma.examSession.findMany({
-    where: { status: "LIVE" },
-    include: { 
-      attempts: { 
-        where: { status: "IN_PROGRESS" },
+    where: { status: 'LIVE' },
+    include: {
+      attempts: {
+        where: { status: 'IN_PROGRESS' },
         include: { responses: true }
-      } 
-    }
+      }
+    },
+    take: 50,
   });
 
   let sweptCount = 0;
   const sessionsToRecalculate = new Set<string>();
+  const { getEffectiveEnd } = await import('@/lib/deadline');
+  const { markCachedAttemptSubmitted } = await import('@/lib/exam-cache');
 
   for (const session of liveSessions) {
-    const sessionStart = session.startTime || session.createdAt;
-    const baseEnd = new Date(sessionStart.getTime() + session.durationMinutes * 60 * 1000);
-    const sessionEffectiveEnd = session.extendedUntil || baseEnd;
-
     for (const attempt of session.attempts) {
-      const candidateDeadline = attempt.extendedUntil || sessionEffectiveEnd;
+      const candidateDeadline = getEffectiveEnd(session, attempt);
       if (now > candidateDeadline) {
         await prisma.candidateAttempt.update({
           where: { id: attempt.id },
           data: {
-            status: "SUBMITTED",
-            submittedAt: now
+            status: 'SUBMITTED',
+            submittedAt: candidateDeadline
           }
         });
+        markCachedAttemptSubmitted(attempt.id);
         sweptCount++;
         sessionsToRecalculate.add(session.id);
       }
     }
   }
-
   // Re-compute analytics for any updated sessions
   if (sessionsToRecalculate.size > 0) {
     const { computeSessionAnalytics } = await import("./analytics");

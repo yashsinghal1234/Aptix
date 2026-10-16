@@ -2,8 +2,10 @@ name: Aptix Scheduled Exam Expiry Sweeper
 
 on:
   schedule:
-    # Runs every 5 minutes (GitHub Actions free cron)
-    - cron: '*/5 * * * *'
+    # Runs every 2 minutes - the sweeper is the server-side backstop for
+    # deadline auto-submit (Vercel cron can't send the CRON_SECRET, so GitHub
+    # Actions remains the scheduler). Lazy sweep-on-read covers gaps.
+    - cron: '*/2 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI anytime
 
 jobs:
@@ -47,7 +49,7 @@ jobs:
           if [ "$HTTP_STATUS" = "200" ] || ([ "$HTTP_STATUS" -ge 200 ] 2>/dev/null && [ "$HTTP_STATUS" -lt 300 ] 2>/dev/null); then
             echo "✅ Sweeper executed successfully."
           elif [ "$HTTP_STATUS" = "401" ]; then
-            echo "⚠️ Warning: Unauthorized (401). Please verify that CRON_SECRET in GitHub Repository Secrets matches your Vercel CRON_SECRET (or JWT_SECRET) environment variable."
+            echo "⚠️ Warning: Unauthorized (401). Please verify that CRON_SECRET in GitHub Repository Secrets matches your Vercel CRON_SECRET environment variable."
             exit 1
           elif [ "$HTTP_STATUS" = "CURL_FAILED" ]; then
             echo "❌ Failed to connect to $TARGET_ENDPOINT. Please verify that your APP_URL secret is a valid, reachable URL."

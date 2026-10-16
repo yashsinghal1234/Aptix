@@ -652,19 +652,6 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                       <p className="relative text-center text-lg sm:text-xl text-neutral-200 leading-snug whitespace-nowrap">
                         Enter your exam PIN to begin?
                       </p>
-                      {(ssoEmail || candidateEmail.trim()) && (
-                        <p className="relative mt-2 text-center text-[11px] font-bold text-neutral-500 truncate">
-                          {ssoEmail || candidateEmail.trim()}
-                          {ssoEmail && (
-                            <>
-                              {" · "}
-                              <button type="button" onClick={() => { handleGoogleSignOut(); setPinOpen(false); }} className="underline underline-offset-2 hover:text-white">
-                                Switch
-                              </button>
-                            </>
-                          )}
-                        </p>
-                      )}
                       <form onSubmit={handleCandidateSubmit} className="relative mt-6 space-y-4">
                         <label htmlFor="candidate-exam-pin-dialog" className="sr-only">
                           Exam PIN
