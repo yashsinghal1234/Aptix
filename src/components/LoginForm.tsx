@@ -122,9 +122,9 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   };
 
   // College SSO identity (Google Workspace, SSO-first-then-PIN)
-  // On /admin/login, a returning Google session auto-completes staff SSO -
-  // no per-page permission needed in Google Cloud (only the single
-  // /api/auth/callback/google redirect URI matters).
+  // A valid KIET ID jumps straight to the PIN dialog - no intermediate chip.
+  // On /admin/login, a returning Google session auto-completes staff SSO.
+  const ssoPinAuto = React.useRef<string | null>(null);
   const staffSsoAuto = React.useRef(false);
   useEffect(() => {
     getSsoIdentityAction()
@@ -141,6 +141,14 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
             staffSsoAuto.current = true;
             setMode("staff");
             completeStaffSso(true);
+          } else if (
+            res.email &&
+            ssoPinAuto.current !== res.email &&
+            typeof window !== "undefined" &&
+            !window.location.pathname.startsWith("/admin/login")
+          ) {
+            ssoPinAuto.current = res.email;
+            setPinOpen(true);
           }
         }
       })
@@ -533,14 +541,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
               )}
 
               <form onSubmit={openPinDialog} className="space-y-4">
-                {ssoEmail ? (
-                  <div className="flex items-center justify-between gap-2 px-1">
-                    <p className="text-xs font-bold text-lime-200 truncate">✓ {ssoEmail}{ssoName ? ` · ${ssoName}` : ""}</p>
-                    <button type="button" onClick={handleGoogleSignOut} className="text-[11px] font-bold text-neutral-400 hover:text-white shrink-0">
-                      Switch
-                    </button>
-                  </div>
-                ) : (
+                {!ssoEmail && (
                   <>
                     <button
                       type="button"
@@ -641,7 +642,14 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                   >
                     <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500">VERIFIED · ENTER EXAM PIN</p>
                     {(ssoEmail || candidateEmail) && (
-                      <p className="mt-2 text-xs font-bold text-lime-200 truncate">{ssoEmail || candidateEmail.trim()}</p>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <p className="text-xs font-bold text-lime-200 truncate">{ssoEmail || candidateEmail.trim()}</p>
+                        {ssoEmail && (
+                          <button type="button" onClick={() => { handleGoogleSignOut(); setPinOpen(false); }} className="text-[11px] font-bold text-neutral-400 hover:text-white shrink-0">
+                            Switch
+                          </button>
+                        )}
+                      </div>
                     )}
                     <form onSubmit={handleCandidateSubmit} className="mt-4 space-y-4">
                       <label htmlFor="candidate-exam-pin-dialog" className="sr-only">
