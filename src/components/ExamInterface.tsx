@@ -12,6 +12,7 @@ import { ExamReviewModal } from "@/components/ExamReviewModal";
 import CandidateScorecardView from "@/components/CandidateScorecardView";
 import { CandidateTopbar, CandidateFooter } from "@/components/candidate/CandidateChrome";
 import { Flower } from "@/components/owner/OpsPanels";
+import { SecureLaunchOverlay } from "@/components/candidate/SecureLaunchOverlay";
 
 function createPRNG(seed: number) {
   return function() {
@@ -48,6 +49,9 @@ export function ExamInterface({
 }) {
   const chosenMascot = isGamified && mascotId ? getMascotById(mascotId) : null;
   const [hasStarted, setHasStarted] = useState(false);
+  const [isSecuring, setIsSecuring] = useState(false);
+  const [secureStep, setSecureStep] = useState(0);
+  const [secureError, setSecureError] = useState<string | null>(null);
   const [rulesAccepted, setRulesAccepted] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -96,20 +100,24 @@ export function ExamInterface({
   const clientDeviceIdRef = useRef<string>("");
 
   // Pre-exam system diagnostics state
+  // null = browser can't report (e.g. Safari masks displays/VM) - shown as
+  // Unknown, never as a false Healthy.
   const [diagnostics, setDiagnostics] = useState<{
     ping: number | null;
     battery: { charging: boolean; level: number } | null;
-    isSingleScreen: boolean;
+    isSingleScreen: boolean | null;
     screenRes: string;
     isVM: boolean;
+    vmKnown: boolean;
     vmRenderer: string;
     isChecking: boolean;
   }>({
     ping: null,
     battery: null,
-    isSingleScreen: true,
+    isSingleScreen: null,
     screenRes: typeof window !== "undefined" ? `${window.screen.width}×${window.screen.height}` : "1920×1080",
     isVM: false,
+    vmKnown: false,
     vmRenderer: "",
     isChecking: true,
   });
@@ -149,15 +157,16 @@ export function ExamInterface({
         logCheatSignalAction(session.id, "VIRTUAL_MACHINE", `Virtual machine / sandbox detected (${vm.renderer || vm.vendor}).`);
       }
 
-      const isSingle = typeof window !== "undefined" ? !(window.screen as any)?.isExtended : true;
+      const extFlag = typeof window !== "undefined" ? (window.screen as any)?.isExtended : undefined;
       const resStr = typeof window !== "undefined" ? `${window.screen.width}×${window.screen.height}` : "Standard";
 
       setDiagnostics({
         ping: measuredPing,
         battery: battInfo,
-        isSingleScreen: isSingle,
+        isSingleScreen: extFlag === undefined ? null : !extFlag,
         screenRes: resStr,
         isVM: vm.isVM,
+        vmKnown: vm.confidence !== "NONE",
         vmRenderer: vm.renderer,
         isChecking: false,
       });
@@ -187,7 +196,8 @@ export function ExamInterface({
   const blurCountRef = useRef(0);           // All infractions (for logging)
   const tabSwitchCountRef = useRef(0);      // Only WINDOW_BLUR tab switches (for limit enforcement)
   const lastInfractionTimestampRef = useRef<number>(0);
-  const lastInfractionKeyRef = useRef<string>(""); // Composite dedup key: "TYPE_secondsEpoch"
+  const lastFocusLossAtRef = useRef<number>(0); // unified focus-loss dedup clock
+  const hiddenAtRef = useRef<number>(0); // for duration-away logging
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const executeSubmitRef = useRef<((msg?: string) => Promise<void>) | null>(null);
   const timeUpRef = useRef(false); // mirrors shouldAutoSubmit without stale closures
@@ -290,7 +300,8 @@ export function ExamInterface({
 
   useEffect(() => {
     if (typeof document !== "undefined") {
-      setIsFullscreen(!!document.fullscreenElement);
+      const doc = document as any;
+      setIsFullscreen(!!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement));
     }
   }, []);
 
@@ -706,15 +717,16 @@ export function ExamInterface({
       if (isFinishingRef.current || isFinished || !hasStarted) return;
 
       const now = Date.now();
+      const isFocusLoss = type === "WINDOW_BLUR" || type === "FULLSCREEN_EXIT";
 
-      // ── Deduplication ─────────────────────────────────────────────────────────
-      // Both window.blur and visibilitychange fire for the same tab switch.
-      // Use a composite key (type + second-resolution timestamp) to count each
-      // real event only once regardless of how many DOM events arrive.
-      if (type === "WINDOW_BLUR" || type === "FULLSCREEN_EXIT") {
-        const dedupKey = `${type}_${Math.floor(now / 1000)}`;
-        if (dedupKey === lastInfractionKeyRef.current) return;
-        lastInfractionKeyRef.current = dedupKey;
+      // ── Unified focus-loss counting ──────────────────────────────────────
+      // One physical gesture (Alt-Tab, minimize, fullscreen exit) fires
+      // window.blur + visibilitychange + fullscreenchange together, sometimes
+      // straddling a second boundary. Collapse anything inside a 1.5s window
+      // into a single infraction so counts match reality in both directions.
+      if (isFocusLoss) {
+        if (now - lastFocusLossAtRef.current < 1500) return;
+        lastFocusLossAtRef.current = now;
         lastInfractionTimestampRef.current = now;
       }
 
@@ -722,44 +734,47 @@ export function ExamInterface({
       blurCountRef.current += 1;
       const totalInfractions = blurCountRef.current;
 
-      // ── Tab-switch-specific counter (for limit enforcement) ───────────────────
-      // Only WINDOW_BLUR counts against the tabSwitchLimit.
-      // Right-clicks, copy attempts, and F12 presses do NOT eat the tab switch budget.
-      if (type === "WINDOW_BLUR") {
+      // ── Focus-loss counter (for limit enforcement) ─────────────────────────
+      // Both tab switches AND fullscreen exits consume the same budget.
+      // Right-clicks, copy attempts, and F12 presses do NOT eat the budget.
+      if (isFocusLoss) {
         tabSwitchCountRef.current += 1;
       }
       const tabSwitchCount = tabSwitchCountRef.current;
 
-      const tabLimit = config.tabSwitchLimit !== undefined ? parseInt(String(config.tabSwitchLimit), 10) : 0;
+      // Default 5 when the template never set a limit; explicit 0 = unlimited.
+      const parsedLimit = parseInt(String(config.tabSwitchLimit ?? ""), 10);
+      const tabLimit = isNaN(parsedLimit) ? 5 : parsedLimit;
 
       // Log cheat signal to database in real-time
-      logCheatSignalAction(session.id, type, `${description} (Tab switch #${tabSwitchCount}, Total infraction #${totalInfractions}).`);
+      logCheatSignalAction(session.id, type, `${description} (Focus loss #${tabSwitchCount}, Total infraction #${totalInfractions}).`);
 
-      if (tabLimit > 0 && type === "WINDOW_BLUR") {
-        // ── Tab switch limit enforcement ───────────────────────────────────────
-        if (tabSwitchCount >= tabLimit) {
-          if (!isFinishingRef.current) {
-            isFinishingRef.current = true;
-            const msg = `Tab switch limit reached (${tabSwitchCount}/${tabLimit}). Auto-submitting assessment now.`;
-            setTabSwitchWarning(msg);
-            (executeSubmitRef.current ?? executeSubmit)(msg);
-          }
-        } else {
-          setTabSwitchWarning(
-            `⚠️ Focus Warning: Tab switch ${tabSwitchCount}/${tabLimit} recorded. ` +
-            `Reaching ${tabLimit} will automatically submit your exam.`
-          );
-        }
-      } else if (config.autoSubmitOnFullscreenExit && type === "FULLSCREEN_EXIT") {
+      if (type === "FULLSCREEN_EXIT" && config.autoSubmitOnFullscreenExit) {
+        // Owner explicitly armed instant submit on fullscreen exit
         if (!isFinishingRef.current) {
           isFinishingRef.current = true;
           const msg = "Exited full-screen mode. Assessment automatically submitted.";
           setTabSwitchWarning(msg);
           (executeSubmitRef.current ?? executeSubmit)(msg);
         }
+      } else if (tabLimit > 0 && isFocusLoss) {
+        // ── Focus-loss limit enforcement ───────────────────────────────────────
+        if (tabSwitchCount >= tabLimit) {
+          if (!isFinishingRef.current) {
+            isFinishingRef.current = true;
+            const msg = `Focus-loss limit reached (${tabSwitchCount}/${tabLimit}). Auto-submitting assessment now.`;
+            setTabSwitchWarning(msg);
+            (executeSubmitRef.current ?? executeSubmit)(msg);
+          }
+        } else {
+          setTabSwitchWarning(
+            `⚠️ Focus Warning: Focus loss ${tabSwitchCount}/${tabLimit} recorded. ` +
+            `Reaching ${tabLimit} will automatically submit your exam.`
+          );
+        }
       } else {
-        // Non-tab-switch infraction: warn but don't auto-submit based on tab limit
-        if (type !== "WINDOW_BLUR" || tabLimit === 0) {
+        // Non-focus-loss infraction, or unlimited budget: warn but don't auto-submit
+        if (!isFocusLoss || tabLimit === 0) {
           setTabSwitchWarning(`Security Alert: Infraction #${totalInfractions} logged to examiner (${description}).`);
         }
       }
@@ -784,8 +799,15 @@ export function ExamInterface({
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        hiddenAtRef.current = Date.now();
         handleSecurityInfraction("WINDOW_BLUR", "Candidate minimized window or navigated to another tab");
       } else {
+        // Log how long the candidate was away (info only, no extra budget)
+        const awayMs = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+        hiddenAtRef.current = 0;
+        if (awayMs >= 10000 && !isFinishingRef.current && !isFinished && hasStarted) {
+          logCheatSignalAction(session.id, "WINDOW_BLUR", `Candidate returned after ${Math.round(awayMs / 1000)}s away.`);
+        }
         // Background throttling stalls setInterval: recompute deadline immediately
         // on return so expired candidates submit instead of gaining free time.
         try {
@@ -956,6 +978,11 @@ export function ExamInterface({
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    // Safari/iPad fire only prefixed variants - without these the paused
+    // overlay never syncs on Apple devices.
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
 
     // Capture-phase registration on window AND document to execute before extension content scripts
     window.addEventListener("contextmenu", handleContextMenu, captureActive);
@@ -992,6 +1019,9 @@ export function ExamInterface({
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
 
       window.removeEventListener("contextmenu", handleContextMenu, captureActive);
       document.removeEventListener("contextmenu", handleContextMenu, captureActive);
@@ -1035,11 +1065,16 @@ export function ExamInterface({
   }, [hasStarted, isFinished, currentQuestion, questions]);
 
   const startExamFullscreen = async () => {
+    setSecureError(null);
+    setSecureStep(0);
+    setIsSecuring(true);
     const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
     if (statusData?.concurrentSessionDetected) {
       setIsConcurrentLockout(true);
+      setIsSecuring(false);
       return;
     }
+    setSecureStep(1);
 
     if (diagnostics.isVM) {
       logCheatSignalAction(session.id, "VIRTUAL_MACHINE", `Candidate launched assessment from a virtualized environment (${diagnostics.vmRenderer}).`);
@@ -1062,6 +1097,23 @@ export function ExamInterface({
         console.warn("Fullscreen request failed", err);
       }
     }
+    setSecureStep(2);
+
+    // Server clock must be synced - it decides the deadline, not this device
+    if (!synced) {
+      setSecureError("Could not reach the server clock. Check your connection and try again.");
+      setIsSecuring(false);
+      return;
+    }
+    setSecureStep(3);
+
+    // Crash-recovery buffer must be writable before answers flow
+    if (typeof indexedDB === "undefined") {
+      setSecureError("Crash-recovery storage is unavailable in this browser. Use Chrome or Edge on desktop.");
+      setIsSecuring(false);
+      return;
+    }
+    setSecureStep(4);
 
     if (typeof window !== "undefined") {
       const startKey = `aptix_attempt_start_${attempt.id}`;
@@ -1071,6 +1123,13 @@ export function ExamInterface({
     }
 
     setHasStarted(true);
+    setSecureStep(5);
+    // Monitors arm on hasStarted; hold the finished card briefly so the
+    // candidate sees lockdown complete, then enter the paper.
+    setTimeout(() => {
+      setIsSecuring(false);
+      setSecureStep(0);
+    }, 800);
   };
 
   useEffect(() => {
@@ -1080,8 +1139,15 @@ export function ExamInterface({
       
       if (statusData.concurrentSessionDetected) {
         setIsConcurrentLockout(true);
-        if (typeof document !== "undefined" && document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+        if (typeof document !== "undefined") {
+          const doc = document as any;
+          try {
+            if (doc.exitFullscreen && (doc.fullscreenElement || doc.webkitFullscreenElement)) {
+              (doc.fullscreenElement ? doc.exitFullscreen() : doc.webkitExitFullscreen()).catch(() => {});
+            } else if (doc.webkitExitFullscreen && doc.webkitFullscreenElement) {
+              doc.webkitExitFullscreen();
+            }
+          } catch {}
         }
         return;
       }
@@ -1149,9 +1215,16 @@ export function ExamInterface({
   }, [isAlreadySubmitted, canViewResults, attempt.id]);
 
   const handleReturnToLogin = () => {
-    if (typeof document !== "undefined" && document.fullscreenElement) {
+    if (typeof document !== "undefined") {
       try {
-        document.exitFullscreen().catch(() => {});
+        const doc = document as any;
+        if (doc.fullscreenElement && doc.exitFullscreen) {
+          doc.exitFullscreen().catch(() => {});
+        } else if (doc.webkitFullscreenElement && doc.webkitExitFullscreen) {
+          doc.webkitExitFullscreen();
+        } else if (doc.mozFullScreenElement && doc.mozCancelFullScreen) {
+          doc.mozCancelFullScreen();
+        }
       } catch (e) {}
     }
     try {
@@ -1516,8 +1589,8 @@ export function ExamInterface({
       { label: "Fullscreen", sub: config.requireFullscreen === false ? "Not required for this exam" : "Request at launch", state: "READY" },
       { label: "Single-device session", sub: "Lease verified on start", state: "READY" },
       { label: "Local recovery storage", sub: typeof indexedDB !== "undefined" ? "IndexedDB available" : "Memory buffer only", state: typeof indexedDB !== "undefined" ? "READY" : "LIMITED" },
-      { label: "Multiple displays", sub: diagnostics.isSingleScreen ? "Single display detected" : "Extended displays detected", state: diagnostics.isSingleScreen ? "READY" : "LIMITED" },
-      { label: "Hardware / virtualization", sub: diagnostics.isVM ? `Virtualized (${diagnostics.vmRenderer || "unknown"})` : "Physical host", state: diagnostics.isVM ? "LIMITED" : "READY" },
+      { label: "Multiple displays", sub: diagnostics.isSingleScreen === null ? "Unknown on this browser" : diagnostics.isSingleScreen ? "Single display detected" : "Extended displays detected", state: diagnostics.isSingleScreen === null ? "LIMITED" : diagnostics.isSingleScreen ? "READY" : "LIMITED" },
+      { label: "Hardware / virtualization", sub: !diagnostics.vmKnown ? "Unknown on this browser" : diagnostics.isVM ? `Virtualized (${diagnostics.vmRenderer || "unknown"})` : "Physical host", state: !diagnostics.vmKnown ? "LIMITED" : diagnostics.isVM ? "LIMITED" : "READY" },
     ];
     return (
       <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
@@ -2271,6 +2344,17 @@ export function ExamInterface({
         session={session}
       />
       {submittingLock}
+      {isSecuring && (
+        <SecureLaunchOverlay
+          stepIndex={secureStep}
+          failMessage={secureError}
+          onClose={() => {
+            setIsSecuring(false);
+            setSecureError(null);
+            setSecureStep(0);
+          }}
+        />
+      )}
     </>
   );
 }

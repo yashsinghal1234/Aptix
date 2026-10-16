@@ -125,13 +125,15 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
         <div className="p-12 text-center border border-white/10 rounded-2xl bg-[#0c0d12]">
           <p className="text-sm font-bold text-white">No blueprints yet</p>
           <p className="text-xs text-neutral-500 mt-1 mb-5">Create your first assessment template to get started.</p>
-          <Link
-            href="/dashboard/owner/template/new"
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-black font-extrabold text-xs shadow-lg transition-all cursor-pointer"
-          >
-            <span className="text-base leading-none font-black">+</span>
-            <span>Create Template Studio</span>
-          </Link>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Link
+              href="/dashboard/owner/template/new"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-black font-extrabold text-xs shadow-lg transition-all cursor-pointer"
+            >
+              <span className="text-base leading-none font-black">+</span>
+              <span>Create Template Studio</span>
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -183,13 +185,15 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
           </p>
         </div>
 
-        <Link
-          href="/dashboard/owner/template/new"
-          className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-black font-extrabold text-xs shadow-lg transition-all self-start sm:self-auto cursor-pointer"
-        >
-          <span className="text-base leading-none font-black">+</span>
-          <span>Create Template Studio</span>
-        </Link>
+        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+          <Link
+            href="/dashboard/owner/template/new"
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-black font-extrabold text-xs shadow-lg transition-all cursor-pointer"
+          >
+            <span className="text-base leading-none font-black">+</span>
+            <span>Create Template Studio</span>
+          </Link>
+        </div>
       </div>
 
       {/* ── Search & Filter Controls ──────────────────────── */}

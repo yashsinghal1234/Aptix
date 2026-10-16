@@ -247,6 +247,17 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     setChecks((prev) => ({ ...prev, [name]: val }));
   };
 
+  // Subject-first creation: picking a blueprint subject auto-filters the
+  // question pool to that subject's bank.
+  useEffect(() => {
+    const sub = (fields.subject || "").trim().toLowerCase();
+    if (!sub) return;
+    const match = allCategories.find((c) => c.toLowerCase() === sub);
+    if (match && match !== filterTopic) {
+      setFilterTopic(match);
+      setQPage(0);
+    }
+  }, [fields.subject]);
   // Restore draft from browser localStorage on initial mount
   useEffect(() => {
     const saved = loadDraft();

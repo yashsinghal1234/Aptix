@@ -22,7 +22,7 @@ const LABEL = "block text-[10px] font-bold text-neutral-500 uppercase tracking-[
 const INPUT =
   "w-full px-3.5 py-2.5 text-xs bg-black/60 border border-white/10 rounded-xl outline-none transition-all font-medium text-white placeholder-neutral-600 hover:border-white/20 focus:border-lime-300/50";
 
-export function AddQuestionForm() {
+export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export function AddQuestionForm() {
   const [correctAnswer, setCorrectAnswer] = useState("0");
   const [pointsVal, setPointsVal] = useState("1.0");
   const [negPointsVal, setNegPointsVal] = useState("0.0");
-  const [selectedTopic, setSelectedTopic] = useState<string>(FIXED_TOPICS[0]);
+  const [selectedTopic, setSelectedTopic] = useState<string>(defaultSubject || FIXED_TOPICS[0]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("MEDIUM");
 
   const [dupState, setDupState] = useState<{ checking: boolean; result: null | { similarity: number; isExact: boolean; matchedId: string | null; matchedStem: string } }>({

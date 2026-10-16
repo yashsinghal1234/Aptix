@@ -1,5 +1,4 @@
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { DashboardNav } from "@/components/DashboardNav";
 import { prewarmAllDashboardCaches } from "@/lib/dashboard-cache";
 
@@ -8,15 +7,12 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const token = cookies().get("token")?.value;
+  const auth = await requireAuth();
   let role = "CANDIDATE";
   let userName = "Administrator";
-  if (token) {
-    const payload = await verifyToken(token);
-    if (payload) {
-      role = payload.role as string;
-      if (typeof payload.name === "string" && payload.name.trim()) userName = payload.name;
-    }
+  if (!("error" in auth)) {
+    role = auth.user.role;
+    if (auth.user.name?.trim()) userName = auth.user.name;
   }
   const isOwner = role === "OWNER";
 

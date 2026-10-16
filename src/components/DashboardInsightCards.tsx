@@ -108,7 +108,7 @@ export function DashboardInsightCards({
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
         const fresh = await getLiveTelemetryData();
-        if (fresh && isMounted) {
+        if (fresh && isMounted && !("error" in fresh)) {
           setLiveTelemetry({
             liveSessionsCount: fresh.liveSessionsCount,
             inProgressAttemptsCount: fresh.inProgressAttemptsCount,

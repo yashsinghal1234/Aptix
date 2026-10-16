@@ -1,17 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 export async function saveCandidateMascotAction(sessionId: string, mascotId: string) {
   try {
-    const token = cookies().get("token")?.value;
-    if (!token) return { error: "Unauthorized" };
-    const payload = await verifyToken(token);
-    if (!payload?.userId) return { error: "Unauthorized" };
+    const auth = await requireAuth();
+    if ("error" in auth || !auth.user) return { error: "Unauthorized" };
 
-    const userId = payload.userId as string;
+    const userId = auth.user.id;
 
     // Check if mascot is already recorded for this user and session
     const existing = await prisma.auditLog.findFirst({
@@ -49,6 +46,11 @@ export async function saveCandidateMascotAction(sessionId: string, mascotId: str
 
 export async function getCandidateMascot(userId: string, sessionId: string): Promise<string | null> {
   try {
+    // Ownership: candidates see only their own, owners see any
+    const auth = await requireAuth();
+    if ("error" in auth || !auth.user) return null;
+    if (auth.user.id !== userId && auth.user.role !== "OWNER") return null;
+
     const log = await prisma.auditLog.findFirst({
       where: {
         userId,
@@ -68,6 +70,8 @@ export async function getCandidateMascot(userId: string, sessionId: string): Pro
 
 export async function getSessionMascotsMap(sessionId: string): Promise<Record<string, string>> {
   try {
+    const auth = await requireAuth(["OWNER"]);
+    if ("error" in auth) return {};
     const logs = await prisma.auditLog.findMany({
       where: {
         action: "CHOSEN_MASCOT",

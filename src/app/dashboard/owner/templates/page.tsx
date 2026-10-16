@@ -1,8 +1,7 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import TemplateStudioView, { TemplateItem, StudioSession } from "@/components/owner/TemplateStudioView";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +12,8 @@ const istTime = (d: Date | string) =>
   new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
 
 export default async function ExamTemplatesPage() {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const [dbExams, staff] = await Promise.all([
     prisma.exam.findMany({

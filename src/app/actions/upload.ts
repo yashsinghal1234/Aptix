@@ -1,13 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 async function isAuthorized() {
-  const token = cookies().get("token")?.value;
-  if (!token) return false;
-  const payload = await verifyToken(token);
-  return payload?.role === "OWNER" || payload?.role === "SETTER";
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  return !("error" in auth);
 }
 
 function detectImageMimeType(buffer: Buffer): string | null {

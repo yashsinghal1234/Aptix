@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { invalidateAllDashboardCaches } from "@/lib/dashboard-cache";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,14 +13,11 @@ export async function GET() {
 }
 
 export async function POST() {
-  const token = cookies().get("token")?.value;
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") {
-    return NextResponse.json({ error: "Forbidden: Only owners can flush system caches." }, { status: 403 });
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) {
+    const msg = auth.error || "Unauthorized";
+    const status = msg.startsWith("Forbidden") ? 403 : 401;
+    return NextResponse.json({ error: msg }, { status });
   }
 
   invalidateAllDashboardCaches();

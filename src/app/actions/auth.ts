@@ -4,7 +4,7 @@ import { randomInt } from "crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { signToken, verifyToken } from "@/lib/auth";
+import { signToken, verifyToken, requireAuth } from "@/lib/auth";
 import { hashPassword, verifyPassword, validatePasswordPolicy } from "@/lib/password";
 import { 
   checkRateLimit, 
@@ -458,14 +458,9 @@ export async function staffLoginAction(formData: FormData) {
  * First-Time Password Setup Action (Author sets their private password)
  */
 export async function setupFirstTimePasswordAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) {
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) {
     return { error: "Session expired. Please log in again." };
-  }
-
-  const payload = await verifyToken(token);
-  if (!payload || !payload.userId) {
-    return { error: "Session invalid. Please log in again." };
   }
 
   const newPassword = (formData.get("newPassword") as string)?.trim();
@@ -480,7 +475,7 @@ export async function setupFirstTimePasswordAction(formData: FormData) {
     return { error: "Passwords do not match." };
   }
 
-  const userId = payload.userId as string;
+  const userId = auth.user.id;
   const user = await prisma.user.findUnique({
     where: { id: userId }
   });
@@ -610,11 +605,8 @@ export async function getSsoIdentityAction() {
  * Removes all candidate responses and the attempt row itself.
  */
 export async function deleteAttemptAction(attemptId: string) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") {
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) {
     return { error: "Forbidden: Only exam owners can delete submissions." };
   }
 

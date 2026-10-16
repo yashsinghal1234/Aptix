@@ -1,8 +1,16 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
 
-export async function computeSessionAnalytics(sessionId: string) {
+export async function computeSessionAnalytics(sessionId: string, internalSecret?: string) {
+  const auth = await requireAuth(["OWNER"]);
+  const isValidCron = !!(
+    internalSecret &&
+    process.env.CRON_SECRET &&
+    internalSecret === process.env.CRON_SECRET
+  );
+  if ("error" in auth && !isValidCron) return { error: "Unauthorized" };
   const session = await prisma.examSession.findUnique({
     where: { id: sessionId },
     include: {
@@ -136,6 +144,8 @@ let telemetryCache: {
 const TELEMETRY_CACHE_TTL_MS = 6000; // 6 seconds memory cache
 
 export async function getLiveTelemetryData() {
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return { error: auth.error };
   const now = Date.now();
   if (telemetryCache && (now - telemetryCache.timestamp) < TELEMETRY_CACHE_TTL_MS) {
     return telemetryCache.data;

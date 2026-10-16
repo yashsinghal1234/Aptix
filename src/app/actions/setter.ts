@@ -2,8 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { z } from "zod";
 
 import { uploadImageAction } from "@/app/actions/upload";
@@ -24,11 +23,9 @@ const questionSchema = z.object({
 });
 
 async function getAuthorizedUser() {
-  const token = cookies().get("token")?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role !== "OWNER" && payload.role !== "SETTER")) return null;
-  return payload;
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return null;
+  return { id: auth.user.id, userId: auth.user.id, role: auth.user.role };
 }
 
 /** Lightweight pre-save duplicate signal (same non-AI Jaccard engine as submit-time enforcement). */

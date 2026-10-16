@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 import { getCachedQuestionBankData } from "@/lib/dashboard-cache";
 import { BankOps } from "@/components/owner/BankOps";
 import { Flower } from "@/components/owner/OpsPanels";
@@ -23,6 +24,7 @@ const WORKFLOW_LABELS: Record<string, string> = {
 
 export default async function QuestionBankDashboard() {
   const [questions, lockedSessions] = await getCachedQuestionBankData();
+  const subjects = await prisma.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, code: true } });
 
   const liveIds = new Set<string>();
   const doneIds = new Set<string>();
@@ -90,6 +92,17 @@ export default async function QuestionBankDashboard() {
   const types = Array.from(new Set(rows.map((r) => r.typeLabel))).sort();
   const levels = Array.from(new Set(rows.map((r) => r.level))).sort();
 
+  // Subject-wise bank tabs: a question belongs to the subject whose name
+  // matches its category (case-insensitive); the rest are Unassigned.
+  const subjectTabs = subjects.map((s) => ({
+    name: s.name,
+    code: s.code,
+    count: rows.filter((r) => r.category.toLowerCase() === s.name.toLowerCase()).length,
+  }));
+  const unassignedCount = rows.filter(
+    (r) => !subjects.some((s) => s.name.toLowerCase() === r.category.toLowerCase())
+  ).length;
+
   return (
     <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
       <div className="flex items-start justify-between gap-6 px-1 pt-1">
@@ -146,6 +159,8 @@ export default async function QuestionBankDashboard() {
         categories={categories}
         types={types}
         levels={levels}
+        subjectTabs={subjectTabs}
+        unassignedCount={unassignedCount}
       />
 
       <p className="px-1 text-[10px] text-neutral-600">

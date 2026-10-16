@@ -1,12 +1,15 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { AddQuestionForm } from "@/components/AddQuestionForm";
 import { BulkUploadCSV } from "@/components/BulkUploadCSV";
 import { BulkUploadText } from "@/components/BulkUploadText";
 import { Flower } from "@/components/owner/OpsPanels";
 
-export default function SetterDashboard() {
+function StudioBody() {
   const [activeTab, setActiveTab] = useState<"MANUAL" | "PASTE" | "CSV">("MANUAL");
+  const searchParams = useSearchParams();
+  const defaultSubject = searchParams.get("subject") || undefined;
 
   const tabs = [
     { k: "MANUAL" as const, label: "MANUAL ENTRY" },
@@ -45,9 +48,17 @@ export default function SetterDashboard() {
         ))}
       </div>
 
-      {activeTab === "MANUAL" && <AddQuestionForm />}
+      {activeTab === "MANUAL" && <AddQuestionForm defaultSubject={defaultSubject} />}
       {activeTab === "PASTE" && <BulkUploadText />}
       {activeTab === "CSV" && <BulkUploadCSV />}
     </div>
+  );
+}
+
+export default function SetterDashboard() {
+  return (
+    <Suspense>
+      <StudioBody />
+    </Suspense>
   );
 }

@@ -1,8 +1,7 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import CandidateAuditView from "@/components/owner/CandidateAuditView";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +42,8 @@ export default async function CandidateReportPage({
 }: {
   params: { sessionId: string; attemptId: string };
 }) {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const attempt = await prisma.candidateAttempt.findUnique({
     where: { id: params.attemptId },

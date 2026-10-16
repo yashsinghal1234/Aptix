@@ -1,8 +1,7 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import Link from "next/link";
 import {
   extendSessionTimeAction,
@@ -27,11 +26,8 @@ const istTime = (d: Date | string) =>
   new Date(d).toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false });
 
 export default async function LiveSessionMonitor({ params }: { params: { id: string } }) {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const session = await prisma.examSession.findUnique({
     where: { id: params.id },

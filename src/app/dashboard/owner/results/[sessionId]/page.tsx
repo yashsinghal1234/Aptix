@@ -1,8 +1,7 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import Link from "next/link";
 import { getSessionMascotsMap } from "@/app/actions/mascot";
 import { getMascotById } from "@/lib/mascots";
@@ -25,10 +24,8 @@ function verdict(p: number, d: number): { label: string; cls: string } {
 }
 
 export default async function SessionAnalyticsPage({ params }: { params: { sessionId: string } }) {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const session = await prisma.examSession.findUnique({
     where: { id: params.sessionId },

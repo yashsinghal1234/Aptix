@@ -1,17 +1,13 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 export async function logCheatSignalAction(examSessionId: string, type: string, description?: string) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  
-  const payload = await verifyToken(token);
-  if (!payload || !payload.userId) return { error: "Unauthorized" };
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) return { error: "Unauthorized" };
 
-  const userId = payload.userId as string;
+  const userId = auth.user.id;
 
   try {
     // Only log integrity signals for actively IN_PROGRESS attempts

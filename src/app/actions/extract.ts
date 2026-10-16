@@ -1,8 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import {
   analyzeQuestionWithAI,
@@ -13,11 +12,9 @@ import {
 import { parseTextBlobToRawItems } from "@/lib/question-parser";
 
 async function getAuthorizedUser() {
-  const token = cookies().get("token")?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role !== "SETTER" && payload.role !== "OWNER")) return null;
-  return payload;
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return null;
+  return auth;
 }
 
 /**
@@ -149,7 +146,7 @@ export async function saveVerifiedQuestionsAction(
         difficultyLevel: q.difficultyLevel,
         status: status,
         isExtracted: true,
-        authorId: user.userId as string,
+        authorId: user.user.id,
         type: "MCQ_SINGLE",
         points: 1.0,
         negativePoints: 0.0

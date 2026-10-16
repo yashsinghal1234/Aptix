@@ -1,7 +1,6 @@
 import React from "react";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import Link from "next/link";
 import { getCachedResultsData } from "@/lib/dashboard-cache";
 import { Flower } from "@/components/owner/OpsPanels";
@@ -12,11 +11,8 @@ const fmtDate = (d: Date) =>
   d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 export default async function ResultsDashboard() {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const completedSessions = await getCachedResultsData();
 

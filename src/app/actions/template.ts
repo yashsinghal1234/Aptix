@@ -2,8 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { invalidateOwnerDashboardCache } from "@/lib/dashboard-cache";
 import { parseRosterText } from "@/lib/roster-parser";
 import { z } from "zod";
@@ -46,10 +45,8 @@ const templateSchema = z.object({
 });
 
 export async function createTemplateAction(formData: FormData, selectedQuestionIds: string[], rules: { category: string, difficultyLevel: string, count: number }[]) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const rawTitle = (formData.get("title") as string)?.trim() || "";
   const title = rawTitle ? rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1) : "";
@@ -119,7 +116,7 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
   const template = await prisma.exam.create({
     data: {
       ...data,
-      createdBySetterId: payload.userId as string,
+      createdBySetterId: auth.user.id,
       questions: {
         connect: selectedQuestionIds.map((id) => ({ id }))
       },
@@ -151,7 +148,7 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
 
   await prisma.auditLog.create({
     data: {
-      userId: payload.userId as string,
+      userId: auth.user.id,
       action: "CREATE_TEMPLATE",
       details: `Created exam template: ${data.title}${rosterCount ? ` with ${rosterCount} roster emails` : ""}`,
     }
@@ -163,10 +160,8 @@ export async function createTemplateAction(formData: FormData, selectedQuestionI
 }
 
 export async function deleteTemplateAction(id: string) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   try {
     // Soft delete the template
@@ -177,7 +172,7 @@ export async function deleteTemplateAction(id: string) {
 
     await prisma.auditLog.create({
       data: {
-        userId: payload.userId as string,
+        userId: auth.user.id,
         action: "DELETE_TEMPLATE",
         details: `Deleted exam template ID: ${id}`,
       }
@@ -193,10 +188,8 @@ export async function deleteTemplateAction(id: string) {
 }
 
 export async function duplicateTemplateAction(id: string) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   try {
     const existing = await prisma.exam.findUnique({
@@ -217,7 +210,7 @@ export async function duplicateTemplateAction(id: string) {
         instructions: existing.instructions,
         subject: existing.subject,
         allowedEmailDomain: existing.allowedEmailDomain,
-        createdBySetterId: existing.createdBySetterId || (payload.userId as string),
+        createdBySetterId: existing.createdBySetterId || (auth.user.id),
         selectionMode: existing.selectionMode,
         randomizeQuestionOrder: existing.randomizeQuestionOrder,
         randomizeOptionOrder: existing.randomizeOptionOrder,
@@ -259,7 +252,7 @@ export async function duplicateTemplateAction(id: string) {
 
     await prisma.auditLog.create({
       data: {
-        userId: payload.userId as string,
+        userId: auth.user.id,
         action: "DUPLICATE_TEMPLATE",
         details: `Duplicated template "${existing.title}" -> "${newTemplate.title}"`,
       }
@@ -275,10 +268,8 @@ export async function duplicateTemplateAction(id: string) {
 }
 
 export async function updateTemplateAction(formData: FormData) {
-  const token = cookies().get("token")?.value;
-  if (!token) return { error: "Unauthorized" };
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return { error: "Unauthorized" };
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return { error: auth.error };
 
   const id = formData.get("id") as string;
   if (!id) return { error: "Template ID is required" };
@@ -333,7 +324,7 @@ export async function updateTemplateAction(formData: FormData) {
 
     await prisma.auditLog.create({
       data: {
-        userId: payload.userId as string,
+        userId: auth.user.id,
         action: "UPDATE_TEMPLATE",
         details: `Updated exam template "${updated.title}" (ID: ${id})`,
       }

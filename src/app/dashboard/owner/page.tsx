@@ -1,8 +1,7 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 import { getCachedOwnerDashboardData } from "@/lib/dashboard-cache";
 import { OpsHero, StatCards, EngineHealthPanel, IntegrityMonitor, AgendaPanel, TriagePanel, BankHealthPanel } from "@/components/owner/OpsPanels";
@@ -66,11 +65,8 @@ function startLabel(d: Date, now: Date): string {
 }
 
 export default async function OwnerDashboard() {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const [
     allQuestions,

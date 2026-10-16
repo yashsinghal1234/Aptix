@@ -2,8 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 const DEFAULT_SUBJECTS = [
   "Machine Learning",
@@ -15,9 +14,9 @@ const DEFAULT_SUBJECTS = [
 ];
 
 async function getAuthPayload() {
-  const token = cookies().get("token")?.value;
-  if (!token) return null;
-  return await verifyToken(token);
+  const auth = await requireAuth(["OWNER", "SETTER"]);
+  if ("error" in auth) return null;
+  return auth.payload;
 }
 
 export async function getSubjectsAction(): Promise<{ id: string; name: string; code: string | null }[]> {

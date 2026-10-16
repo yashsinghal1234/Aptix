@@ -1,7 +1,6 @@
 import React from "react";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { getCachedSettersData } from "@/lib/dashboard-cache";
 import {
   SettersHero,
@@ -13,11 +12,8 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ManageSettersPage() {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const [setters, authorGroups, totalBankQuestions, categories] = await getCachedSettersData();
 

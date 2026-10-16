@@ -1,7 +1,6 @@
 import React from "react";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { getCachedCandidatesData } from "@/lib/dashboard-cache";
 import { CandidateRecordsOps } from "@/components/owner/CandidateRecordsOps";
 import { Flower } from "@/components/owner/OpsPanels";
@@ -9,11 +8,8 @@ import { Flower } from "@/components/owner/OpsPanels";
 export const dynamic = "force-dynamic";
 
 export default async function CandidateRecordsPage() {
-  const token = cookies().get("token")?.value;
-  if (!token) redirect("/");
-
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") redirect("/");
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) redirect("/");
 
   const [candidates, totalCandidates, totalAttempts, totalFlags, responseAvg, sessions] =
     await getCachedCandidatesData();

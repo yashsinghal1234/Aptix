@@ -31,6 +31,12 @@ export interface QueueItem {
 const selectCls =
   "text-[11px] bg-black/60 border border-white/10 rounded-xl px-3 py-2.5 outline-none font-semibold text-neutral-200 cursor-pointer w-full";
 
+export interface SubjectTab {
+  name: string;
+  code: string | null;
+  count: number;
+}
+
 export function BankOps({
   rows,
   queue,
@@ -38,6 +44,8 @@ export function BankOps({
   categories,
   types,
   levels,
+  subjectTabs = [],
+  unassignedCount = 0,
 }: {
   rows: BankRow[];
   queue: QueueItem[];
@@ -45,10 +53,13 @@ export function BankOps({
   categories: string[];
   types: string[];
   levels: string[];
+  subjectTabs?: SubjectTab[];
+  unassignedCount?: number;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
+  const [subject, setSubject] = useState("");
   const [type, setType] = useState("");
   const [level, setLevel] = useState("");
   const [page, setPage] = useState(0);
@@ -58,9 +69,21 @@ export function BankOps({
   const [approvingAll, setApprovingAll] = useState(false);
   const PER = 8;
 
+  const pickSubject = (name: string) => {
+    setSubject(name);
+    // Subject tabs drive the table on their own (case-insensitive match, so
+    // "machine learning" questions sit under the Machine Learning subject).
+    setCat("");
+    setPage(0);
+  };
+
   const filtered = rows.filter((r) => {
     if (q && !`${r.text} ${r.qcode} ${r.id}`.toLowerCase().includes(q.toLowerCase())) return false;
-    if (cat && r.category !== cat) return false;
+    if (subject === "__UNASSIGNED__") {
+      if (subjectTabs.some((s) => s.name.toLowerCase() === r.category.toLowerCase())) return false;
+    } else if (subject) {
+      if (r.category.toLowerCase() !== subject.toLowerCase()) return false;
+    } else if (cat && r.category !== cat) return false;
     if (type && r.typeLabel !== type) return false;
     if (level && r.level !== level) return false;
     return true;
@@ -94,6 +117,51 @@ export function BankOps({
 
   return (
     <div className="space-y-4">
+      {/* Subject-wise banks */}
+      {subjectTabs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => pickSubject("")}
+            className={`text-[10px] font-black tracking-[0.12em] rounded-lg px-3 py-2 border transition-all ${
+              subject === "" ? "text-black bg-lime-300 border-lime-300" : "text-neutral-400 bg-white/[0.04] border-white/10 hover:text-white"
+            }`}
+          >
+            ALL · {rows.length}
+          </button>
+          {subjectTabs.map((s) => (
+            <button
+              key={s.name}
+              type="button"
+              onClick={() => pickSubject(subject === s.name ? "" : s.name)}
+              className={`text-[10px] font-black tracking-[0.12em] rounded-lg px-3 py-2 border transition-all tabular-nums ${
+                subject === s.name ? "text-black bg-lime-300 border-lime-300" : "text-neutral-400 bg-white/[0.04] border-white/10 hover:text-white"
+              }`}
+            >
+              {s.name.toUpperCase()} · {s.count}
+            </button>
+          ))}
+          {unassignedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => pickSubject(subject === "__UNASSIGNED__" ? "" : "__UNASSIGNED__")}
+              className={`text-[10px] font-black tracking-[0.12em] rounded-lg px-3 py-2 border transition-all tabular-nums ${
+                subject === "__UNASSIGNED__" ? "text-black bg-lime-300 border-lime-300" : "text-neutral-500 bg-white/[0.04] border-dashed border-white/15 hover:text-white"
+              }`}
+            >
+              UNASSIGNED · {unassignedCount}
+            </button>
+          )}
+          {subject && subject !== "__UNASSIGNED__" && (
+            <a
+              href={`/dashboard/setter?subject=${encodeURIComponent(subject)}`}
+              className="text-[10px] font-black tracking-[0.12em] rounded-lg px-3 py-2 bg-white text-black hover:bg-neutral-200 transition-all"
+            >
+              + ADD TO {subject.toUpperCase()}
+            </a>
+          )}
+        </div>
+      )}
       {/* Search + filters */}
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
         <input

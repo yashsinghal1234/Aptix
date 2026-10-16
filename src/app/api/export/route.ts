@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -11,10 +10,8 @@ export async function GET(request: Request) {
     return new NextResponse("Missing sessionId", { status: 400 });
   }
 
-  const token = cookies().get("token")?.value;
-  if (!token) return new NextResponse("Unauthorized", { status: 401 });
-  const payload = await verifyToken(token);
-  if (!payload || payload.role !== "OWNER") return new NextResponse("Unauthorized", { status: 401 });
+  const auth = await requireAuth(["OWNER"]);
+  if ("error" in auth) return new NextResponse("Unauthorized", { status: 401 });
 
   const session = await prisma.examSession.findUnique({
     where: { id: sessionId },

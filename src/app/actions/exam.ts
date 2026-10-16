@@ -399,7 +399,7 @@ export async function sweepExpiredAttemptsAction(internalSecret?: string) {
   if (sessionsToRecalculate.size > 0) {
     const { computeSessionAnalytics } = await import("./analytics");
     for (const sId of Array.from(sessionsToRecalculate)) {
-      await computeSessionAnalytics(sId).catch(e => console.error("Sweeper analytics error:", e));
+      await computeSessionAnalytics(sId, internalSecret).catch(e => console.error("Sweeper analytics error:", e));
     }
   }
 

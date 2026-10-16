@@ -83,16 +83,19 @@ export function PreflightDiagnostics() {
         if (b) batt = `${Math.round(b.level * 100)}% ${b.charging ? "charging" : "on battery"}`;
       } catch {}
       const vm = detectVirtualMachine();
-      const single = !(window.screen as any)?.isExtended;
+      const extFlag = (window.screen as any)?.isExtended;
+      const displayKnown = extFlag === true || extFlag === false;
+      const single = !extFlag;
+      const vmKnown = vm.confidence !== "NONE";
       const res = `${window.screen.width} × ${window.screen.height}`;
       const idb = typeof indexedDB !== "undefined";
       if (!live) return;
       setRows([
         { label: "Server NTP latency", value: ping !== null ? `${ping} ms · healthy` : "unreachable", state: ping !== null ? "HEALTHY" : "UNAVAILABLE" },
-        { label: "Battery", value: batt, state: batt === "Unavailable" ? "UNAVAILABLE" : "HEALTHY" },
-        { label: "Display configuration", value: single ? "Single display" : "Extended displays", state: single ? "HEALTHY" : "LIMITED" },
+        { label: "Battery", value: batt === "Unavailable" ? "Not reported by this browser" : batt, state: batt === "Unavailable" ? "UNAVAILABLE" : "HEALTHY" },
+        { label: "Display configuration", value: !displayKnown ? "Unknown (browser can't report displays)" : single ? "Single display" : "Extended displays", state: !displayKnown ? "UNAVAILABLE" : single ? "HEALTHY" : "LIMITED" },
         { label: "Native resolution", value: `${res} reported`, state: "HEALTHY" },
-        { label: "VM / RDP guard", value: vm.isVM ? `Virtualized (${vm.renderer || "unknown"})` : "Physical host", state: vm.isVM ? "LIMITED" : "HEALTHY" },
+        { label: "VM / RDP guard", value: !vmKnown ? "Unknown (masked by this browser)" : vm.isVM ? `Virtualized (${vm.renderer || "unknown"})` : "Physical host", state: !vmKnown ? "UNAVAILABLE" : vm.isVM ? "LIMITED" : "HEALTHY" },
         { label: "Browser-extension guardian", value: "Arms at exam launch", state: "LIMITED" },
         { label: "Fullscreen", value: "Request at launch", state: "LIMITED" },
         { label: "Recovery storage", value: idb ? "IndexedDB available" : "Memory only", state: idb ? "HEALTHY" : "LIMITED" },
