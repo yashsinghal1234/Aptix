@@ -181,6 +181,21 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     ssoPinAuto.current = null;
   };
 
+  const handleSwitchAccount = async () => {
+    setSsoLoading(true);
+    try {
+      try {
+        await signOut({ redirect: false });
+      } catch {}
+      setSsoEmail(null);
+      setSsoName(null);
+      ssoPinAuto.current = null;
+      await signIn("google", { callbackUrl: typeof window !== "undefined" ? window.location.pathname : "/" });
+    } finally {
+      setSsoLoading(false);
+    }
+  };
+
   const handleStaffSso = async () => {
     const id = await getSsoIdentityAction().catch(() => ({ signedIn: false as const }));
     if (!id.signedIn) {
@@ -523,13 +538,19 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
 
               <form onSubmit={openPinDialog} className="space-y-4">
                 {ssoEmail ? (
-                  <p className="px-1 text-[11px] text-neutral-500">
-                    Google connected: <span className="font-bold text-lime-200">{ssoEmail}</span>
-                    {" · "}
-                    <button type="button" onClick={handleGoogleSignOut} className="font-bold text-neutral-400 hover:text-white underline underline-offset-2">
-                      Switch account
-                    </button>
-                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSwitchAccount}
+                    disabled={ssoLoading}
+                    title="Switch Google account"
+                    className="w-full py-3 px-4 rounded-full bg-white hover:bg-neutral-200 text-black font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9z"/><path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.5 24 12 24z"/><path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.5-2.7-.1.1C.6 8.7 0 10.2 0 12s.6 3.3 1.5 4.8l3.7-2.4z"/><path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.9l3.7 2.9c1-2.9 3.7-5.1 6.8-5.1z"/></svg>
+                    <span className="truncate">{ssoLoading ? "Opening Google..." : ssoEmail}</span>
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 ) : (
                   <>
                     <button
@@ -628,10 +649,8 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     >
                       {/* soft top highlight */}
                       <span aria-hidden className="pointer-events-none absolute inset-x-8 top-0 h-20 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.14),transparent_70%)]" />
-                      <p className="relative text-center text-lg sm:text-xl text-neutral-200 leading-snug">
-                        Enter your exam PIN
-                        <br />
-                        to begin?
+                      <p className="relative text-center text-lg sm:text-xl text-neutral-200 leading-snug whitespace-nowrap">
+                        Enter your exam PIN to begin?
                       </p>
                       {(ssoEmail || candidateEmail.trim()) && (
                         <p className="relative mt-2 text-center text-[11px] font-bold text-neutral-500 truncate">
@@ -681,14 +700,6 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                         )}
                         <div className="flex gap-3 pt-1">
                           <button
-                            type="button"
-                            disabled={loading}
-                            onClick={() => setPinOpen(false)}
-                            className="flex-1 py-3.5 px-4 rounded-full bg-white/[0.07] hover:bg-white/[0.12] text-neutral-200 font-semibold text-sm transition-all disabled:opacity-50"
-                          >
-                            Back
-                          </button>
-                          <button
                             type="submit"
                             disabled={loading}
                             className="flex-1 py-3.5 px-4 rounded-full bg-white/[0.07] hover:bg-white/[0.12] text-neutral-200 font-semibold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -701,6 +712,14 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                             ) : (
                               <span>Begin Exam</span>
                             )}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => setPinOpen(false)}
+                            className="flex-1 py-3.5 px-4 rounded-full bg-white/[0.07] hover:bg-white/[0.12] text-neutral-200 font-semibold text-sm transition-all disabled:opacity-50"
+                          >
+                            Back
                           </button>
                         </div>
                       </form>
