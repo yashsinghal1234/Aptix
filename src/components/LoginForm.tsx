@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { candidateLoginAction, staffLoginAction, getSsoIdentityAction, staffSsoLoginAction } from "@/app/actions/auth";
+import { ToastBanner } from "@/components/ToastBanner";
 import { signIn, signOut } from "next-auth/react";
 import Link from "next/link";
 import { ChunkedVideo } from "@/components/ChunkedVideo";
@@ -503,40 +504,16 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
               aria-labelledby="tab-candidate"
             >
               {candidateError && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  id="candidate-error-msg"
-                  className={`mb-5 p-3.5 sm:p-4 bg-gradient-to-r from-rose-950/60 to-[#18080c] border border-rose-500/40 text-rose-200 text-xs sm:text-sm rounded-2xl flex items-start gap-3 shadow-[0_4px_24px_rgba(244,63,94,0.18)] ${
-                    shake ? "animate-shake" : ""
-                  }`}
-                >
-                  <div className="w-5 h-5 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0 mt-0.5">
-                    <svg className="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0 pr-1">
-                    <p className="font-semibold text-rose-300 text-xs tracking-wide uppercase mb-0.5">
-                      Verification Notice
-                    </p>
-                    <p className="text-rose-200/90 leading-relaxed font-normal">
-                      {candidateError}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
+                <div className={`mb-5 ${shake ? "animate-shake" : ""}`}>
+                  <ToastBanner
+                    variant="error"
+                    message={candidateError}
+                    alertId="candidate-error-msg"
+                    onClose={() => {
                       setCandidateError(null);
                       setErrorField(null);
                     }}
-                    className="text-rose-400 hover:text-white p-1 rounded-lg transition shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-400"
-                    aria-label="Dismiss message"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  />
                 </div>
               )}
 
@@ -625,22 +602,36 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 </button>
               </form>
 
-              {/* Exam PIN dialog - opens only after identity verification */}
+              {/* Exam PIN dialog - chat bubble with Aptix logo avatar */}
               {pinOpen && (
                 <div
                   className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
                   onClick={() => { if (!loading) setPinOpen(false); }}
                   role="presentation"
                 >
-                  <div
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="Enter exam PIN"
-                    className="w-full max-w-[400px] rounded-[28px] bg-[#0d0f14] border border-white/10 p-6 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.85)]"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => { if (e.key === "Escape" && !loading) setPinOpen(false); }}
-                  >
-                    <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500">VERIFIED · ENTER EXAM PIN</p>
+                  <div className="relative w-full max-w-[400px] ml-5 sm:ml-6">
+                    {/* Aptix logo avatar overlapping top-left */}
+                    <span aria-hidden className="absolute -left-5 sm:-left-6 -top-5 sm:-top-6 z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden ring-2 ring-sky-400 bg-black shrink-0 flex items-center justify-center">
+                      <video
+                        src="/aptix-logo-anim.mp4"
+                        poster="/logo-preview-frame.jpg"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        preload="auto"
+                        className="w-full h-full object-cover mix-blend-screen scale-125"
+                      />
+                    </span>
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Enter exam PIN"
+                      className="relative rounded-[26px] border-2 border-sky-400/80 bg-[#0b1220] pl-12 sm:pl-14 pr-5 sm:pr-6 pt-5 sm:pt-6 pb-5 sm:pb-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => { if (e.key === "Escape" && !loading) setPinOpen(false); }}
+                    >
+                      <p className="text-sm font-black text-white leading-tight">Aptix</p>
                     {(ssoEmail || candidateEmail) && (
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <p className="text-xs font-bold text-lime-200 truncate">{ssoEmail || candidateEmail.trim()}</p>
@@ -709,6 +700,9 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                         </button>
                       </div>
                     </form>
+                    {/* bubble tail dot */}
+                    <span aria-hidden className="absolute -bottom-2 left-10 w-3 h-3 rounded-full bg-sky-400" />
+                  </div>
                   </div>
                 </div>
               )}
@@ -721,40 +715,16 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
               aria-labelledby="tab-staff"
             >
               {staffError && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  id="staff-error-msg"
-                  className={`mb-5 p-3.5 sm:p-4 bg-gradient-to-r from-rose-950/60 to-[#18080c] border border-rose-500/40 text-rose-200 text-xs sm:text-sm rounded-2xl flex items-start gap-3 shadow-[0_4px_24px_rgba(244,63,94,0.18)] ${
-                    shake ? "animate-shake" : ""
-                  }`}
-                >
-                  <div className="w-5 h-5 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0 mt-0.5">
-                    <svg className="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0 pr-1">
-                    <p className="font-semibold text-rose-300 text-xs tracking-wide uppercase mb-0.5">
-                      Authentication Notice
-                    </p>
-                    <p className="text-rose-200/90 leading-relaxed font-normal">
-                      {staffError}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
+                <div className={`mb-5 ${shake ? "animate-shake" : ""}`}>
+                  <ToastBanner
+                    variant="error"
+                    message={staffError}
+                    alertId="staff-error-msg"
+                    onClose={() => {
                       setStaffError(null);
                       setErrorField(null);
                     }}
-                    className="text-rose-400 hover:text-white p-1 rounded-lg transition shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-400"
-                    aria-label="Dismiss message"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  />
                 </div>
               )}
 
