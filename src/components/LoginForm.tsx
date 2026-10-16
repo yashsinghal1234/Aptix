@@ -611,7 +611,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 >
                   <div className="relative w-full max-w-[400px] ml-5 sm:ml-6">
                     {/* Aptix logo avatar overlapping top-left */}
-                    <span aria-hidden className="absolute -left-5 sm:-left-6 -top-5 sm:-top-6 z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden ring-2 ring-sky-400 bg-black shrink-0 flex items-center justify-center">
+                    <span aria-hidden className="absolute -left-5 sm:-left-6 -top-5 sm:-top-6 z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden ring-2 ring-sky-500 bg-black shrink-0 flex items-center justify-center">
                       <video
                         src="/aptix-logo-anim.mp4"
                         poster="/logo-preview-frame.jpg"
@@ -627,11 +627,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                       role="dialog"
                       aria-modal="true"
                       aria-label="Enter exam PIN"
-                      className="relative rounded-[26px] border-2 border-sky-400/80 bg-[#0b1220] pl-12 sm:pl-14 pr-5 sm:pr-6 pt-5 sm:pt-6 pb-5 sm:pb-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]"
+                      className="relative rounded-[22px] border-2 border-sky-500 bg-black pl-12 sm:pl-14 pr-5 sm:pr-6 pt-5 sm:pt-6 pb-5 sm:pb-6"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => { if (e.key === "Escape" && !loading) setPinOpen(false); }}
                     >
                       <p className="text-sm font-black text-white leading-tight">Aptix</p>
+                      <p className="mt-1 text-sm text-neutral-300 leading-snug">Yeah! Let&apos;s go. Enter your exam PIN to begin.</p>
                     {(ssoEmail || candidateEmail) && (
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <p className="text-xs font-bold text-lime-200 truncate">{ssoEmail || candidateEmail.trim()}</p>
@@ -701,7 +702,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                       </div>
                     </form>
                     {/* bubble tail dot */}
-                    <span aria-hidden className="absolute -bottom-2 left-10 w-3 h-3 rounded-full bg-sky-400" />
+                    <span aria-hidden className="absolute -bottom-2 left-10 w-3 h-3 rounded-full bg-sky-500" />
                   </div>
                   </div>
                 </div>
