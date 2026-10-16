@@ -98,6 +98,29 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     return () => clearInterval(timer);
   }, []);
 
+  // Single staff-SSO exchange: trades the verified Google session for a
+  // staff JWT. Used by both the button and the /admin/login auto-complete.
+  const completeStaffSso = async (remember: boolean) => {
+    setLoading(true);
+    setStaffError(null);
+    try {
+      const res = await staffSsoLoginAction(remember);
+      if ("error" in res && res.error) {
+        triggerStaffError(res.error);
+        setLoading(false);
+        return;
+      }
+      if ("redirectUrl" in res && res.redirectUrl) {
+        window.location.href = res.redirectUrl as string;
+        return;
+      }
+      setLoading(false);
+    } catch (err: any) {
+      setLoading(false);
+      triggerStaffError(err?.message || "Staff SSO failed. Please try again.");
+    }
+  };
+
   // College SSO identity (Google Workspace, SSO-first-then-PIN)
   // On /admin/login, a returning Google session auto-completes staff SSO -
   // no per-page permission needed in Google Cloud (only the single
@@ -117,22 +140,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
           ) {
             staffSsoAuto.current = true;
             setMode("staff");
-            setLoading(true);
-            staffSsoLoginAction(true)
-              .then((sso) => {
-                if ("error" in sso && sso.error) {
-                  triggerStaffError(sso.error);
-                  setLoading(false);
-                } else if ("redirectUrl" in sso && sso.redirectUrl) {
-                  window.location.href = sso.redirectUrl as string;
-                } else {
-                  setLoading(false);
-                }
-              })
-              .catch((err: any) => {
-                triggerStaffError(err?.message || "Staff SSO failed. Please try again.");
-                setLoading(false);
-              });
+            completeStaffSso(true);
           }
         }
       })
@@ -163,29 +171,12 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   };
 
   const handleStaffSso = async () => {
-    setLoading(true);
-    setStaffError(null);
-    try {
-      let id = await getSsoIdentityAction().catch(() => ({ signedIn: false as const }));
-      if (!id.signedIn) {
-        await signIn("google", { callbackUrl: "/admin/login" });
-        return;
-      }
-      const res = await staffSsoLoginAction(rememberStaff);
-      if ("error" in res && res.error) {
-        triggerStaffError(res.error);
-        setLoading(false);
-        return;
-      }
-      if ("redirectUrl" in res && res.redirectUrl) {
-        window.location.href = res.redirectUrl as string;
-        return;
-      }
-      setLoading(false);
-    } catch (err: any) {
-      setLoading(false);
-      triggerStaffError(err?.message || "Staff SSO failed. Please try again.");
+    const id = await getSsoIdentityAction().catch(() => ({ signedIn: false as const }));
+    if (!id.signedIn) {
+      await signIn("google", { callbackUrl: "/admin/login" });
+      return;
     }
+    await completeStaffSso(rememberStaff);
   };
 
   // Real-time network connectivity monitoring
@@ -555,10 +546,10 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                       type="button"
                       onClick={handleGoogleSignIn}
                       disabled={ssoLoading}
-                      className="w-full py-3 px-4 rounded-full bg-white hover:bg-neutral-200 text-black font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3.5 sm:py-4 px-6 rounded-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-bold text-sm sm:text-base tracking-wide transition-all shadow-[0_4px_24px_rgba(255,255,255,0.2)] cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9z"/><path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.5 24 12 24z"/><path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.5-2.7-.1.1C.6 8.7 0 10.2 0 12s.6 3.3 1.5 4.8l3.7-2.4z"/><path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.9l3.7 2.9c1-2.9 3.7-5.1 6.8-5.1z"/></svg>
-                      {ssoLoading ? "Opening Google..." : "Continue with Google"}
+                      <svg className="w-4.5 h-4.5 sm:w-5 sm:h-5 shrink-0" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9z"/><path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.5 24 12 24z"/><path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.5-2.7-.1.1C.6 8.7 0 10.2 0 12s.6 3.3 1.5 4.8l3.7-2.4z"/><path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.9l3.7 2.9c1-2.9 3.7-5.1 6.8-5.1z"/></svg>
+                      <span>{ssoLoading ? "Opening Google..." : "Continue with Google"}</span>
                     </button>
                     <div className="flex items-center gap-3 text-[10px] text-neutral-600 px-1">
                       <span className="flex-1 h-px bg-white/10" /> or enter manually <span className="flex-1 h-px bg-white/10" />
@@ -782,9 +773,15 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                   type="button"
                   onClick={handleStaffSso}
                   disabled={loading}
-                  className="w-full py-3 px-4 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/15 text-white font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3.5 sm:py-4 px-6 rounded-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-bold text-sm sm:text-base tracking-wide transition-all shadow-[0_4px_24px_rgba(255,255,255,0.2)] cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
-                  Continue with college Google (staff)
+                  <svg className="w-4.5 h-4.5 sm:w-5 sm:h-5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9z"/>
+                    <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.5 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.5-2.7-.1.1C.6 8.7 0 10.2 0 12s.6 3.3 1.5 4.8l3.7-2.4z"/>
+                    <path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.9l3.7 2.9c1-2.9 3.7-5.1 6.8-5.1z"/>
+                  </svg>
+                  <span>{loading ? "Connecting to Google..." : "Continue with Google"}</span>
                 </button>
                 <div className="flex items-center gap-3 text-[10px] text-neutral-600">
                   <span className="flex-1 h-px bg-white/10" /> or password <span className="flex-1 h-px bg-white/10" />
