@@ -4,11 +4,23 @@ export interface RawParsedItem {
   answerIndex: number;
   explanation?: string;
   category?: string;
+  /** Detected question type: MCQ (default), True/False, fill-in-blank, or numeric. */
+  qType?: "MCQ_SINGLE" | "TRUE_FALSE" | "FILL_BLANK" | "NUMERIC";
+  /** Raw answer text captured from "Ans:" lines — drives FILL_BLANK and NUMERIC saves. */
+  answerText?: string;
+  tolerance?: number;
 }
 
 /**
  * Robust line-by-line question parser supporting multi-line stems, isolated "Question 1:" headers,
  * various option prefixes (A), A., [A], Option A), inline options, custom explanations, and category/subject tags.
+ *
+ * Academic conventions accepted:
+ * - Moodle-style correct marker: a leading * on the correct option line ("* c) Answer text")
+ * - "Ans:" values as letters (A-D / 1-4), words matching an option ("Ans: True"), numbers
+ *   (numeric questions), or literal accepted answers for fill-in-blank stems.
+ * - Type auto-detection: True/False pairs, "___" blank stems with literal answers, numeric answers.
+ * - No junk padding: options are saved at their real count (min 2 for choice questions).
  */
 export function parseTextBlobToRawItems(textBlob: string): RawParsedItem[] {
   const normalized = textBlob.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -19,6 +31,8 @@ export function parseTextBlobToRawItems(textBlob: string): RawParsedItem[] {
   let curStemLines: string[] = [];
   let curOptions: string[] = [];
   let curAnswerIndex = 0;
+  let curAnsExplicit = false; // an Ans: line or * marker was seen (vs silent default)
+  let curAnsText: string | undefined;
   let curExplanationLines: string[] = [];
   let curCategory: string | undefined = undefined;
   let currentGlobalCategory: string | undefined = undefined;
@@ -26,23 +40,56 @@ export function parseTextBlobToRawItems(textBlob: string): RawParsedItem[] {
 
   const flushCurrentItem = () => {
     const stem = curStemLines.join("\n").trim();
-    if (stem && curOptions.length >= 2) {
-      const opts = [...curOptions];
-      while (opts.length < 4) {
-        opts.push(`Option ${String.fromCharCode(65 + opts.length)}`);
-      }
+    if (stem) {
+      const opts = curOptions.slice(0, 4);
       const explanation = curExplanationLines.join("\n").trim();
-      items.push({
-        stem,
-        options: opts.slice(0, 4),
-        answerIndex: Math.max(0, Math.min(opts.length - 1, curAnswerIndex)),
-        explanation: explanation.length > 0 ? explanation : undefined,
-        category: curCategory || currentGlobalCategory || undefined
-      });
+
+      // True/False detection: exactly two options that are True/False
+      const isTF = opts.length === 2 && opts.every(o => /^(true|false)[\.\?!]?\s*$/i.test(o));
+
+      const hasBlank = /_{3,}/.test(stem);
+      const numericAnswer = curAnsText && /^[-+]?\d+(\.\d+)?$/.test(curAnsText.trim()) ? curAnsText.trim() : undefined;
+
+      if (hasBlank && curAnsText && opts.length < 2) {
+        // "fill in the blank with [ 1 ]" — the Ans: value is the accepted text
+        items.push({
+          stem,
+          options: [],
+          answerIndex: 0,
+          explanation: explanation.length > 0 ? explanation : undefined,
+          category: curCategory || currentGlobalCategory || undefined,
+          qType: "FILL_BLANK",
+          answerText: curAnsText,
+        });
+      } else if (!isTF && opts.length === 0 && numericAnswer) {
+        items.push({
+          stem,
+          options: [],
+          answerIndex: 0,
+          explanation: explanation.length > 0 ? explanation : undefined,
+          category: curCategory || currentGlobalCategory || undefined,
+          qType: "NUMERIC",
+          answerText: numericAnswer,
+          tolerance: 0,
+        });
+      } else if (opts.length >= 2) {
+        const idx = Math.max(0, Math.min(opts.length - 1, isTF ? Math.min(curAnswerIndex, 1) : curAnswerIndex));
+        items.push({
+          stem,
+          options: opts,
+          answerIndex: idx,
+          explanation: explanation.length > 0 ? explanation : undefined,
+          category: curCategory || currentGlobalCategory || undefined,
+          qType: isTF ? "TRUE_FALSE" : "MCQ_SINGLE",
+          answerText: isTF ? (opts[idx] || undefined) : curAnsText,
+        });
+      }
     }
     curStemLines = [];
     curOptions = [];
     curAnswerIndex = 0;
+    curAnsExplicit = false;
+    curAnsText = undefined;
     curExplanationLines = [];
     curCategory = undefined;
     state = "IDLE";
@@ -67,7 +114,7 @@ export function parseTextBlobToRawItems(textBlob: string): RawParsedItem[] {
     if (catMatch) {
       const catVal = catMatch[1].trim();
       if (catVal.length > 0 && catVal.length < 80) {
-        if (curStemLines.length > 0 && curOptions.length >= 2) {
+        if (curStemLines.length > 0) {
           flushCurrentItem();
         }
         if (state === "IDLE" || (state === "IN_STEM" && curStemLines.length === 0)) {
@@ -89,8 +136,10 @@ export function parseTextBlobToRawItems(textBlob: string): RawParsedItem[] {
 
     // 1. Check Answer Line
     const ansMatch = line.match(answerPrefixRegex);
-    if (ansMatch && (curOptions.length > 0 || state === "IN_OPTIONS")) {
+    if (ansMatch && (curOptions.length > 0 || state === "IN_OPTIONS" || curStemLines.length > 0)) {
       const rawAnsVal = ansMatch[1].trim();
+      curAnsText = rawAnsVal;
+      curAnsExplicit = true;
       const letterMatch = rawAnsVal.match(/^[\(\[]?([A-Da-d1-4])[\)\]\.\:]?/);
       if (letterMatch) {
         const ch = letterMatch[1].toUpperCase();
@@ -100,7 +149,7 @@ export function parseTextBlobToRawItems(textBlob: string): RawParsedItem[] {
           curAnswerIndex = parseInt(ch, 10) - 1;
         }
       } else if (rawAnsVal && curOptions.length > 0) {
-        const matchedIdx = curOptions.findIndex(o => 
+        const matchedIdx = curOptions.findIndex(o =>
           o.toLowerCase().trim() === rawAnsVal.toLowerCase().trim() ||
           rawAnsVal.toLowerCase().includes(o.toLowerCase().trim())
         );
@@ -120,38 +169,84 @@ export function parseTextBlobToRawItems(textBlob: string): RawParsedItem[] {
       continue;
     }
 
-    // 3. Check Option Line(s)
-    const multipleInlineMatches = line.split(/(?=\s+(?:\(?[A-Da-d]\)|\[[A-Da-d]\]|[A-Da-d][\.\:\-])\s+)/);
-    if (multipleInlineMatches.length >= 2 && singleOptionPrefixRegex.test(multipleInlineMatches[0].trim())) {
+    // 2.5. Bare True/False option lines — Moodle TF banks write them unprefixed
+    if (/^(true|false)[\.\?!]*$/i.test(line) && (state === "IN_STEM" || state === "IN_OPTIONS") && curStemLines.length > 0) {
       state = "IN_OPTIONS";
-      for (const optChunk of multipleInlineMatches) {
+      curOptions.push(/^t/i.test(line) ? "True" : "False");
+      continue;
+    }
+
+    // 3. Check Option Line(s)
+    // A leading * marks the correct option (Moodle Word-bank convention):
+    // "* c) Photosynthesis is..." → the option flagged correct without an Ans line.
+    const asteriskBefore = (l: string) => l.replace(/^\*+\s*/, "");
+
+    const multipleInlineMatches = asteriskBefore(line).split(/(?=\s+(?:\(?[A-Da-d]\)|\[[A-Da-d]\]|[A-Da-d][\.\:\-])\s+)/);
+    const firstIsOption = singleOptionPrefixRegex.test(multipleInlineMatches[0].trim());
+    const restAreOptions = multipleInlineMatches.slice(1).every((c) => !!c.trim() && singleOptionPrefixRegex.test(c.trim()));
+    if (multipleInlineMatches.length >= 2 && restAreOptions && !questionHeaderPrefixRegex.test(line)) {
+      const hadAsterisk = /^\*+\s*/.test(line);
+      state = "IN_OPTIONS";
+      if (!firstIsOption) {
+        // Options were attached to the stem itself: "Which is a mammal? [A] Bat [B] Shark"
+        const stemChunk = multipleInlineMatches[0].trim();
+        if (stemChunk) curStemLines.push(stemChunk);
+      }
+      for (const optChunk of firstIsOption ? multipleInlineMatches : multipleInlineMatches.slice(1)) {
         const m = optChunk.trim().match(singleOptionPrefixRegex);
         if (m) {
-          const optText = (m[5] || "").trim();
-          curOptions.push(optText);
+          curOptions.push((m[5] || "").trim());
         }
+      }
+      if (hadAsterisk && curOptions.length > 0) {
+        curAnswerIndex = curOptions.length - 1;
+        curAnsExplicit = true;
+        curAnsText = curOptions[curOptions.length - 1];
       }
       continue;
     }
 
-    const singleOptMatch = line.match(singleOptionPrefixRegex);
+    const hadLeadingAsterisk = /^\*+\s*/.test(line);
+    const lineWithoutStar = asteriskBefore(line);
+    const singleOptMatch = lineWithoutStar.match(singleOptionPrefixRegex);
     if (singleOptMatch && (state === "IN_STEM" || curStemLines.length > 0 || state === "IN_OPTIONS")) {
       state = "IN_OPTIONS";
       const optText = (singleOptMatch[5] || "").trim();
       curOptions.push(optText);
+      if (hadLeadingAsterisk) {
+        curAnswerIndex = curOptions.length - 1;
+        curAnsExplicit = true;
+        curAnsText = optText;
+      }
       continue;
     }
 
     // 4. Check Question Header / Start
     const qHeaderMatch = line.match(questionHeaderPrefixRegex);
     if (qHeaderMatch) {
-      if (curStemLines.length > 0 && curOptions.length >= 2) {
+      if (curStemLines.length > 0) {
         flushCurrentItem();
       }
 
       state = "IN_STEM";
       const remainingStemText = qHeaderMatch[1].trim();
       if (remainingStemText) {
+        // A header line can carry its options inline: "Q1. Which is even? A) 2 B) 3"
+        const inlineChunks = remainingStemText.split(/(?=\s+(?:\(?[A-Da-d]\)|\[[A-Da-d]\]|[A-Da-d][\.\:\-])\s+)/);
+        const restOpt =
+          inlineChunks.length >= 2 &&
+          !singleOptionPrefixRegex.test(inlineChunks[0].trim()) &&
+          inlineChunks.slice(1).every((c) => !!c.trim() && singleOptionPrefixRegex.test(c.trim()));
+        if (restOpt) {
+          const stemChunk = inlineChunks[0].trim();
+          if (stemChunk) curStemLines.push(stemChunk);
+          state = "IN_OPTIONS";
+          for (const chunk of inlineChunks.slice(1)) {
+            const m = chunk.trim().match(singleOptionPrefixRegex);
+            if (m) curOptions.push((m[5] || "").trim());
+          }
+          continue;
+        }
         curStemLines.push(remainingStemText);
       }
       continue;

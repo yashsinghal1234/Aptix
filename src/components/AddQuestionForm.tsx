@@ -80,6 +80,23 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
+
+    // Answer-integrity mirrors the server rules so mistakes surface before
+    // any upload round-trip.
+    if (qType === "MCQ_MULTI" && multiCorrect.length === 0) {
+      setError("Multiple-correct question: tick at least one correct option before saving.");
+      setLoading(false);
+      return;
+    }
+    if (qType === "FILL_BLANK") {
+      const badBlank = blanks.findIndex((b) => !b.accepted.trim());
+      if (badBlank >= 0) {
+        setError(`Blank [${blanks[badBlank].id}] has no accepted answers. Type at least one accepted answer for every blank.`);
+        setLoading(false);
+        return;
+      }
+    }
+
     formData.set("actionType", actionType);
     formData.set("qType", qType);
     formData.set("multiCorrect", JSON.stringify(multiCorrect));
@@ -87,8 +104,9 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
     formData.set("partialCredit", JSON.stringify(partialCredit));
     formData.set("category", selectedTopic);
     formData.set("difficultyLevel", selectedDifficulty);
-    formData.set("points", pointsVal);
-    formData.set("negativePoints", negPointsVal);
+    // Cleared inputs fall back to defaults instead of becoming NaN server-side.
+    formData.set("points", pointsVal || "1.0");
+    formData.set("negativePoints", negPointsVal || "0.0");
 
     const imageFile = formData.get("image") as File;
     let imageUrl = null;
@@ -110,7 +128,16 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
       formData.append("imageUrl", imageUrl);
     }
 
-    const res = await createQuestionAction(formData);
+    let res: any = null;
+    try {
+      res = await createQuestionAction(formData);
+    } catch (err: any) {
+      // Without this catch a thrown server error left the "Saving..." spinner
+      // hanging forever with no way to recover the form.
+      setError("Server error while saving. Please try again — the form has kept your work.");
+      setLoading(false);
+      return;
+    }
     setLoading(false);
 
     if (res.error) {
@@ -185,7 +212,13 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
         setError((res as any).error);
         setDupState({ checking: false, result: null });
       } else {
-        setDupState({ checking: false, result: (res as any).match || null });
+        const m = (res as any).match || null;
+        if (!m && (res as any).short) {
+          setDupState({ checking: false, result: null });
+          setError("Stem is too short to scan — type at least 10 characters before comparing.");
+          return;
+        }
+        setDupState({ checking: false, result: m });
       }
     } catch {
       setDupState({ checking: false, result: null });

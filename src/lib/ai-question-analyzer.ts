@@ -44,6 +44,11 @@ export interface ParsedQuestionWithAI {
   confidence: number;
   draftExplanation: string;
   qualityFeedback: QuestionQualityFeedback;
+  /** Detected source type from the raw parse (MCQ_SINGLE default). */
+  qType?: "MCQ_SINGLE" | "TRUE_FALSE" | "FILL_BLANK" | "NUMERIC";
+  /** Raw answer text for FILL_BLANK / NUMERIC saves. */
+  answerText?: string;
+  tolerance?: number;
 }
 
 /**

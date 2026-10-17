@@ -162,7 +162,8 @@ export function BulkUploadText() {
       if (res.count === 0 && res.skippedDuplicates) {
         setError(`All ${res.skippedDuplicates} questions already exist in the question bank.`);
       } else {
-        setSuccessMsg(`Successfully saved ${res.count} questions as ${status === "DRAFT" ? "Drafts" : "Submitted for Review"}!${dupMsg}`);
+        const stateLabel = res.approvedAsOwner ? "Approved (owner bypasses review)" : status === "DRAFT" ? "Drafts" : "Submitted for Review";
+        setSuccessMsg(`Successfully saved ${res.count} questions as ${stateLabel}!${dupMsg}`);
         setParsedQuestions([]);
         setTextBlob("");
       }
@@ -182,7 +183,8 @@ export function BulkUploadText() {
     } else if (res.count === 0 && res.skippedDuplicates) {
       setError("This question already exists in the question bank.");
     } else {
-      setSuccessMsg(`Question saved successfully as ${status === "DRAFT" ? "Draft" : "Submitted"}.`);
+      const stateLabel = res.approvedAsOwner ? "Approved (owner bypasses review)" : status === "DRAFT" ? "Draft" : "Submitted for Review";
+      setSuccessMsg(`Question saved successfully as ${stateLabel}.`);
       setParsedQuestions(prev => prev.filter((_, idx) => idx !== index));
     }
   };
@@ -240,6 +242,20 @@ export function BulkUploadText() {
               {successMsg}
             </div>
           )}
+          <details className="rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5">
+            <summary className="text-[11px] font-bold text-neutral-300 cursor-pointer select-none">
+              Accepted formats — faculty Word/paste conventions all work
+            </summary>
+            <div className="mt-2 text-[10px] text-neutral-500 font-mono leading-[1.7] space-y-1">
+              <p>Q1. What is 2+2? &nbsp;·&nbsp; or &nbsp;·&nbsp; Question: ...</p>
+              <p>A) 3 &nbsp;·&nbsp; B) 4 &nbsp;·&nbsp; C) 5 &nbsp;·&nbsp; D) 6 &nbsp;&nbsp;<span className="text-neutral-600">(also a. [A] Option B)</span></p>
+              <p>Answer: B &nbsp;&nbsp;<span className="text-neutral-600">(also Ans: 2 / Ans: (b))</span></p>
+              <p><span className="text-lime-300">*C) 5</span> &nbsp;&nbsp;<span className="text-neutral-600">(asterisk on the correct option also works)</span></p>
+              <p>True / False rows are auto-detected as True-False questions</p>
+              <p>A stem with ___ plus &quot;Ans: 42&quot; becomes fill-in-blank / numeric automatically</p>
+              <p>Category: Machine Learning &nbsp;&nbsp;<span className="text-neutral-600">(subject line or auto-detect)</span></p>
+            </div>
+          </details>
           <form onSubmit={handleParse} className="space-y-3">
             <textarea
               value={textBlob}
@@ -284,7 +300,7 @@ export function BulkUploadText() {
                 <div key={q.id} className="rounded-xl border border-white/10 bg-black/40 p-4">
                   <div className="flex items-center justify-between mb-2.5">
                     <span className="text-[10px] font-mono font-black text-neutral-300">P-{String(qIdx + 1).padStart(2, "0")}</span>
-                    <span className="text-[9px] text-neutral-500">Draft candidate · editable</span>
+                    <span className="text-[9px] text-neutral-500">{q.qType === "TRUE_FALSE" ? "True / False" : q.qType === "FILL_BLANK" ? "Fill blank" : q.qType === "NUMERIC" ? "Numeric" : "MCQ · Single"} · editable</span>
                   </div>
                   <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.12em] mb-1">Question stem</p>
                   <textarea

@@ -67,6 +67,9 @@ export function BankOps({
   const [approving, setApproving] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [approvingAll, setApprovingAll] = useState(false);
+  // Review decisions previously ignored the action's {error} return, so
+  // four-eyes blocks and auth errors were silently swallowed.
+  const [queueMsg, setQueueMsg] = useState<string | null>(null);
   const PER = 8;
 
   const pickSubject = (name: string) => {
@@ -94,21 +97,37 @@ export function BankOps({
 
   const approve = async (id: string) => {
     setApproving(id);
-    await reviewQuestionAction(id, "APPROVE");
+    setQueueMsg(null);
+    const res = await reviewQuestionAction(id, "APPROVE");
     setApproving(null);
+    if ((res as any)?.error) {
+      setQueueMsg((res as any).error);
+      return;
+    }
     router.refresh();
   };
   const reject = async (id: string) => {
     setRejecting(id);
-    await reviewQuestionAction(id, "REJECT");
+    setQueueMsg(null);
+    const res = await reviewQuestionAction(id, "REJECT");
     setRejecting(null);
+    if ((res as any)?.error) {
+      setQueueMsg((res as any).error);
+      return;
+    }
     router.refresh();
   };
   const approveAll = async () => {
     if (!confirm(`Approve all ${queue.length} pending questions?`)) return;
     setApprovingAll(true);
-    await approveAllQuestionsAction();
+    setQueueMsg(null);
+    const res = await approveAllQuestionsAction();
     setApprovingAll(false);
+    if ((res as any)?.error) {
+      setQueueMsg((res as any).error);
+      return;
+    }
+    setQueueMsg(`Approved all ${queue.length} pending questions.`);
     router.refresh();
   };
 
@@ -186,6 +205,14 @@ export function BankOps({
           </label>
         ))}
       </div>
+
+      {/* Review feedback banner */}
+      {queueMsg && (
+        <div className="rounded-2xl border border-rose-800/50 bg-rose-950/40 px-4 py-3 flex items-start justify-between gap-3">
+          <p className="text-xs font-bold text-rose-300 leading-relaxed">{queueMsg}</p>
+          <button type="button" onClick={() => setQueueMsg(null)} className="text-rose-300/70 hover:text-white text-xs font-bold shrink-0">✕</button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">

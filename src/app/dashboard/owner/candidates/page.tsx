@@ -67,7 +67,6 @@ export default async function CandidateRecordsPage() {
     <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
       <div className="flex items-start justify-between gap-6 px-1 pt-1">
         <div>
-          <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">ROSTER / CANDIDATE DIRECTORY</p>
           <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
             Every attempt, accounted for<span className="text-lime-300">.</span>
           </h1>
@@ -76,15 +75,6 @@ export default async function CandidateRecordsPage() {
           </p>
         </div>
         <Flower className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 mt-1" />
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 px-1">
-        <span className="text-[9px] font-black tracking-[0.12em] text-lime-200 bg-lime-300/[0.08] border border-lime-300/25 rounded-md px-2 py-1">
-          LIVE ROSTER
-        </span>
-        <span className="text-[9px] font-bold tracking-[0.12em] text-neutral-300 bg-white/[0.05] border border-white/10 rounded-md px-2 py-1">
-          KIET Deemed to be University · {latestSession ? `${latestSession.exam.title} · ${latestSession.pin || "no pin"}` : "No sessions yet"}
-        </span>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

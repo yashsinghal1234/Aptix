@@ -277,7 +277,7 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
         {/* ── Sidebar ─────────────────────────────── */}
         <aside className={`${mobileMenuOpen ? "flex" : "hidden"} md:flex w-full md:w-[228px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-white/10 bg-[#060607] z-30 md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:overflow-y-auto`}>
           <div className="p-4 flex-1 md:overflow-y-auto">
-            <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-600 px-2 mb-2">WORKSPACE · 2026–27</p>
+            <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-600 px-2 mb-2">WORKSPACE</p>
             <nav className="space-y-1">
               {navItems.map((item) => {
                 const active = isActive(item.href, item.exact, item.hash, (item as any).section);

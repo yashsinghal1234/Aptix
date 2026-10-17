@@ -1,14 +1,16 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { deleteQuestionAction } from "@/app/actions/setter";
 
 export function DeleteQuestionButton({ id, isLocked }: { id: string; isLocked?: boolean }) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   if (isLocked) {
     return (
-      <div 
+      <div
         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium cursor-not-allowed select-none"
         title="Question is locked: Bound to an active or completed assessment session. Deletion is blocked to preserve scoring records."
       >
@@ -28,7 +30,11 @@ export function DeleteQuestionButton({ id, isLocked }: { id: string; isLocked?: 
             const res = await deleteQuestionAction(id);
             if (res && res.error) {
               alert(res.error);
+              return;
             }
+            // Pull the fresh bank from the server so the deleted row
+            // disappears immediately instead of after the next navigation.
+            router.refresh();
           });
         }
       }}

@@ -161,9 +161,9 @@ export function CandidateRecordsOps({
           Showing {shown.length} of {filtered.length} total records · latest score reflects the selected session
         </p>
         <div className="overflow-x-auto -mx-1 px-1">
-          <div className="grid grid-cols-[1.5fr_auto_1.2fr_auto_auto_auto] gap-x-4 gap-y-1 items-center min-w-[820px]">
+          <div className="grid grid-cols-[minmax(220px,1.15fr)_90px_minmax(260px,1.35fr)_170px_80px_110px] gap-x-6 gap-y-1 items-center min-w-[1000px]">
             {(["NAME / ROLL", "TOTAL EXAMS", "LATEST EXAM", "LATEST SCORE / %", "FLAGS", "AUDIT"] as const).map((h, i) => (
-              <p key={h} className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${i >= 1 ? "text-center" : ""} ${i === 5 ? "text-right" : ""}`}>{h}</p>
+              <p key={h} className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${["", "text-center", "text-left", "text-center", "text-center", "text-right"][i]}`}>{h}</p>
             ))}
             {shown.length === 0 && (
               <p className="col-span-6 text-xs text-neutral-500 py-6 text-center">No candidates match these filters.</p>

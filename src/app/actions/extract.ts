@@ -10,6 +10,8 @@ import {
   FIXED_DIFFICULTIES
 } from "@/lib/ai-question-analyzer";
 import { parseTextBlobToRawItems } from "@/lib/question-parser";
+import { invalidateOwnerDashboardCache, invalidateQuestionBankCache } from "@/lib/dashboard-cache";
+import { findDuplicateInQuestionList } from "@/lib/question-duplicate-checker";
 
 async function getAuthorizedUser() {
   const auth = await requireAuth(["OWNER", "SETTER"]);
@@ -61,6 +63,10 @@ export async function parseAndAnalyzeTextBlobAction(
       categoryToUse,
       dbSubjectNames
     );
+    // Carry the raw parser's type detection through to the review list and save
+    analyzed.qType = item.qType || "MCQ_SINGLE";
+    analyzed.answerText = item.answerText;
+    analyzed.tolerance = item.tolerance;
     analyzedQuestions.push(analyzed);
   }
 
@@ -93,7 +99,7 @@ export async function analyzeSingleQuestionAction(
 export async function saveVerifiedQuestionsAction(
   questions: ParsedQuestionWithAI[],
   status: "DRAFT" | "SUBMITTED" = "SUBMITTED"
-): Promise<{ error?: string; count?: number; skippedDuplicates?: number }> {
+): Promise<{ error?: string; count?: number; skippedDuplicates?: number; approvedAsOwner?: boolean }> {
   const user = await getAuthorizedUser();
   if (!user) return { error: "Unauthorized" };
 
@@ -104,14 +110,23 @@ export async function saveVerifiedQuestionsAction(
   let createdCount = 0;
   let skippedDuplicates = 0;
 
-  for (const q of questions) {
-    // Check if exact duplicate question already exists
-    const duplicate = await prisma.question.findFirst({
-      where: { text: { equals: q.text } },
-      select: { id: true }
-    });
+  // Owner-submitted content skips the review queue entirely: the owner IS the
+  // reviewer, so forcing their own paste through SUBMITTED simply hides it
+  // from template creation with no second reviewer to unblock it.
+  const isOwner = user.user.role === "OWNER";
+  const effectiveStatus = status === "SUBMITTED" && isOwner ? "APPROVED" : status;
 
-    if (duplicate) {
+  // Load the bank once (not per question) and screen with the same Jaccard
+  // engine as the manual path — not just exact string equality.
+  const bank = await prisma.question.findMany({
+    select: { id: true, text: true, category: true },
+  });
+
+  for (const q of questions) {
+    const catLower = (q.category || "").toLowerCase();
+    const pool = catLower ? bank.filter((b) => b.category.toLowerCase() === catLower) : bank;
+    const match = findDuplicateInQuestionList(q.text, pool);
+    if (match.isDuplicate) {
       skippedDuplicates++;
       continue;
     }
@@ -122,7 +137,35 @@ export async function saveVerifiedQuestionsAction(
       imageUrl: opt.imageUrl || null
     }));
 
-    const correctText = formattedOptions[q.correctAnswerIndex]?.text || formattedOptions[0]?.text;
+    // Per-type answer payloads — mirrors the shapes the manual authoring path
+    // writes (see setter.ts createQuestionAction) so the score engine reads
+    // pasted questions identically.
+    const qType = q.qType || "MCQ_SINGLE";
+    let answerData: string;
+    let optionPayload = formattedOptions;
+
+    if (qType === "FILL_BLANK") {
+      const accepted = (q.answerText || "").split(",").map(s => s.trim()).filter(Boolean);
+      if (accepted.length === 0) { skippedDuplicates++; continue; }
+      optionPayload = [];
+      answerData = JSON.stringify({
+        blanks: { "1": { accepted, points: 1, caseSensitive: false } },
+        partialCredit: true
+      });
+    } else if (qType === "NUMERIC") {
+      const exact = parseFloat(q.answerText || "");
+      if (!Number.isFinite(exact)) { skippedDuplicates++; continue; }
+      optionPayload = [];
+      answerData = JSON.stringify({ exact, tolerance: q.tolerance ?? 0 });
+    } else if (qType === "TRUE_FALSE") {
+      answerData = JSON.stringify({
+        correctAnswer: formattedOptions[q.correctAnswerIndex]?.text || formattedOptions[0]?.text
+      });
+    } else {
+      answerData = JSON.stringify({
+        correctAnswer: formattedOptions[q.correctAnswerIndex]?.text || formattedOptions[0]?.text
+      });
+    }
 
     // Ensure custom category exists in Subject table so it remains selectable across platform
     if (q.category && q.category.trim().length >= 2) {
@@ -140,18 +183,28 @@ export async function saveVerifiedQuestionsAction(
     await prisma.question.create({
       data: {
         text: q.text,
-        options: JSON.stringify(formattedOptions),
-        answerData: JSON.stringify({ correctAnswer: correctText }),
+        options: JSON.stringify(optionPayload),
+        answerData,
         category: q.category,
         difficultyLevel: q.difficultyLevel,
-        status: status,
+        status: effectiveStatus,
         isExtracted: true,
         authorId: user.user.id,
-        type: "MCQ_SINGLE",
+        type: qType,
         points: 1.0,
         negativePoints: 0.0
       }
     });
+
+    // The question added it to the bank; mirror it into the Subject table so
+    // it stays selectable in SubjectSelector and grouped in bank tabs.
+    if (q.category && q.category.trim().length >= 2) {
+      await prisma.subject.upsert({
+        where: { name: q.category.trim() },
+        update: {},
+        create: { name: q.category.trim() }
+      }).catch(() => {});
+    }
 
     createdCount++;
   }
@@ -160,5 +213,7 @@ export async function saveVerifiedQuestionsAction(
   revalidatePath("/dashboard/setter/bank");
   revalidatePath("/dashboard/owner");
   revalidatePath("/dashboard/owner/templates");
-  return { count: createdCount, skippedDuplicates };
+  invalidateOwnerDashboardCache();
+  invalidateQuestionBankCache();
+  return { count: createdCount, skippedDuplicates, approvedAsOwner: effectiveStatus === "APPROVED" && createdCount > 0 };
 }

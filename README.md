@@ -1,271 +1,319 @@
 <div align="center">
 
-  <img src="./public/logo.png" alt="Aptix Logo" width="100" style="border-radius: 20%;" />
+  <img src="./public/logo.png" alt="Aptix Logo" width="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);" />
 
   # ⚡ Aptix Assessment Platform
 
   **Enterprise-Grade Digital Examination, Live Proctoring & Concurrency-Resilient Assessment Engine**
 
   <p align="center">
-    <a href="#-architecture--concurrency-design">Architecture</a> •
-    <a href="#-core-capabilities">Key Features</a> •
-    <a href="#-role-based-workflows">User Roles</a> •
-    <a href="#-getting-started">Getting Started</a> •
-    <a href="#-environment-configuration">Configuration</a> •
-    <a href="#-deployment">Deployment</a>
-  </p>
-
-  <p align="center">
-    <img src="https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js" alt="Next.js" />
-    <img src="https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript" alt="TypeScript" />
-    <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma" alt="Prisma" />
-    <img src="https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css" alt="TailwindCSS" />
-    <img src="https://img.shields.io/badge/PostgreSQL-Neon_Serverless-4169E1?style=for-the-badge&logo=postgresql" alt="PostgreSQL" />
-    <img src="https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge" alt="Proprietary License" />
+    <img src="https://img.shields.io/badge/Next.js-14.2.35-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" />
+    <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+    <img src="https://img.shields.io/badge/PostgreSQL-Neon_Serverless-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+    <img src="https://img.shields.io/badge/Upstash-Redis_RateLimiting-00E599?style=for-the-badge&logo=redis&logoColor=white" alt="Upstash Redis" />
+    <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma&logoColor=white" alt="Prisma" />
+    <img src="https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="TailwindCSS" />
+    <img src="https://img.shields.io/badge/Tests-105%20%2F%20105%20Passing-brightgreen?style=for-the-badge&logo=jest&logoColor=white" alt="Tests" />
   </p>
 
 </div>
 
 ---
 
-## 🌟 Executive Summary
+## 🌟 Executive Overview
 
-**Aptix** is a high-concurrency, zero-data-loss examination platform designed to conduct high-stakes assessments, competitive tests, and institutional evaluations at massive scale. Built with modern full-stack web standards, Aptix eliminates the notorious **thundering-herd read/write spikes** that crash conventional assessment tools when hundreds or thousands of students access tests simultaneously.
+**Aptix** is a high-concurrency, zero-data-loss examination platform engineered for high-stakes university assessments, competitive tests, and institutional certifications. 
 
-From instant offline client answer buffering and true server NTP clock synchronization to live interactive proctoring and psychometric analytics, Aptix ensures absolute fairness, total reliability, and complete operational visibility.
+Traditional evaluation platforms suffer severe failure points under real-world pressure:
+1. **Thundering-Herd Bottlenecks**: Thousands of candidates opening an exam simultaneously overload database connection pools and crash servers.
+2. **Local Timer Tampering & Desync**: Client-side countdowns drift, get throttled in background tabs, or get hacked through system clock changes.
+3. **Flaky Network Data Loss**: Intermittent campus Wi-Fi causes unsubmitted questions, lost keystrokes, and corrupted attempts.
+4. **Subtle E-Cheating**: Virtual machine sandboxes, floating browser extensions (ChatGPT/Copilot), multi-monitor setups, and clipboard scraping bypass basic web forms.
+
+**Aptix solves every one of these failure modes natively** with a server-authoritative state engine, transaction-free batch SQL upserts, client-side dual-storage buffers, hardware-level proctoring heuristics, and distributed sliding-window rate limiters.
 
 ---
 
-## 🚀 Key Highlights & Architecture
+## 🏗️ Architecture & Concurrency Flow
 
 ```mermaid
-graph TD
-    A[Candidate Browser] -->|Encrypted HTTPS| B[Next.js 14 App Router]
-    B -->|Stateless JWT Auth| C[Middleware & Route Handlers]
-    B -->|Server Actions| D[Prisma ORM Client]
-    D -->|Connection Pool| E[(Neon Serverless PostgreSQL)]
-    
-    subgraph Client-Side Resilience
-        A -->|Debounced 400ms| F[Instant LocalStorage Buffer]
-        F -->|Streamed Sync| B
-        A -->|NTP Calibration| G[Server-Calibrated Clock]
-        A -->|Anti-Cheat Watchdog| H[Fullscreen / Tab-Switch Monitor]
+flowchart TB
+    subgraph Client["Candidate Web Browser"]
+        UI["React 18 Dark-Mode Interface"]
+        IDB["IndexedDB + LocalStorage Buffer"]
+        NTP["Server NTP Calibrator"]
+        Watchdogs["Anti-Cheat Watchdogs<br/>(WebGL GPU • DOM Observer • Window API)"]
+        
+        UI -->|Debounced 400ms| IDB
+        UI --> NTP
+        UI --> Watchdogs
     end
 
-    subgraph Live Proctoring & Operations
-        I[Owner Dashboard] -->|3s Live Feed Pulse| B
-        I -->|1-Click Dynamic Control| J[Extend Time / Retake / Force End]
-        I -->|Auto-Pick Rules Engine| K[Dynamic Question Assembler]
+    subgraph Edge["Edge & Security Perimeter"]
+        CSP["Strict Content Security Policy (CSP)"]
+        RL["Upstash Redis Sliding-Window Rate Limiter"]
+        Auth["Stateless JWT + scrypt Auth + TokenVersion"]
     end
+
+    subgraph Backend["Next.js 14 App Router (Server Actions & API)"]
+        SA["Server Action RPCs<br/>(saveDraftAction • submitExamAction)"]
+        Deadline["Server-Authoritative Deadline Engine<br/>(0s Draft Grace • 60s Submit Grace)"]
+        Cron["Automated Sweeper Worker<br/>(/api/cron/sweep • Bearer Guarded)"]
+    end
+
+    subgraph Data["Persistence & Caching Layer"]
+        Prisma["Prisma ORM Client"]
+        Neon[("Neon Serverless PostgreSQL<br/>Connection Pooler")]
+        RedisCache[("Upstash Redis KV")]
+    end
+
+    Client -->|HTTPS / WSS| Edge
+    Edge --> Backend
+    SA --> Deadline
+    Deadline --> Prisma
+    Cron --> Prisma
+    Prisma --> Neon
+    RL --> RedisCache
 ```
-
-### 1. 🛡️ High-Scale Concurrency & Zero Data Loss
-* **Thundering-Herd Read Mitigation**: Pre-cached and snapshotted question set definitions eliminate database bottlenecks when 1,000+ candidates initiate tests at the exact same second.
-* **Transaction-Free Raw SQL Bulk Upsert**: Candidate answer submissions use high-speed parameterized SQL (`INSERT ... ON CONFLICT DO UPDATE`), collapsing 50+ individual database round-trips into a single atomic write without transaction locks.
-* **Dual-Layer Storage (IndexedDB + In-Memory)**: Non-blocking client-side IndexedDB persistence ensures zero frame drops during autosaves, with automatic retry queues when lab Wi-Fi fluctuates.
-* **Dual-Layer Crash Restoration**: If a candidate experiences power failure, browser crash, or machine reboot, re-entering the exam instantly restores all previously marked answers, visited question states, and remaining time down to the exact second.
-* **In-Memory TTL Multi-Tier Caching**: Dashboard statistics, active session rosters, and candidate mastery metrics leverage atomic cache layers to keep Neon query latency under 50ms.
-* **$O(1)$ Deadline Sweeper & Lazy Submission**: Strict deadlines are checked at the millisecond level on candidate interactions (Check-on-Access) combined with an automated scheduled sweep.
-
-### 2. 🔒 Ironclad Anti-Cheating & AI Proctoring
-* **Server-Calibrated NTP Timekeeping**: Prevents local device clock tampering; timers run against high-precision server time delta stamps with server-side deadline capping.
-* **Sliding-Window Rate Limiting**: Anti-brute-force defense throttles unauthorized PIN guesses and credential spraying on all authentication entrypoints.
-* **Single-Device / Single-Tab Session Lock**: Enforces a strict lease lock per candidate session, immediately booting duplicate tabs or concurrent devices.
-* **Hardware & Sandbox Detection**: Client initialization inspects WebGL unmasked hardware renderers to identify virtual machines and sandbox cheating environments (`VMware`, `VirtualBox`, `SwiftShader`, `llvmpipe`, `Parallels`).
-* **Extension Injection Guardian**: `MutationObserver` monitors document body for unauthorized third-party AI extensions, floating overlays, and ChatGPT/Copilot sidebars.
-* **Multi-Display & PrintScreen Defense**: Tracks secondary monitors via the Window Management API and actively purges the system clipboard upon OS-level PrintScreen keystrokes.
-* **Window Minimization & Tab-Switch Limit**: Real-time detection tracks every tab switch or window blur, increments persistent security violation flags, and triggers automatic force-submission upon exceeding thresholds.
-* **Fullscreen Enforced Lockdown**: Exams prompt strict full-screen enforcement; exiting logs audit warnings.
-* **Payload Answer Obfuscation**: Correct choices, explanations, and author IDs are completely stripped from candidate payloads, guaranteeing zero client-side inspect-element cheating.
-* **Institutional Domain Locking**: Restrict test eligibility to specific verified institutional email domains (e.g. `@college.edu`).
-
-### 3. 📚 Question Bank Integrity & Setter Intelligence
-* **Question Bank Integrity Lock**: Questions bound to active (`LIVE`) or concluded (`COMPLETED`) assessment sessions are hard-locked against accidental deletion, permanently safeguarding historical scorecards and candidate response archives.
-* **Visual Lock Transparency**: Setters and administrators receive clear `🔒 Locked` status indicators and protective tooltips in the Question Bank management portal.
-* **Intelligent Duplicate Stem Detection**: Token-based Jaccard similarity engine with prefix normalization (`Q1:`, `1)`, etc.) and stop-word filtering prevents question bank pollution, flagging exact duplicates and near-identical questions (>85% match).
-* **Quote-Aware CSV Bulk Importer**: RFC 4180-compliant CSV parser seamlessly processes questions containing internal commas, escaped quotes, and multiline choices with automated duplicate skip reporting.
-* **AI Extraction Deduplication**: The AI question extractor audits incoming batches and automatically skips existing items to prevent redundant entries.
-
-### 4. 📊 Psychometrics & Executive Analytics
-* **Cohort Mastery Metrics**: Automatic calculation of cohort mean score, median score, pass rates, and candidate decile score histograms.
-* **Psychometric Item Discrimination**: Per-question analytics measure question difficulty index ($p$-value), discrimination index ($D$), and distractor frequency distributions.
-* **Audit Trail & Response Inspection**: Comprehensive timeline view of every student's answer submission, flag occurrences, and time logged.
-
-### 5. 🎮 Gamified Assessment Mode & Spirit Mascots
-* **10 Interactive Spirit Mascots**: Candidates can choose from 10 pixel-art companions: Iron Man, Smooth Criminal (Michael Jackson), Madara Uchiha, Deadpool, Courage the Cowardly Dog, Spider-Man, Monkey D. Luffy, John Wick, Vader & Luke (Star Wars Lightsaber Duel), and The Contender (Boxer).
-* **Widescreen 5-in-One Selector Grid**: Responsive 5-column layout with character zoom, alignment, and power-flavor bios.
-* **Persistent Companion Experience**: Chosen mascot badge accompanies the student throughout the exam header and celebratory scorecard.
-* **Live Session Toggle**: Instructors can enable or disable Gamified Mode anytime on any live session directly from the Command Center.
-
-### 6. 🏆 Granular Result Release & Cohort Podium Control
-* **Flexible Visibility Policies**: Support for `IMMEDIATE`, `AFTER_RELEASE`, and `NEVER` score visibility policies.
-* **On-Demand Results Release**: For `AFTER_RELEASE` exams, submitted candidates view a submission confirmation until the instructor clicks **"Release Results to Candidates"** in the Live Session Monitor.
-* **Animated Top-3 Podium Reveal**: Instructors control when the cohort top-3 podium snapshot is revealed to candidates, showing the top performers along with their animated mascot character avatars.
-* **Teacher-Exclusive Live Podium & Leaderboard**: Dedicated real-time podium and ranked leaderboard cockpit built exclusively for instructors. Available directly during **live exam monitoring** (updating dynamically as candidates progress and submit) and preserved permanently in **historical post-exam analytics**, completely independent of candidate-facing release toggles. Includes:
-  * Top-3 visual podium with dynamically scaled gold 👑, purple 🥈, and coral 🥉 pillars.
-  * Animated mascot GIF character avatars with smooth focus framing and glow effects.
-  * Search by candidate name, email, or mascot name, plus instant status filtering (`ALL`, `SUBMITTED`, `IN_PROGRESS`).
-  * Cohort summary metrics (Highest Score, Cohort Mean, Passing Rate %) and 1-click candidate audit links.
-* **Zero Data Leakage Invariant**: Strict server-side gatekeeping ensures answers, solutions, and podium snapshots are never sent over the wire until officially released.
 
 ---
 
-## 🖥️ Platform Tour & User Roles
+## 🛡️ Core Capabilities & Deep Dives
 
-### 👑 Assessment Owner / Administrator
-* **Full-Width Operations Hub**: Real-time view of active live assessments, candidates in progress, and cheat flags.
-* **Teacher-Exclusive Live & Historical Podium Leaderboard**:
-  * Real-time top-3 visual podium with animated mascot GIF avatars, score percentages, and dense-ranked cohort leaderboard.
-  * Search by candidate name, email, or mascot name with multi-status filtering (`ALL`, `SUBMITTED`, `IN_PROGRESS`).
-  * Available directly inside the Live Session Cockpit and preserved permanently inside the Historical Exam Results view.
-* **Exam Template Management**:
-  * Clean, tabular blueprint directory displaying test durations, fixed questions, auto-pick rule sets, and passing criteria.
-  * **Interactive Slide-Over Drawer**: Click any template to inspect rules, question pools, and proctoring parameters.
-  * **Dynamic Exam Rescheduling**: Update start dates & times for upcoming scheduled exams directly from the drawer.
-  * **Inline Specification Editor**: Modify title, instructions, duration, negative marking, domain locks, and anti-cheat policies on the fly.
-* **Live Monitoring Command Center**:
-  * 3-second auto-sync feed showing candidate progress, submissions, and flag alerts.
-  * 1-Click compensatory time grant (`🔓 +10m Extension`) or clean retake grant (`🔄 Reset Retake`).
-  * Force End session control with automated evaluation generation.
+### 1. ⚡ High-Scale Concurrency & Zero Data Loss
+* **Thundering-Herd Read Mitigation**: Pre-cached and snapshot-assembled question sets prevent database connection exhaustion when 1,000+ candidates initiate tests at the exact same second.
+* **Transaction-Free Raw SQL Bulk Upserts**: Candidate answer submissions use high-speed parameterized SQL (`INSERT ... ON CONFLICT DO UPDATE`), collapsing 50+ individual database round-trips into a single atomic write without transaction locks.
+* **Dual-Layer Storage (IndexedDB + In-Memory)**: Non-blocking client-side IndexedDB persistence ensures zero frame drops during autosaves, with automatic retry queues when lab Wi-Fi fluctuates.
+* **Dual-Layer Crash Restoration**: If a candidate experiences a power outage, browser crash, or machine restart, re-entering the exam instantly restores all previously marked answers, review flags, and remaining time down to the exact second.
+* **Deterministic PRNG Question Shuffling**: Seeded pseudo-random shuffling guarantees that every student receives uniquely randomized questions and answer choices while remaining 100% deterministic and recoverable across restarts.
 
-### 📝 Question Setter / Faculty
-* **Authoring Suite**: Supports Single Choice (MCQ), Multiple Correct, Fill in the Blanks, and Numerical Entry.
-* **Dynamic Auto-Pick Rules Engine**: Formulate templates using dynamic category rules (e.g., *10 Easy Quantitative + 5 Hard Logical Reasoning*).
-* **Question Quality Queue**: Review workflow for reviewing submitted items, evaluating points, and managing the central bank.
+---
 
-### 🎓 Candidate / Student
-* **Distraction-Free Exam Interface**: Sleek dark-mode interface with a clear question palette, review tags, remaining time indicators, and quick navigation.
-* **Diagnostic & Practice Interface**: Self-paced drill mode offering instant feedback, detailed step-by-step explanations, and category-level mastery tracking.
-* **Candidate Performance Report**: Comprehensive breakdown of individual test scores, question-by-question review (when enabled by the owner), and cohort standing.
+### 2. ⏱️ Server-Authoritative Deadline Engine (Moodle / Canvas Standard)
+* **Single Source of Truth**: The server computes `effectiveEnd` on every single mutation:
+  $$\text{effectiveEnd} = \text{attempt.extendedUntil} \mathbin{\Vert} \text{session.extendedUntil} \mathbin{\Vert} (\text{session.startTime} + \text{duration})$$
+* **Display-Only Client Timer**: The client countdown is calibrated against server NTP time delta stamps upon initial load and re-synchronized instantly on window `visibilitychange` (foreground return).
+* **Unified Grace Window Policy**:
+  * **Draft Saves**: `0s grace` (strictly rejected past `effectiveEnd`).
+  * **Exam Submissions**: `60s submit-only grace` to accommodate network latency. Hard rejection thereafter.
+* **Instant Input Freezing**: As soon as countdown reaches `00:00`, candidate radio buttons, input fields, clear actions, and debounced buffers are frozen immediately.
+
+---
+
+### 3. 🔒 Ironclad Anti-Cheating & AI Proctoring
+* **WebGL GPU Fingerprinting**: Client inspection probes unmasked hardware renderers to identify virtual machines and sandbox cheating environments (`VMware`, `VirtualBox`, `SwiftShader`, `llvmpipe`, `Parallels`).
+* **Extension Injection Guardian**: A persistent `MutationObserver` monitors the DOM tree for unauthorized floating AI helper extensions, injected buttons, or ChatGPT/Copilot sidebars.
+* **Multi-Display & PrintScreen Defense**: Uses the Window Management API to detect multi-monitor configurations and actively purges the OS-level system clipboard upon PrintScreen keystrokes.
+* **Window Minimization & Tab-Switch Tracking**: Tracks window blur events, increments persistent security violation counters, and triggers automated submission when configured violation thresholds are breached.
+* **Zero Client-Side Solution Leaks**: Answer keys, author metadata, and explanations are completely stripped from candidate payloads at the server boundary, preventing DevTools element-inspect exploits.
+* **Institutional Domain Locking**: Restricts candidate exam entry to verified institutional email domains (e.g., `@college.edu` or `@univ.ac.in`).
+
+---
+
+### 4. 🔑 Enterprise Security & Distributed Rate Limiting
+* **NIST-Compliant Cryptography**: Password hashing powered by `@noble/hashes/scrypt` with constant-time verification. Zero legacy MD5/SHA1 or plaintext passwords.
+* **Instant Session Revocation**: Every user account maintains a `tokenVersion` counter. Revoking a session or changing credentials immediately invalidates all active JWT tokens globally.
+* **Distributed Sliding-Window Rate Limiting**: Backed by **Upstash Redis**, authentication entrypoints enforce sliding-window rate limiting to neutralize brute-force attacks and PIN enumeration.
+* **Strict Content Security Policy (CSP)**: Nonce-based script execution, whitelisted Google Fonts and Upstash endpoints, and `frame-ancestors 'none'` to block clickjacking.
+
+---
+
+## 🎮 Gamified Mode & Spirit Mascots
+
+To boost candidate engagement and reduce test anxiety, Aptix includes an optional **Gamified Assessment Mode**. Candidates can select from 10 animated pixel-art spirit companions who accompany them on their test journey, react to milestones, and stand atop the cohort podium!
+
+<div align="center">
+
+| Iron Man | Smooth Criminal | Madara Uchiha | Deadpool | Courage Dog |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="./public/characters/ironman.gif" width="75" height="75" /> | <img src="./public/characters/michael_jackson.gif" width="75" height="75" /> | <img src="./public/characters/madara.gif" width="75" height="75" /> | <img src="./public/characters/deadpool.gif" width="75" height="75" /> | <img src="./public/characters/courage.gif" width="75" height="75" /> |
+| **Spider-Man** | **Luffy (Gear 5)** | **John Wick** | **Vader vs. Luke** | **The Contender** |
+| <img src="./public/characters/spiderman.gif" width="75" height="75" /> | <img src="./public/characters/luffy.gif" width="75" height="75" /> | <img src="./public/characters/john_wick.gif" width="75" height="75" /> | <img src="./public/characters/vader.gif" width="75" height="75" /> | <img src="./public/characters/boxer.gif" width="75" height="75" /> |
+
+</div>
+
+* **5-Column Mascot Picker**: Interactive widescreen modal with animated GIFs, character bios, and motivational mottos.
+* **Live Session Toggle**: Instructors can activate or deactivate Gamified Mode per exam session with a single click.
+* **Dynamic Podium**: Upon score release, the top-3 performers are showcased on an animated 3D podium with their chosen companions.
+
+---
+
+## 🏆 Dynamic Podium & Granular Result Release
+
+Aptix gives instructors full operational command over when and how assessment outcomes are published:
+
+```
+Result Visibility Policies:
+├── IMMEDIATE       → Candidates see score & explanations immediately upon submission.
+├── AFTER_RELEASE   → Candidates see a confirmed submission screen until instructor releases scores.
+└── NEVER           → Scores are held indefinitely for confidential institutional grading.
+```
+
+* **Instructor Live Podium**: Dedicated real-time cockpit updating dynamically as students submit, displaying highest score, cohort average, passing percentages, and mascot avatars.
+* **Zero Data Leakage Invariant**: When an exam is configured with `AFTER_RELEASE` or `NEVER`, answer keys, item reviews, and podium rosters are physically omitted from API responses until the instructor clicks **"Release Results"**.
+
+---
+
+## 📚 Question Bank & Setter Intelligence
+
+* **Session Immutability Lock**: Questions tied to live or completed sessions are locked against modification or deletion to preserve historical score accuracy.
+* **Token-Based Jaccard Similarity Engine**: Scans incoming questions against the bank, normalizing prefixes (`Q1:`, `1)`) and stopwords, flagging duplicates with $>85\%$ stem similarity.
+* **RFC 4180 Quote-Aware CSV Importer**: Seamlessly imports complex questions containing multiline stems, commas inside quotes, LaTeX formulas, and explanations.
+* **Psychometric Item Discrimination**: Automatically calculates item difficulty ($p$-value), point-biserial discrimination index ($D$), and distractor distribution frequency for every question.
+
+---
+
+## 🖥️ Platform Roles & Cockpits
+
+| Role | Key Capabilities |
+| :--- | :--- |
+| **👑 Assessment Owner (Admin)** | • Full operations command center with live active candidate counts.<br/>• 3-second live monitoring pulse with 1-click time extensions (`+10m`) and clean retakes.<br/>• Four-eyes moderation controls and template approval workflows.<br/>• Master analytics, cohort score histograms, and CSV data export. |
+| **📝 Question Setter (Faculty)** | • Rich authoring suite for MCQ, Multi-Select, Fill-in-the-Blank, and Numeric questions.<br/>• Dynamic Auto-Pick rule builder (*e.g., 20 Easy Math + 10 Hard Logic*).<br/>• Quality queue review and duplicate stem detector. |
+| **🎓 Candidate (Student)** | • High-speed dark-mode exam interface with palette navigation and review markers.<br/>• One-tap Google SSO with instant account switcher and PIN modal.<br/>• Diagnostic self-practice drill mode with instant step-by-step explanations.<br/>• Individual scorecard with detailed performance analytics. |
+
+---
+
+## 🧪 Invariants & Test Suite (105 / 105 Passed)
+
+Aptix incorporates an automated critical-path invariant testing harness (`npm test`) that rigorously validates all core platform guarantees before deployment:
+
+```bash
+> aptix@0.1.0 test
+> npx -y tsx tests/run-all.ts
+
+==================================================
+🚀 APTIX PLATFORM CRITICAL PATH TEST SUITE
+==================================================
+
+  Scoring Logic (MCQ, Negative, Numeric, Multi-Correct, Fill-Blank)  --> 13 / 13 PASSED
+  Attempt Expiry & Server Deadline Invariants                         --> 18 / 18 PASSED
+  Auth & Security Boundaries (Domains, Passwords, Scrypt, Roles)      --> 16 / 16 PASSED
+  Item Psychometrics & Discrimination Index ($p$, $D$)                -->  7 /  7 PASSED
+  Deterministic PRNG Shuffle & Crash Recovery                         -->  3 /  3 PASSED
+  Anti-Leakage Data Sanitization & Result Release Gates               --> 16 / 16 PASSED
+  RFC 4180 CSV Importer Robustness                                    -->  6 /  6 PASSED
+  Upstash Rate Limiting & Safe IP Extraction                          --> 12 / 12 PASSED
+  Sandbox & Virtual Machine Detection Heuristics                      -->  2 /  2 PASSED
+  Question Bank Deduplication (Jaccard Similarity)                    -->  8 /  8 PASSED
+  Session Roster Parser & Sanitization                                -->  4 /  4 PASSED
+
+==================================================
+📊 TEST SUITE RESULTS: 105 / 105 PASSED (100%)
+🎉 ALL HIGH-STAKES PLATFORM INVARIANTS VERIFIED!
+==================================================
+```
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology | Purpose |
+| Layer | Technology | Key Selection Rationale |
 | :--- | :--- | :--- |
-| **Framework** | [Next.js 14 (App Router)](https://nextjs.org/) | Server Components, Server Actions & Route Handlers |
-| **Language** | [TypeScript 5](https://www.typescriptlang.org/) | End-to-end type safety & strict interface modeling |
-| **Database** | [Neon Serverless PostgreSQL](https://neon.tech/) | Cloud-native, high-concurrency relational data layer |
-| **ORM** | [Prisma ORM](https://www.prisma.io/) | Schema modeling, connection management & migrations |
-| **Styling** | [TailwindCSS 3](https://tailwindcss.com/) | Bespoke dark-mode glassmorphic design system |
-| **Authentication** | [Jose](https://github.com/panva/jose) & HTTP-only Cookies | Secure, stateless JWT token management |
-| **Validation** | [Zod](https://zod.dev/) | Strict runtime schema parsing for forms & API payloads |
+| **Framework** | [Next.js 14 (App Router)](https://nextjs.org/) | Hybrid Server Components, Server Actions & optimized Edge routes |
+| **Language** | [TypeScript 5](https://www.typescriptlang.org/) | End-to-end type safety with strict compiler flags |
+| **Database** | [Neon Serverless PostgreSQL](https://neon.tech/) | Cloud-native relational database with connection pooling |
+| **Rate Limiter** | [Upstash Redis](https://upstash.com/) | Low-latency sliding-window distributed rate limiting |
+| **ORM** | [Prisma ORM](https://www.prisma.io/) | Declarative schema modeling, migrations, and parameterized SQL |
+| **Styling** | [TailwindCSS 3](https://tailwindcss.com/) | Custom responsive dark glassmorphic design system |
+| **Security** | [Jose](https://github.com/panva/jose) & [@noble/hashes](https://github.com/paulmillr/noble-hashes) | Stateless JWT tokens and NIST-compliant scrypt key derivation |
+| **Validation** | [Zod](https://zod.dev/) | Strict runtime schema validation across forms, RPCs, and APIs |
 
 ---
 
-## 🏁 Getting Started
+## 🏁 Quickstart & Local Setup
 
 ### Prerequisites
-- **Node.js**: `v18.17.0` or higher
-- **npm** or **pnpm**
-- **PostgreSQL Database** (Local instance or free cloud database like [Neon](https://neon.tech))
+* **Node.js**: `v18.17.0` or higher
+* **npm** or **pnpm**
+* **PostgreSQL Database** (e.g., [Neon Serverless](https://neon.tech))
+* **Upstash Redis Instance** (Free tier from [Upstash](https://upstash.com))
 
-### 1. Clone the Repository
+### 1. Clone & Install
 ```bash
 git clone https://github.com/yashsinghal1234/Aptix.git
 cd Aptix
-```
-
-### 2. Install Dependencies
-```bash
 npm install
 ```
 
-### 3. Configure Environment Variables
-Create a `.env` file in the root directory:
+### 2. Configure Environment Variables
+Create a `.env` file in the project root:
 ```env
-# Database Connection (Neon or local PostgreSQL)
-DATABASE_URL="postgresql://username:password@ep-sample-pool.us-east-2.aws.neon.tech/neondb?sslmode=require"
+# Database (Neon Serverless PostgreSQL connection with pooling)
+DATABASE_URL="postgresql://user:pass@ep-sample-pool.us-east-2.aws.neon.tech/neondb?sslmode=require"
 
-# Authentication Secret
+# Stateless JWT Authentication Secret (min 32 characters)
 JWT_SECRET="your-super-secure-random-32-character-secret-key"
 
-# Automated Sweeper Cron Secret (Optional for production)
+# Upstash Redis (For distributed rate limiting)
+UPSTASH_REDIS_REST_URL="https://your-upstash-instance.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="your-upstash-rest-token"
+
+# Automated Sweeper Cron Secret (Guards /api/cron/sweep)
 CRON_SECRET="your-sweeper-cron-secret-token"
 
 # Base Application URL
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
-### 4. Initialize Database Schema
-Generate Prisma client artifacts and push the schema directly to your database:
+### 3. Database Schema Setup
 ```bash
+# Generate Prisma Client & apply database schema
 npx prisma generate
 npx prisma db push
 ```
 
-### 5. Launch Development Server
+### 4. Run Development Server
 ```bash
 npm run dev
 ```
+Open [**http://localhost:3000**](http://localhost:3000) in your browser.
 
-Access the application at [**http://localhost:3000**](http://localhost:3000).
-
-### 6. Run Critical Path Test Suite
-Verify 76 platform invariants across scoring, rate limiting, anti-cheat detection, PRNG shuffling, psychometrics, data leakage prevention, and question bank deduplication:
+### 5. Run Verification Suite
 ```bash
 npm test
 ```
 
 ---
 
-## 🌐 Production Deployment
+## 🌐 Deployment
 
-### Deploying on Vercel
+### Deploying to Vercel
+Aptix is optimized for zero-configuration deployment on **Vercel**:
+1. Push your code to GitHub.
+2. Import your repository into [Vercel](https://vercel.com/new).
+3. Configure the environment variables (`DATABASE_URL`, `JWT_SECRET`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `CRON_SECRET`).
+4. Click **Deploy**.
 
-Aptix is built to deploy natively on **Vercel** with zero custom infrastructure overhead.
-
-1. Push your code to your GitHub repository.
-2. Go to [**vercel.com/new**](https://vercel.com/new) and import the repository.
-3. In **Environment Variables**, provide:
-   * `DATABASE_URL` (Use Neon pooled connection string)
-   * `JWT_SECRET`
-   * `CRON_SECRET`
-4. Deploy! Vercel will automatically build the Next.js bundle and set up edge routing.
-
-### Automated Exam Sweeper (GitHub Actions)
-The repository includes `.github/workflows/cron-sweep.yml`, which triggers `/api/cron/sweep` on a recurring cron schedule to cleanly finalize any unsubmitted attempts for exams that reached their deadline:
-* Under GitHub repository **Settings $\rightarrow$ Secrets and variables $\rightarrow$ Actions**, add:
-  * `APP_URL`: Your live domain (e.g., `https://aptix.vercel.app`)
-  * `CRON_SECRET`: Your configured cron authentication token.
+### Automated Sweeper (Cron Schedule)
+Aptix includes an automated exam deadline sweeper at `/api/cron/sweep` that marks overdue attempts as submitted.
+* **Vercel Cron**: Configured via `vercel.json` to trigger every minute.
+* **GitHub Actions**: Configured via `.github/workflows/cron-sweep.yml` as a high-availability fallback. Set `APP_URL` and `CRON_SECRET` in your repository secrets.
 
 ---
 
-## 📁 Project Directory Structure
+## 📁 Directory Structure
 
 ```plaintext
 aptix/
+├── .github/workflows/          # Automated cron sweeper GitHub Actions workflow
 ├── prisma/
-│   └── schema.prisma            # Database models & relationships
-├── public/                      # Static assets, branding & icons
+│   └── schema.prisma           # Relational schema (Users, Sessions, Attempts, Questions)
+├── public/                     # Static media, icons, and animated mascot GIFs
+│   ├── characters/             # 10 animated pixel-art spirit mascots
+│   └── logo.png                # Brand identity
 ├── src/
-│   ├── app/                     # Next.js App Router routes & pages
-│   │   ├── actions/             # Secure Server Actions (template, session, candidate)
-│   │   ├── api/                 # REST endpoints & background cron workers
-│   │   ├── dashboard/           # Owner, Setter & Candidate dashboards
-│   │   ├── exam/                # Live proctored examination interface
-│   │   └── practice/            # Diagnostic practice & drill portal
-│   ├── components/              # Modular UI components & design system
-│   │   ├── OwnerTemplatesManager.tsx # Interactive templates table & slide-over drawer
-│   │   ├── ActiveSessionsList.tsx    # Live proctoring monitor card
-│   │   ├── LaunchSessionForm.tsx     # Session scheduling & PIN generator
-│   │   └── ...
-│   └── lib/                     # Prisma client, JWT authentication & utilities
-├── .env.example                 # Environment variables template
-└── README.md                    # Project documentation
+│   ├── app/
+│   │   ├── actions/            # Server Actions (exam.ts, session.ts, template.ts, etc.)
+│   │   ├── api/                # REST endpoints (/api/auth, /api/cron/sweep)
+│   │   ├── dashboard/          # Owner, Setter, and Candidate operational views
+│   │   ├── exam/               # Real-time proctored test environment
+│   │   └── practice/           # Diagnostic drill & self-evaluation portal
+│   ├── components/             # Reusable UI components & modals
+│   └── lib/                    # Security, auth, redis, db client, and utilities
+├── tests/                      # 105 automated critical invariant test suites
+├── .env.example                # Example environment configuration
+└── README.md                   # Platform documentation
 ```
-
----
-
-## 🤝 Contributing
-
-Contributions, feedback, and issue reports are welcome!
-1. Fork the Project.
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to the Branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
 
 ---
 
@@ -273,7 +321,7 @@ Contributions, feedback, and issue reports are welcome!
 
 Copyright © 2024–2026 **Yash Singhal**. All Rights Reserved.
 
-This software, along with all associated source code, user interface designs, algorithms, branding, and documentation, is **strictly proprietary**. 
+This software, including all source code, algorithms, user interface designs, visual assets, and documentation, is **strictly proprietary**. 
 
-* **No Unauthorized Copying or Use**: No individual or organization is permitted to duplicate, modify, distribute, publish, reverse-engineer, or commercially deploy any part of this repository without prior explicit written authorization from **Yash Singhal**.
-* For licensing inquiries or formal authorization, contact: [singhalyash307@gmail.com](mailto:singhalyash307@gmail.com).
+* **No Unauthorized Use**: Duplication, modification, redistribution, reverse engineering, or commercial use without prior explicit written permission from **Yash Singhal** is strictly prohibited.
+* For licensing inquiries, institutional partnerships, or authorizations, please contact: **[singhalyash307@gmail.com](mailto:singhalyash307@gmail.com)**.

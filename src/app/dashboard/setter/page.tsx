@@ -4,14 +4,16 @@ import { useSearchParams } from "next/navigation";
 import { AddQuestionForm } from "@/components/AddQuestionForm";
 import { BulkUploadCSV } from "@/components/BulkUploadCSV";
 import { BulkUploadText } from "@/components/BulkUploadText";
+import { QuickQuestionGrid } from "@/components/QuickQuestionGrid";
 import { Flower } from "@/components/owner/OpsPanels";
 
 function StudioBody() {
-  const [activeTab, setActiveTab] = useState<"MANUAL" | "PASTE" | "CSV">("MANUAL");
+  const [activeTab, setActiveTab] = useState<"GRID" | "MANUAL" | "PASTE" | "CSV">("MANUAL");
   const searchParams = useSearchParams();
   const defaultSubject = searchParams.get("subject") || undefined;
 
   const tabs = [
+    { k: "GRID" as const, label: "QUICK GRID" },
     { k: "MANUAL" as const, label: "MANUAL ENTRY" },
     { k: "PASTE" as const, label: "PASTE & PARSE" },
     { k: "CSV" as const, label: "BULK UPLOAD" },
@@ -48,6 +50,7 @@ function StudioBody() {
         ))}
       </div>
 
+      {activeTab === "GRID" && <QuickQuestionGrid defaultSubject={defaultSubject} />}
       {activeTab === "MANUAL" && <AddQuestionForm defaultSubject={defaultSubject} />}
       {activeTab === "PASTE" && <BulkUploadText />}
       {activeTab === "CSV" && <BulkUploadCSV />}

@@ -22,7 +22,6 @@ export function SettersHero() {
   return (
     <div className="flex items-start justify-between gap-6 px-1 pt-1">
       <div>
-        <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">STAFFING / 2026–27</p>
         <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
           Good questions start here.
         </h1>
