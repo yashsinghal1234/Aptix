@@ -405,18 +405,18 @@ export async function deleteQuestionAction(id: string) {
   if (!user) return { error: "Unauthorized" };
 
   try {
-    // Question Bank Integrity Lock: Prevent deleting questions attached to active or completed sessions
-    const attachedSession = await prisma.examSession.findFirst({
+    // Only prevent deleting questions attached to currently active LIVE sessions
+    const activeLiveSession = await prisma.examSession.findFirst({
       where: {
         questions: { some: { id } },
-        status: { in: ["LIVE", "COMPLETED"] }
+        status: "LIVE"
       },
       include: { exam: { select: { title: true } } }
     });
 
-    if (attachedSession) {
+    if (activeLiveSession) {
       return {
-        error: `Cannot delete locked question: It is bound to an active or completed assessment session ("${attachedSession.exam?.title || attachedSession.id}"). Deletion is blocked to preserve scoring records.`
+        error: `Cannot delete question: It is currently part of an active LIVE assessment ("${activeLiveSession.exam?.title || activeLiveSession.id}").`
       };
     }
 
@@ -438,6 +438,10 @@ export async function deleteQuestionAction(id: string) {
       where: { questionId: id }
     });
 
+    await prisma.questionStats.deleteMany({
+      where: { questionId: id }
+    });
+
     await prisma.question.delete({
       where: { id }
     });
@@ -450,5 +454,136 @@ export async function deleteQuestionAction(id: string) {
   } catch (error: any) {
     console.error("Failed to delete question:", error);
     return { error: error.message || "Failed to delete question" };
+  }
+}
+
+export interface UpdateQuestionInput {
+  id: string;
+  text: string;
+  category: string;
+  difficultyLevel: "EASY" | "MEDIUM" | "HARD";
+  points: number;
+  negativePoints?: number;
+  options?: string[];
+  correctAnswer?: string;
+  correctAnswers?: string[];
+  explanation?: string;
+}
+
+export async function updateQuestionAction(data: UpdateQuestionInput) {
+  const user = await getAuthorizedUser();
+  if (!user) return { error: "Unauthorized" };
+
+  try {
+    const { id, text, category, difficultyLevel, points, negativePoints, options, correctAnswer, correctAnswers, explanation } = data;
+
+    if (!id) return { error: "Missing question ID" };
+    if (!category || category.trim().length < 2) return { error: "Category must be at least 2 characters" };
+
+    // 1. Question Bank Integrity Lock Check
+    const attachedSession = await prisma.examSession.findFirst({
+      where: {
+        questions: { some: { id } },
+        status: { in: ["LIVE", "COMPLETED"] }
+      },
+      include: { exam: { select: { title: true } } }
+    });
+    const isLocked = !!attachedSession;
+
+    // 2. Ownership check: Only question author or OWNER can edit
+    const existing = await prisma.question.findUnique({
+      where: { id },
+      select: { authorId: true, type: true, answerData: true, options: true, text: true }
+    });
+
+    if (!existing) return { error: "Question not found" };
+
+    if (user.role !== "OWNER" && existing.authorId !== user.id) {
+      return { error: "Forbidden: You can only edit questions that you authored." };
+    }
+
+    if (!isLocked && (!text || text.trim().length < 5)) {
+      return { error: "Question text must be at least 5 characters" };
+    }
+
+    // 3. Format options JSON and answerData JSON
+    const cleanCategory = category.trim();
+    const cleanPoints = Math.max(0.5, Number(points) || 1);
+    const cleanNegative = Math.max(0, Number(negativePoints) || 0);
+
+    let currentAnswerData: any = {};
+    try {
+      currentAnswerData = JSON.parse(existing.answerData || "{}");
+    } catch {}
+
+    let finalText = existing.text;
+    let finalOptionsJson: string | undefined = undefined;
+    let finalAnswerDataJson = "";
+
+    if (isLocked) {
+      // When used in past assessments: question text and options/answers are locked to protect scoring.
+      // Explanation, category, difficulty, and point weights can still be modified.
+      finalText = existing.text;
+      finalOptionsJson = existing.options;
+      const updatedAnswerData = {
+        ...currentAnswerData,
+        explanation: explanation !== undefined ? explanation.trim() : currentAnswerData.explanation,
+      };
+      finalAnswerDataJson = JSON.stringify(updatedAnswerData);
+    } else {
+      finalText = text.trim();
+      const formattedOptions = (options && options.length > 0)
+        ? options.map((optText, idx) => {
+            const isCorrect = correctAnswer
+              ? optText.trim().toLowerCase() === correctAnswer.trim().toLowerCase()
+              : (correctAnswers ? correctAnswers.includes(optText.trim()) : idx === 0);
+            return {
+              text: optText.trim(),
+              isCorrect,
+              explanation: isCorrect && explanation ? explanation.trim() : null
+            };
+          })
+        : [];
+      if (formattedOptions.length > 0) {
+        finalOptionsJson = JSON.stringify(formattedOptions);
+      }
+      const updatedAnswerData = {
+        ...currentAnswerData,
+        correctAnswer: correctAnswer ? correctAnswer.trim() : currentAnswerData.correctAnswer,
+        correctAnswers: correctAnswers ?? currentAnswerData.correctAnswers,
+        explanation: explanation !== undefined ? explanation.trim() : currentAnswerData.explanation,
+      };
+      finalAnswerDataJson = JSON.stringify(updatedAnswerData);
+    }
+
+    const updated = await prisma.question.update({
+      where: { id },
+      data: {
+        text: finalText,
+        category: cleanCategory,
+        difficultyLevel: difficultyLevel || "MEDIUM",
+        points: cleanPoints,
+        negativePoints: cleanNegative,
+        ...(finalOptionsJson ? { options: finalOptionsJson } : {}),
+        answerData: finalAnswerDataJson,
+      }
+    });
+
+    await prisma.subject.upsert({
+      where: { name: cleanCategory },
+      update: {},
+      create: { name: cleanCategory },
+    }).catch(() => {});
+
+    revalidatePath("/dashboard/setter");
+    revalidatePath("/dashboard/setter/bank");
+    revalidatePath("/dashboard/owner");
+    invalidateOwnerDashboardCache();
+    invalidateQuestionBankCache();
+
+    return { success: true, question: updated };
+  } catch (error: any) {
+    console.error("Failed to update question:", error);
+    return { error: error.message || "Failed to update question" };
   }
 }

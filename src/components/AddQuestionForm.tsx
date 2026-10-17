@@ -35,8 +35,6 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [optionsList, setOptionsList] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("0");
-  const [pointsVal, setPointsVal] = useState("1.0");
-  const [negPointsVal, setNegPointsVal] = useState("0.0");
   const [selectedTopic, setSelectedTopic] = useState<string>(defaultSubject || FIXED_TOPICS[0]);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("MEDIUM");
 
@@ -104,9 +102,6 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
     formData.set("partialCredit", JSON.stringify(partialCredit));
     formData.set("category", selectedTopic);
     formData.set("difficultyLevel", selectedDifficulty);
-    // Cleared inputs fall back to defaults instead of becoming NaN server-side.
-    formData.set("points", pointsVal || "1.0");
-    formData.set("negativePoints", negPointsVal || "0.0");
 
     const imageFile = formData.get("image") as File;
     let imageUrl = null;
@@ -511,7 +506,7 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
                 <div>
                   <p className={LABEL}>Points</p>
                   <p className="px-3.5 py-2.5 text-xs font-mono font-bold text-lime-200 bg-lime-300/[0.07] border border-lime-300/25 rounded-xl tabular-nums">
-                    {pointsVal || "2.0"}
+                    1.0
                   </p>
                 </div>
               </div>
@@ -572,52 +567,6 @@ export function AddQuestionForm({ defaultSubject }: { defaultSubject?: string })
                 )}
               </div>
               <p className="mt-2 text-[10px] text-neutral-600">Preview reflects the current stem, selected answer, and stocked options.</p>
-            </div>
-
-            <div className={PANEL}>
-              <h4 className="text-[13px] font-bold text-white mb-3">Marks & deduction</h4>
-              <p className={LABEL}>Points value</p>
-              <input
-                name="points"
-                type="number"
-                step="0.5"
-                value={pointsVal}
-                onChange={(e) => setPointsVal(e.target.value)}
-                className={`${INPUT} font-mono mb-3`}
-              />
-              <p className={LABEL}>Negative deduction</p>
-              <input
-                name="negativePoints"
-                type="number"
-                step="0.1"
-                value={negPointsVal}
-                onChange={(e) => setNegPointsVal(e.target.value)}
-                className={`${INPUT} font-mono`}
-              />
-              <p className="mt-2 text-[10px] text-neutral-600">Negative marking is set by the exam blueprint; {negPointsVal} here.</p>
-            </div>
-
-            <div className={PANEL}>
-              <h4 className="text-[13px] font-bold text-white mb-3">Actions</h4>
-              <div className="space-y-2">
-                <button
-                  type="submit"
-                  onClick={() => setActionType("draft")}
-                  disabled={loading}
-                  className="w-full py-2.5 text-[11px] font-bold text-neutral-300 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-xl transition-colors disabled:opacity-50"
-                >
-                  Save as Draft
-                </button>
-                <button
-                  type="submit"
-                  onClick={() => setActionType("submit")}
-                  disabled={loading}
-                  className="w-full py-2.5 text-[11px] font-black text-black bg-lime-300 hover:brightness-110 rounded-xl transition-all disabled:opacity-50"
-                >
-                  {loading ? "Saving..." : "Submit for Approval"}
-                </button>
-                <p className="text-[10px] text-neutral-600 text-center">⌃ Ctrl+Enter quick save</p>
-              </div>
             </div>
           </div>
         </div>

@@ -221,13 +221,6 @@ export function AddSetterPanel() {
           </button>
         </div>
 
-        {/* Row 4: Green alert banner */}
-        <div className="rounded-xl border border-white/5 border-l-2 border-l-[#bef264] bg-[#111411] p-4 sm:p-5">
-          <h4 className="text-sm font-bold text-[#bef264] mb-1.5">Activate before authoring</h4>
-          <p className="text-xs text-neutral-400 leading-relaxed">
-            New staff receive a temporary password and the SETTER role. First login requires /admin/setup-password. A private password is Scrypt-encrypted and never accessible to the administrator.
-          </p>
-        </div>
 
         {/* Row 5: Action Button & Note */}
         <div className="pt-1">
@@ -278,58 +271,90 @@ export function FacultyDirectory({ setters }: { setters: SetterRow[] }) {
         initialEmail={selectedEmail}
       />
       <div className="overflow-x-auto -mx-1 px-1">
-        <div className="grid grid-cols-[1.4fr_1fr_auto_auto_auto_auto] gap-x-4 gap-y-1 items-center min-w-[760px]">
-          {(["AUTHOR / EMAIL", "DEPARTMENT", "STATUS", "AUTHORED", "JOINED", "ACTIONS"] as const).map((h, i) => (
-            <p key={h} className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${i >= 1 ? "text-center" : ""} ${i === 5 ? "text-right" : ""}`}>{h}</p>
-          ))}
-          {setters.length === 0 && (
-            <p className="col-span-6 text-xs text-neutral-500 py-6 text-center">No authors yet. Invite faculty with the panel above.</p>
-          )}
-          {setters.map((s) => (
-            <React.Fragment key={s.id}>
-              <div className="py-3 border-t border-white/[0.06] pr-2 min-w-0">
-                <p className="text-xs font-bold text-white truncate">{s.name}</p>
-                <p className="text-[10px] text-neutral-500 truncate">{s.email}</p>
-              </div>
-              <div className="py-3 border-t border-white/[0.06] text-center">
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/[0.08] text-neutral-200 border border-white/10">
-                  {s.assignedSubject || "General / All"}
-                </span>
-              </div>
-              <p className="py-3 border-t border-white/[0.06] text-center">
-                {s.mustChangePassword ? (
-                  <span className="text-[9px] font-black tracking-wider text-[#f2a488] whitespace-nowrap">Password Change Required</span>
-                ) : (
-                  <span className="text-[9px] font-black tracking-wider text-lime-200 whitespace-nowrap">Active</span>
-                )}
-              </p>
-              <p className="py-3 border-t border-white/[0.06] text-xs font-bold text-white tabular-nums text-center">{s.authored}</p>
-              <p className="py-3 border-t border-white/[0.06] text-[11px] text-neutral-400 tabular-nums text-center whitespace-nowrap">{s.joinedLabel}</p>
-              <div className="py-3 border-t border-white/[0.06] flex justify-end gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedEmail(s.email);
-                    setResetOpen(true);
-                  }}
-                  className="text-[10px] font-bold text-neutral-200 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  Reset password
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedEmail(s.email);
-                    setRemoveOpen(true);
-                  }}
-                  className="text-[10px] font-bold text-[#f2a488] bg-[#f2a488]/10 hover:bg-[#f2a488]/20 border border-[#f2a488]/25 rounded-lg px-2.5 py-1.5 transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  Remove setter
-                </button>
-              </div>
-            </React.Fragment>
-          ))}
-        </div>
+        <table className="w-full min-w-[760px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-white/[0.08]">
+              <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-left">
+                AUTHOR / EMAIL
+              </th>
+              <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[160px]">
+                DEPARTMENT
+              </th>
+              <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[180px]">
+                STATUS
+              </th>
+              <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[100px]">
+                AUTHORED
+              </th>
+              <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[110px]">
+                JOINED
+              </th>
+              <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-right w-[200px]">
+                ACTIONS
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[0.06]">
+            {setters.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-xs text-neutral-500 py-8 text-center">
+                  No authors yet. Invite faculty with the panel above.
+                </td>
+              </tr>
+            ) : (
+              setters.map((s) => (
+                <tr key={s.id} className="transition-colors hover:bg-white/[0.02]">
+                  <td className="py-3 pr-4 align-middle">
+                    <p className="text-xs font-bold text-white truncate">{s.name}</p>
+                    <p className="text-[10px] text-neutral-500 truncate">{s.email}</p>
+                  </td>
+                  <td className="py-3 px-3 text-center align-middle">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/[0.08] text-neutral-200 border border-white/10">
+                      {s.assignedSubject || "General / All"}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-center align-middle">
+                    {s.mustChangePassword ? (
+                      <span className="text-[9px] font-black tracking-wider text-[#f2a488] whitespace-nowrap">Password Change Required</span>
+                    ) : (
+                      <span className="text-[9px] font-black tracking-wider text-lime-200 whitespace-nowrap">Active</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-3 text-xs font-bold text-white tabular-nums text-center align-middle">
+                    {s.authored}
+                  </td>
+                  <td className="py-3 px-3 text-[11px] text-neutral-400 tabular-nums text-center whitespace-nowrap align-middle">
+                    {s.joinedLabel}
+                  </td>
+                  <td className="py-3 pl-3 text-right align-middle">
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedEmail(s.email);
+                          setResetOpen(true);
+                        }}
+                        className="text-[10px] font-bold text-neutral-200 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 transition-colors whitespace-nowrap cursor-pointer"
+                      >
+                        Reset password
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedEmail(s.email);
+                          setRemoveOpen(true);
+                        }}
+                        className="text-[10px] font-bold text-[#f2a488] bg-[#f2a488]/10 hover:bg-[#f2a488]/20 border border-[#f2a488]/25 rounded-lg px-2.5 py-1.5 transition-colors whitespace-nowrap cursor-pointer"
+                      >
+                        Remove setter
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
       <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] text-neutral-600">
         <p>

@@ -1,9 +1,7 @@
 import React from "react";
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCachedQuestionBankData } from "@/lib/dashboard-cache";
 import { BankOps } from "@/components/owner/BankOps";
-import { Flower } from "@/components/owner/OpsPanels";
 
 export const dynamic = "force-dynamic";
 
@@ -46,24 +44,46 @@ export default async function QuestionBankDashboard() {
           : "Editable";
     const tone = locked ? ("lime" as const) : q.status === "REJECTED" ? ("peach" as const) : ("neutral" as const);
     let options: string[] = [];
+    let optionCorrect: string | undefined = undefined;
+    let optionExplanation: string | undefined = undefined;
     try {
       const parsed = JSON.parse(q.options || "[]");
-      options = parsed.map((o: any) => (typeof o === "string" ? o : o.text));
+      options = parsed.map((o: any) => {
+        if (typeof o === "string") return o;
+        if (o.isCorrect && !optionCorrect) optionCorrect = o.text;
+        if (o.explanation && !optionExplanation) optionExplanation = o.explanation;
+        return o.text;
+      });
     } catch {}
+    let answerObj: any = {};
+    try {
+      answerObj = JSON.parse(q.answerData || "{}");
+    } catch {}
+    const correctAnswer = answerObj.correctAnswer ?? (answerObj.exact !== undefined ? String(answerObj.exact) : optionCorrect);
+    const correctAnswers = answerObj.correctAnswers ?? (answerObj.acceptedAnswers ?? undefined);
+    const explanation = answerObj.explanation ?? optionExplanation;
+
     return {
       id: q.id,
       qcode: `Q-${q.id.slice(-4).toUpperCase()}`,
       text: q.text,
       category: q.category || "General",
+      type: q.type,
       typeLabel: TYPE_LABELS[q.type] || q.type,
       level: q.difficultyLevel === "MEDIUM" ? "Medium" : q.difficultyLevel === "EASY" ? "Easy" : q.difficultyLevel === "HARD" ? "Hard" : q.difficultyLevel,
+      rawLevel: (q.difficultyLevel || "MEDIUM") as "EASY" | "MEDIUM" | "HARD",
       workflow: q.status,
       workflowLabel: WORKFLOW_LABELS[q.status] || q.status,
       integrity,
       integrityTone: tone,
       points: q.points ?? 1,
+      negativePoints: q.negativePoints ?? 0,
       options,
+      correctAnswer,
+      correctAnswers,
+      explanation,
       locked,
+      createdAt: q.createdAt ? new Date(q.createdAt).toISOString() : undefined,
     };
   });
 
@@ -105,53 +125,6 @@ export default async function QuestionBankDashboard() {
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
-      <div className="flex items-start justify-between gap-6 px-1 pt-1">
-        <div>
-          <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">CONTENT LIBRARY / FACULTY &amp; SETTERS</p>
-          <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
-            Total questions<span className="text-lime-300">.</span>
-          </h1>
-          <p className="text-[13px] text-neutral-400 mt-2.5">
-            Add questions, review protected items, and manage quality states without exposing master permissions to faculty.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-3 shrink-0">
-          <Flower className="w-14 h-14 sm:w-16 sm:h-16" />
-          <Link
-            href="/dashboard/setter"
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-lime-300 hover:brightness-110 text-black rounded-xl text-xs font-black transition-all whitespace-nowrap"
-          >
-            <span className="text-sm leading-none font-black">+</span> Add questions
-          </Link>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 px-1">
-        {[
-          `Question bank · ${rows.length}`,
-          `Quality queue · ${pending}`,
-          `Locked · ${liveIds.size + doneIds.size}`,
-        ].map((p) => (
-          <span key={p} className="text-[9px] font-black tracking-[0.12em] text-neutral-300 bg-white/[0.05] border border-white/10 rounded-md px-2 py-1 tabular-nums">
-            {p}
-          </span>
-        ))}
-        <span className="ml-auto flex gap-2">
-          <span className="text-[9px] font-black tracking-[0.12em] text-neutral-400 bg-white/[0.04] border border-white/10 rounded-md px-2 py-1">CSV IMPORT</span>
-          <span className="text-[9px] font-black tracking-[0.12em] text-neutral-400 bg-white/[0.04] border border-white/10 rounded-md px-2 py-1">PASTE &amp; PARSE</span>
-        </span>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] px-5 py-3.5 flex gap-3 items-start">
-        <span className="text-lime-300 text-sm mt-0.5">🛡</span>
-        <div>
-          <p className="text-[11px] font-black text-white">Locked means protected</p>
-          <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
-            Questions linked to LIVE or COMPLETED assessments cannot be edited or deleted. Their cached snapshots and response history stay intact. Duplicate a blueprint instead.
-          </p>
-        </div>
-      </div>
-
       <BankOps
         rows={rows}
         queue={queue}
@@ -163,7 +136,7 @@ export default async function QuestionBankDashboard() {
         unassignedCount={unassignedCount}
       />
 
-      <p className="px-1 text-[10px] text-neutral-600">
+      <p className="px-1 text-[10.5px] text-zinc-500 font-medium">
         {approved} approved · {drafts} drafts · {pending} in review · {liveIds.size + doneIds.size} locked by live or completed sessions.
       </p>
     </div>

@@ -53,6 +53,9 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [ssoEmail, setSsoEmail] = useState<string | null>(null);
   const [ssoName, setSsoName] = useState<string | null>(null);
   const [ssoLoading, setSsoLoading] = useState(false);
+  // The staff Google button must not react to manual password logins, so it
+  // tracks its own connect flow instead of sharing the generic `loading`.
+  const [ssoBusy, setSsoBusy] = useState(false);
   const router = useRouter();
 
   // Instant route prefetching for seamless post-login navigation
@@ -103,12 +106,14 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   // staff JWT. Used by both the button and the /admin/login auto-complete.
   const completeStaffSso = async (remember: boolean) => {
     setLoading(true);
+    setSsoBusy(true);
     setStaffError(null);
     try {
       const res = await staffSsoLoginAction(remember);
       if ("error" in res && res.error) {
         triggerStaffError(res.error);
         setLoading(false);
+        setSsoBusy(false);
         return;
       }
       if ("redirectUrl" in res && res.redirectUrl) {
@@ -116,8 +121,10 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         return;
       }
       setLoading(false);
+      setSsoBusy(false);
     } catch (err: any) {
       setLoading(false);
+      setSsoBusy(false);
       triggerStaffError(err?.message || "Staff SSO failed. Please try again.");
     }
   };
@@ -197,9 +204,13 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   };
 
   const handleStaffSso = async () => {
+    setSsoBusy(true);
     const id = await getSsoIdentityAction().catch(() => ({ signedIn: false as const }));
     if (!id.signedIn) {
-      await signIn("google", { callbackUrl: "/admin/login" });
+      try {
+        await signIn("google", { callbackUrl: "/admin/login" });
+      } catch {}
+      setSsoBusy(false);
       return;
     }
     await completeStaffSso(rememberStaff);
@@ -286,6 +297,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
     setErrorField(null);
     setShowForgotNotice(false);
     setLoading(false);
+    setSsoBusy(false);
     if (typeof window !== "undefined") {
       const targetUrl = newMode === "staff" ? "/admin/login" : "/";
       if (window.location.pathname !== targetUrl) {
@@ -758,7 +770,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                 <button
                   type="button"
                   onClick={handleStaffSso}
-                  disabled={loading}
+                  disabled={loading || ssoBusy}
                   className="w-full py-3.5 sm:py-4 px-6 rounded-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black font-bold text-sm sm:text-base tracking-wide transition-all shadow-[0_4px_24px_rgba(255,255,255,0.2)] cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
                   <svg className="w-4.5 h-4.5 sm:w-5 sm:h-5 shrink-0" viewBox="0 0 24 24">
@@ -767,7 +779,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
                     <path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.5-2.7-.1.1C.6 8.7 0 10.2 0 12s.6 3.3 1.5 4.8l3.7-2.4z"/>
                     <path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.5 0 3.5 2.7 1.5 6.9l3.7 2.9c1-2.9 3.7-5.1 6.8-5.1z"/>
                   </svg>
-                  <span>{loading ? "Connecting to Google..." : "Continue with Google"}</span>
+                  <span>{ssoBusy ? "Connecting to Google..." : "Continue with Google"}</span>
                 </button>
                 <div className="flex items-center gap-3 text-[10px] text-neutral-600">
                   <span className="flex-1 h-px bg-white/10" /> or password <span className="flex-1 h-px bg-white/10" />

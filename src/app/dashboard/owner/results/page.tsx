@@ -75,95 +75,113 @@ export default async function ResultsDashboard() {
         </p>
 
         <div className="overflow-x-auto -mx-1 px-1">
-          <div className="grid grid-cols-[1.6fr_auto_auto_1fr_auto_auto] gap-x-5 gap-y-1 items-center min-w-[860px]">
-            {(["ASSESSMENT", "CONDUCTED", "CANDIDATES", "PASS RATE", "MEAN SCORE", "REPORT"] as const).map((h, i) => (
-              <p
-                key={h}
-                className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${i >= 1 ? "text-center" : ""} ${i === 5 ? "text-right" : ""}`}
-              >
-                {h}
-              </p>
-            ))}
+          <table className="w-full min-w-[860px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-white/[0.08]">
+                <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-left">
+                  ASSESSMENT
+                </th>
+                <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[130px]">
+                  CONDUCTED
+                </th>
+                <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[130px]">
+                  CANDIDATES
+                </th>
+                <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[180px]">
+                  PASS RATE
+                </th>
+                <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-center w-[130px]">
+                  MEAN SCORE
+                </th>
+                <th className="pb-2.5 text-[9px] font-bold tracking-[0.16em] text-neutral-500 uppercase text-right w-[140px]">
+                  REPORT
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.06]">
+              {completedSessions.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-xs text-neutral-500 py-8 text-center">
+                    No completed exam sessions recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                completedSessions.map((session) => {
+                  const totalMarks =
+                    session.questions.reduce((sum, q) => sum + q.points, 0) || session.exam.totalMarks || 1;
+                  const attempts = session._count.attempts;
+                  const stats = session.sessionStats;
+                  const passRate = stats ? stats.passRate : 0;
+                  const date = session.startTime ?? session.createdAt;
 
-            {completedSessions.length === 0 && (
-              <p className="col-span-6 text-xs text-neutral-500 py-8 text-center">
-                No completed exam sessions recorded yet.
-              </p>
-            )}
+                  return (
+                    <tr key={session.id} className="transition-colors hover:bg-white/[0.02]">
+                      <td className="py-3 pr-4 align-middle">
+                        <p className="text-xs font-bold text-white truncate capitalize">{session.exam.title}</p>
+                        <p className="text-[10px] text-neutral-500 truncate mt-0.5">
+                          {session.exam.instructions || "Standard Assessment"}
+                        </p>
+                      </td>
 
-            {completedSessions.map((session) => {
-              const totalMarks =
-                session.questions.reduce((sum, q) => sum + q.points, 0) || session.exam.totalMarks || 1;
-              const attempts = session._count.attempts;
-              const stats = session.sessionStats;
-              const passRate = stats ? stats.passRate : 0;
-              const date = session.startTime ?? session.createdAt;
-              return (
-                <React.Fragment key={session.id}>
-                  <div className="py-3 border-t border-white/[0.06] pr-2 min-w-0">
-                    <p className="text-xs font-bold text-white truncate capitalize">{session.exam.title}</p>
-                    <p className="text-[10px] text-neutral-500 truncate mt-0.5">
-                      {session.exam.instructions || "Standard Assessment"}
-                    </p>
-                  </div>
+                      <td className="py-3 px-3 text-[11px] text-neutral-300 font-medium tabular-nums text-center whitespace-nowrap align-middle">
+                        {fmtDate(new Date(date))}
+                      </td>
 
-                  <p className="py-3 border-t border-white/[0.06] text-[11px] text-neutral-300 font-medium tabular-nums text-center whitespace-nowrap">
-                    {fmtDate(new Date(date))}
-                  </p>
-
-                  <p className="py-3 border-t border-white/[0.06] text-xs font-bold text-white tabular-nums text-center whitespace-nowrap">
-                    {attempts}{" "}
-                    <span className="font-medium text-neutral-500">
-                      {attempts === 1 ? "candidate" : "candidates"}
-                    </span>
-                  </p>
-
-                  <div className="py-3 border-t border-white/[0.06]">
-                    {attempts === 0 ? (
-                      <p className="text-[11px] text-neutral-600 text-center">No attempts</p>
-                    ) : stats ? (
-                      <div className="flex items-center justify-center gap-2.5">
-                        <span className="font-bold text-white text-[11px] tabular-nums w-11 shrink-0 text-right">
-                          {passRate.toFixed(1)}%
+                      <td className="py-3 px-3 text-xs font-bold text-white tabular-nums text-center whitespace-nowrap align-middle">
+                        {attempts}{" "}
+                        <span className="font-medium text-neutral-500">
+                          {attempts === 1 ? "candidate" : "candidates"}
                         </span>
-                        <div className="w-24 xl:w-28 h-1.5 bg-white/[0.06] rounded-full overflow-hidden shrink-0">
-                          <div
-                            className={`h-full rounded-full ${passRate >= 40 ? "bg-lime-300" : passRate > 0 ? "bg-[#f2a488]" : "bg-neutral-800"}`}
-                            style={{ width: `${Math.max(passRate, passRate > 0 ? 8 : 0)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-neutral-500 italic text-center">Evaluating</p>
-                    )}
-                  </div>
+                      </td>
 
-                  <p className="py-3 border-t border-white/[0.06] text-[11px] font-bold text-white tabular-nums text-center whitespace-nowrap">
-                    {attempts === 0 ? (
-                      <span className="text-neutral-600 font-medium">—</span>
-                    ) : (
-                      <>
-                        {stats ? stats.meanScore.toFixed(1) : "—"}{" "}
-                        <span className="text-neutral-500 font-medium">/ {totalMarks}</span>
-                      </>
-                    )}
-                  </p>
+                      <td className="py-3 px-3 align-middle">
+                        {attempts === 0 ? (
+                          <p className="text-[11px] text-neutral-600 text-center">No attempts</p>
+                        ) : stats ? (
+                          <div className="flex items-center justify-center gap-2.5">
+                            <span className="font-bold text-white text-[11px] tabular-nums w-11 shrink-0 text-right">
+                              {passRate.toFixed(1)}%
+                            </span>
+                            <div className="w-24 xl:w-28 h-1.5 bg-white/[0.06] rounded-full overflow-hidden shrink-0">
+                              <div
+                                className={`h-full rounded-full ${passRate >= 40 ? "bg-lime-300" : passRate > 0 ? "bg-[#f2a488]" : "bg-neutral-800"}`}
+                                style={{ width: `${Math.max(passRate, passRate > 0 ? 8 : 0)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-neutral-500 italic text-center">Evaluating</p>
+                        )}
+                      </td>
 
-                  <div className="py-3 border-t border-white/[0.06] text-right">
-                    <Link
-                      href={`/dashboard/owner/results/${session.id}`}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-200 bg-white/[0.06] hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
-                    >
-                      View Report
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </div>
-                </React.Fragment>
-              );
-            })}
-          </div>
+                      <td className="py-3 px-3 text-[11px] font-bold text-white tabular-nums text-center whitespace-nowrap align-middle">
+                        {attempts === 0 ? (
+                          <span className="text-neutral-600 font-medium">—</span>
+                        ) : (
+                          <>
+                            {stats ? stats.meanScore.toFixed(1) : "—"}{" "}
+                            <span className="text-neutral-500 font-medium">/ {totalMarks}</span>
+                          </>
+                        )}
+                      </td>
+
+                      <td className="py-3 pl-3 text-right align-middle">
+                        <Link
+                          href={`/dashboard/owner/results/${session.id}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-200 bg-white/[0.06] hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
+                        >
+                          View Report
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
 
         <div className="mt-3 flex items-center justify-between text-[10px] text-neutral-600">

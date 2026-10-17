@@ -150,10 +150,9 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
 
         {isOwner && (
           <div className="hidden md:flex items-center gap-2.5 absolute left-1/2 -translate-x-1/2">
-            <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 bg-white/[0.06] border border-white/10 rounded-full px-3 py-1.5">
-              ILLUSTRATIVE WORKSPACE
+            <span className="text-sm font-bold text-neutral-100 bg-white/[0.07] border border-white/15 rounded-full px-5 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.35)]">
+              KIET Deemed to be University.
             </span>
-            <span className="text-xs font-semibold text-neutral-200">KIET Deemed to be University.</span>
           </div>
         )}
 
@@ -273,9 +272,9 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col md:flex-row min-h-0" suppressHydrationWarning>
+      <div className="flex flex-1 flex-col md:flex-row" suppressHydrationWarning>
         {/* ── Sidebar ─────────────────────────────── */}
-        <aside className={`${mobileMenuOpen ? "flex" : "hidden"} md:flex w-full md:w-[228px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-white/10 bg-[#060607] z-30 md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:overflow-y-auto`}>
+        <aside className={`${mobileMenuOpen ? "flex" : "hidden"} md:flex w-full md:w-[228px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-white/10 bg-[#060607] z-30 md:sticky md:top-16 md:h-[calc(111.11vh-104px)] md:overflow-y-auto`}>
           <div className="p-4 flex-1 md:overflow-y-auto">
             <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-600 px-2 mb-2">WORKSPACE</p>
             <nav className="space-y-1">
@@ -353,9 +352,9 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
 
           {isOwner && (
             <div className="hidden md:block p-4 pt-2">
-              <p className="text-[10px] leading-relaxed text-neutral-600 px-1">
+              <p className="text-[10px] leading-relaxed text-zinc-500 px-1">
                 Enterprise-Grade Digital Examination, Live Proctoring &amp; Concurrency-Resilient Assessment Engine
-                <span className="block mt-1.5 text-neutral-700">APTIX • Proprietary License</span>
+                <span className="block mt-1.5 text-zinc-600">APTIX • Proprietary License</span>
               </p>
             </div>
           )}
@@ -368,9 +367,53 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
       </div>
 
       {/* ── Footer strip ──────────────────────────── */}
-      <footer className="shrink-0 border-t border-white/10 px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-1 text-[10px] font-medium text-neutral-600">
-        <span>APTIX Assessment Platform · KIET Deemed to be University</span>
-        <span>Illustrative assessment data · <span suppressHydrationWarning>{new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}</span> · IST (UTC+05:30)</span>
+      <footer className="sticky bottom-0 z-40 shrink-0 border-t border-white/10 bg-[#060607] min-h-[42px] px-4 sm:px-6 py-2.5 sm:py-0 flex flex-col sm:flex-row items-center justify-between gap-3 text-[10.5px] font-medium text-zinc-500">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <span>APTIX Assessment Platform · KIET Deemed to be University</span>
+          <span className="hidden sm:inline text-zinc-700">·</span>
+          <Link href="/terms" className="hover:text-zinc-300 transition-colors">
+            Terms
+          </Link>
+          <span className="text-zinc-700">·</span>
+          <Link href="/privacy" className="hover:text-zinc-300 transition-colors">
+            Privacy
+          </Link>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Made by Yash Singhal pill with Github avatar */}
+          <a
+            href="https://github.com/yashsinghal1234"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all shadow-xs"
+            title="View Yash Singhal on GitHub"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://github.com/yashsinghal1234.png"
+              alt="Yash Singhal"
+              className="w-4 h-4 rounded-full ring-1 ring-white/20 object-cover"
+            />
+            <span className="text-[11px] text-zinc-400 font-medium">
+              Made by <span className="text-zinc-100 font-bold group-hover:text-lime-300 transition-colors">Yash Singhal</span>
+            </span>
+          </a>
+
+          {/* LinkedIn Logo Link */}
+          <a
+            href="https://www.linkedin.com/in/yash-singhal-94894b317/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-7 h-7 rounded-full bg-zinc-900/90 hover:bg-[#0077b5]/15 border border-zinc-800 hover:border-[#0077b5]/50 flex items-center justify-center text-zinc-400 hover:text-[#0a66c2] transition-all shadow-xs"
+            title="Connect on LinkedIn"
+            aria-label="LinkedIn Profile"
+          >
+            <svg className="w-3.5 h-3.5 fill-currentColor" viewBox="0 0 24 24">
+              <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64c-.9 0-1.63.73-1.63 1.63 0 .9.73 1.63 1.63 1.63.9 0 1.63-.73 1.63-1.63 0-.9-.73-1.63-1.63-1.63Z" />
+            </svg>
+          </a>
+        </div>
       </footer>
     </div>
   );
