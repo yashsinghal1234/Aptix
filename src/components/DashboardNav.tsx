@@ -274,7 +274,7 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
 
       <div className="flex flex-1 flex-col md:flex-row" suppressHydrationWarning>
         {/* ── Sidebar ─────────────────────────────── */}
-        <aside className={`${mobileMenuOpen ? "flex" : "hidden"} md:flex w-full md:w-[228px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-white/10 bg-[#060607] z-30 md:sticky md:top-16 md:h-[calc(111.11vh-104px)] md:overflow-y-auto`}>
+        <aside className={`${mobileMenuOpen ? "flex" : "hidden"} md:flex w-full md:w-[228px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-white/10 bg-[#060607] z-30 md:fixed md:top-16 md:bottom-10 md:left-0 md:overflow-y-auto`}>
           <div className="p-4 flex-1 md:overflow-y-auto">
             <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-600 px-2 mb-2">WORKSPACE</p>
             <nav className="space-y-1">
@@ -361,13 +361,13 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
         </aside>
 
         {/* ── Content ─────────────────────────────── */}
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 md:ml-[228px]">
           <div className="p-4 sm:p-6">{children}</div>
         </main>
       </div>
 
       {/* ── Footer strip ──────────────────────────── */}
-      <footer className="sticky bottom-0 z-40 shrink-0 border-t border-white/10 bg-[#060607] min-h-[42px] px-4 sm:px-6 py-2.5 sm:py-0 flex flex-col sm:flex-row items-center justify-between gap-3 text-[10.5px] font-medium text-zinc-500">
+      <footer className="sticky bottom-0 z-40 shrink-0 border-t border-white/10 bg-[#060607] h-10 px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[10.5px] font-medium text-zinc-500">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <span>APTIX Assessment Platform · KIET Deemed to be University</span>
           <span className="hidden sm:inline text-zinc-700">·</span>
@@ -386,30 +386,33 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
             href="https://github.com/yashsinghal1234"
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all shadow-xs"
+            className="group inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 hover:border-zinc-600 transition-all shadow-xs"
             title="View Yash Singhal on GitHub"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://github.com/yashsinghal1234.png"
+              src="/yash-avatar.jpg"
               alt="Yash Singhal"
-              className="w-4 h-4 rounded-full ring-1 ring-white/20 object-cover"
+              className="w-4 h-4 rounded-full ring-1 ring-white/30 object-cover shrink-0"
+              onError={(e) => {
+                e.currentTarget.src = "https://avatars.githubusercontent.com/u/173256800?v=4";
+              }}
             />
-            <span className="text-[11px] text-zinc-400 font-medium">
-              Made by <span className="text-zinc-100 font-bold group-hover:text-lime-300 transition-colors">Yash Singhal</span>
+            <span className="text-[11px] text-zinc-300 font-medium">
+              Made by <span className="text-white font-bold group-hover:text-lime-300 transition-colors">Yash Singhal</span>
             </span>
           </a>
 
-          {/* LinkedIn Logo Link */}
+          {/* LinkedIn Logo Link with crisp white icon */}
           <a
             href="https://www.linkedin.com/in/yash-singhal-94894b317/"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-7 h-7 rounded-full bg-zinc-900/90 hover:bg-[#0077b5]/15 border border-zinc-800 hover:border-[#0077b5]/50 flex items-center justify-center text-zinc-400 hover:text-[#0a66c2] transition-all shadow-xs"
+            className="w-7 h-7 rounded-full bg-white/[0.12] hover:bg-[#0a66c2] border border-white/20 hover:border-[#0a66c2] flex items-center justify-center text-white transition-all shadow-xs group"
             title="Connect on LinkedIn"
             aria-label="LinkedIn Profile"
           >
-            <svg className="w-3.5 h-3.5 fill-currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 fill-white text-white" viewBox="0 0 24 24">
               <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64c-.9 0-1.63.73-1.63 1.63 0 .9.73 1.63 1.63 1.63.9 0 1.63-.73 1.63-1.63 0-.9-.73-1.63-1.63-1.63Z" />
             </svg>
           </a>
