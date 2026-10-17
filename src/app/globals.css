@@ -17,6 +17,23 @@ body {
   overscroll-behavior-x: none;
 }
 
+/*
+ * Uniform 90% design scale on every screen.
+ *
+ * The UI was designed on a 16" laptop at 90% browser zoom; visitors are on
+ * 100% zoom by default and saw everything ~11% larger with more cramping.
+ * Browser zoom cannot be changed by the site itself, but the standardized
+ * CSS `zoom` property renders identically: on desktop-class viewports
+ * everything is drawn at 0.9x, so 16", 15", and 14" laptops all get the
+ * exact layout used during development. Phones/small tablets stay at 1x
+ * so their touch layout and breakpoints are untouched.
+ */
+@media screen and (min-width: 1024px) {
+  html {
+    zoom: 0.9;
+  }
+}
+
 ::selection {
   background-color: #ffffff;
   color: #000000;
