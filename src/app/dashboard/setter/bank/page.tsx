@@ -87,10 +87,6 @@ export default async function QuestionBankDashboard() {
     };
   });
 
-  const approved = rows.filter((r) => r.workflow === "APPROVED").length;
-  const drafts = rows.filter((r) => r.workflow === "DRAFT").length;
-  const pending = rows.filter((r) => r.workflow === "SUBMITTED").length;
-
   const queue = rows
     .filter((r) => r.workflow === "SUBMITTED")
     .map((r) => ({ id: r.id, qcode: r.qcode, text: r.text, category: r.category }));
@@ -124,7 +120,7 @@ export default async function QuestionBankDashboard() {
   ).length;
 
   return (
-    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+    <div className="max-w-[1440px] mx-auto">
       <BankOps
         rows={rows}
         queue={queue}
@@ -135,10 +131,6 @@ export default async function QuestionBankDashboard() {
         subjectTabs={subjectTabs}
         unassignedCount={unassignedCount}
       />
-
-      <p className="px-1 text-[10.5px] text-zinc-500 font-medium">
-        {approved} approved · {drafts} drafts · {pending} in review · {liveIds.size + doneIds.size} locked by live or completed sessions.
-      </p>
     </div>
   );
 }
