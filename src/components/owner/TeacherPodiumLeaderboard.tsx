@@ -82,6 +82,8 @@ interface TeacherPodiumLeaderboardProps {
   totalMarks: number;
   passCriteria?: number;
   isLive?: boolean;
+  /** "full" = podium + leaderboard (default); "podium" or "leaderboard" renders only that half. */
+  view?: "full" | "podium" | "leaderboard";
 }
 
 export function TeacherPodiumLeaderboard({
@@ -90,6 +92,7 @@ export function TeacherPodiumLeaderboard({
   totalMarks,
   passCriteria = 50,
   isLive = false,
+  view = "full",
 }: TeacherPodiumLeaderboardProps) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "SUBMITTED" | "IN_PROGRESS">("ALL");
@@ -208,7 +211,8 @@ export function TeacherPodiumLeaderboard({
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5 sm:p-7 shadow-2xl space-y-6">
-      {/* ── Header Bar ── */}
+      {/* ── Header Bar (full view only — split views are labeled by their folder tab) ── */}
+      {view === "full" && (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
@@ -252,9 +256,10 @@ export function TeacherPodiumLeaderboard({
           </div>
         </div>
       </div>
+      )}
 
       {/* ── Top 3 Visual Podium ── */}
-      {top3.length === 0 ? (
+      {view !== "leaderboard" && (top3.length === 0 ? (
         <div className="py-12 px-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col items-center justify-center text-center space-y-2">
           <div className="w-12 h-12 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center text-amber-300">
             <TrophyIcon className="w-6 h-6" />
@@ -265,7 +270,7 @@ export function TeacherPodiumLeaderboard({
           </p>
         </div>
       ) : (
-        <div className="pt-4 pb-2">
+        <div className={view === "full" ? "pt-4 pb-2" : "pt-4 -mb-5 sm:-mb-7"}>
           <div className="flex items-end justify-center gap-3 sm:gap-6 max-w-2xl mx-auto px-2">
             {top3.map((p) => {
               const isFirst = p.place === "1st";
@@ -304,39 +309,17 @@ export function TeacherPodiumLeaderboard({
                         <span className="text-3xl sm:text-4xl">{p.entry.displayEmoji}</span>
                       )}
                     </div>
-
-                    <span className={`mt-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase border font-mono flex items-center gap-1 ${p.color}`}>
-                      {isFirst ? (
-                        <CrownIcon className="w-3 h-3 fill-current text-amber-300" />
-                      ) : (
-                        <MedalIcon className="w-3 h-3" />
-                      )}
-                      <span>{p.badgeText}</span>
-                    </span>
                   </div>
 
-                  {/* Candidate Name & Info */}
+                  {/* Candidate Name & Points */}
                   <div className="text-center w-full px-1 mb-2">
                     <p className="text-xs sm:text-sm font-black text-white truncate" title={p.entry.userName}>
                       {p.entry.userName}
-                    </p>
-                    <p className="text-[10px] text-neutral-400 font-mono truncate" title={p.entry.userEmail}>
-                      {p.entry.userEmail.split("@")[0]}
                     </p>
                     <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
                       <span className="text-[11px] font-black text-lime-300 font-mono tabular-nums">
                         {p.entry.score.toFixed(1)} pts
                       </span>
-                      <span className="text-[10px] text-neutral-500 font-mono">
-                        ({p.entry.pct.toFixed(0)}%)
-                      </span>
-                      {p.entry.displayTimeTaken && (
-                        <span className="text-[10px] text-neutral-400 font-mono inline-flex items-center gap-1">
-                          <span>•</span>
-                          <ClockIcon className="w-2.5 h-2.5 text-neutral-500" />
-                          <span>{p.entry.displayTimeTaken}</span>
-                        </span>
-                      )}
                     </div>
                   </div>
 
@@ -357,17 +340,15 @@ export function TeacherPodiumLeaderboard({
             })}
           </div>
         </div>
-      )}
+      ))}
 
       {/* ── Leaderboard Table ── */}
-      <div className="border-t border-white/10 pt-5 space-y-4">
+      {view !== "podium" && (
+      <div className={view === "full" ? "border-t border-white/10 pt-5 space-y-4" : "space-y-4"}>
         {/* Controls: search and filter */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-white">Full Cohort Leaderboard</h3>
-            <p className="text-xs text-neutral-400">
-              Ranked by total score. Ties resolved by fastest submission speed.
-            </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -400,16 +381,16 @@ export function TeacherPodiumLeaderboard({
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/40">
-          <table className="w-full text-left border-collapse text-xs">
+        {/* Table (Switchlane style) */}
+        <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#101116]">
+          <table className="w-full text-left border-collapse text-[13px]">
             <thead>
-              <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] font-bold tracking-wider text-neutral-400 uppercase">
-                <th className="py-3 px-4 w-16 text-center">Rank</th>
+              <tr className="border-b border-white/10 text-[10px] font-semibold tracking-[0.14em] text-neutral-500 uppercase">
+                <th className="py-3 px-4 w-14">Rank</th>
                 <th className="py-3 px-4">Candidate</th>
-                <th className="py-3 px-4">Spirit Mascot</th>
+                <th className="py-3 px-4">Spirit mascot</th>
                 <th className="py-3 px-4 text-center">Score</th>
-                <th className="py-3 px-4 text-center">Accuracy / %</th>
+                <th className="py-3 px-4">Progress</th>
                 <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-center">Flags</th>
                 <th className="py-3 px-4 text-right">Audit</th>
@@ -427,42 +408,29 @@ export function TeacherPodiumLeaderboard({
                   return (
                     <tr
                       key={c.id}
-                      className={`transition-colors hover:bg-white/[0.03] ${
-                        c.denseRank === 1
-                          ? "bg-lime-400/[0.02]"
-                          : c.denseRank <= 3
-                            ? "bg-white/[0.01]"
-                            : ""
+                      className={`transition-colors hover:bg-white/[0.04] ${
+                        c.denseRank === 1 ? "bg-lime-400/[0.03]" : ""
                       }`}
                     >
                       {/* Rank */}
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-4">
                         {c.denseRank === 1 ? (
-                          <span
-                            className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/40 text-amber-300 font-mono font-black text-xs shadow-[0_0_12px_rgba(251,191,36,0.25)] mx-auto"
-                            title="Rank 1"
-                          >
-                            <TrophyIcon className="w-3.5 h-3.5 text-amber-300" />
-                            <span>1</span>
+                          <span className="inline-flex items-center justify-center gap-1 text-amber-300" title="Rank 1">
+                            <TrophyIcon className="w-4 h-4 text-amber-300" />
+                            <span className="font-semibold text-xs">1</span>
                           </span>
                         ) : c.denseRank === 2 ? (
-                          <span
-                            className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-slate-300/15 border border-slate-300/40 text-slate-200 font-mono font-black text-xs shadow-[0_0_8px_rgba(203,213,225,0.2)] mx-auto"
-                            title="Rank 2"
-                          >
-                            <MedalIcon className="w-3.5 h-3.5 text-slate-300" />
-                            <span>2</span>
+                          <span className="inline-flex items-center justify-center gap-1 text-neutral-300" title="Rank 2">
+                            <MedalIcon className="w-4 h-4 text-neutral-300" />
+                            <span className="font-semibold text-xs">2</span>
                           </span>
                         ) : c.denseRank === 3 ? (
-                          <span
-                            className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-amber-700/20 border border-amber-600/40 text-amber-400 font-mono font-black text-xs shadow-[0_0_8px_rgba(217,119,6,0.2)] mx-auto"
-                            title="Rank 3"
-                          >
-                            <MedalIcon className="w-3.5 h-3.5 text-amber-500" />
-                            <span>3</span>
+                          <span className="inline-flex items-center justify-center gap-1 text-amber-500/90" title="Rank 3">
+                            <MedalIcon className="w-4 h-4 text-amber-500/90" />
+                            <span className="font-semibold text-xs">3</span>
                           </span>
                         ) : (
-                          <span className="font-mono font-black text-neutral-400 text-xs tabular-nums">
+                          <span className="font-semibold text-neutral-500 text-xs tabular-nums">
                             #{c.denseRank}
                           </span>
                         )}
@@ -470,13 +438,13 @@ export function TeacherPodiumLeaderboard({
 
                       {/* Candidate */}
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-7 h-7 rounded-full bg-purple-600/60 border border-purple-400/30 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-full bg-purple-500 text-white text-[11px] font-black flex items-center justify-center shrink-0">
                             {c.userName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
                           </span>
                           <div className="min-w-0">
-                            <p className="font-bold text-white truncate max-w-[180px]">{c.userName}</p>
-                            <p className="text-[10px] text-neutral-500 font-mono truncate max-w-[180px]">
+                            <p className="font-semibold text-white text-[13px] truncate max-w-[180px]">{c.userName}</p>
+                            <p className="text-[10px] text-neutral-500 truncate max-w-[180px]">
                               {c.userEmail}
                             </p>
                           </div>
@@ -485,7 +453,7 @@ export function TeacherPodiumLeaderboard({
 
                       {/* Mascot */}
                       <td className="py-3 px-4">
-                        <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/[0.03] border border-white/5">
+                        <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/10">
                           {c.displayGif ? (
                             <img
                               src={c.displayGif}
@@ -511,39 +479,33 @@ export function TeacherPodiumLeaderboard({
                           </span>
                           <span className="text-[10px] text-neutral-500 ml-1">/ {totalMarks}</span>
                         </div>
-                        {c.displayTimeTaken && (
-                          <div className="text-[10px] text-neutral-400 font-sans mt-0.5 flex items-center justify-center gap-1">
-                            <ClockIcon className="w-3 h-3 text-neutral-500" />
-                            <span>{c.displayTimeTaken}</span>
-                          </div>
-                        )}
                       </td>
 
-                      {/* Accuracy & Progress */}
-                      <td className="py-3 px-4 text-center font-mono">
-                        <div className="inline-flex flex-col items-center">
-                          <span className={`text-xs font-bold tabular-nums ${c.isPassed ? "text-lime-300" : "text-[#f2a488]"}`}>
-                            {c.pct.toFixed(1)}%
-                          </span>
-                          <div className="w-16 h-1 rounded-full bg-white/10 mt-1 overflow-hidden">
+                      {/* Progress (accuracy bar + %) */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-28 h-1.5 rounded-full bg-zinc-800 overflow-hidden shrink-0">
                             <div
                               className={`h-full rounded-full ${c.isPassed ? "bg-lime-400" : "bg-[#f2a488]"}`}
                               style={{ width: `${Math.min(100, Math.max(3, c.pct))}%` }}
                             />
                           </div>
+                          <span className={`text-[12px] font-bold tabular-nums ${c.isPassed ? "text-lime-300" : "text-[#f2a488]"}`}>
+                            {c.pct.toFixed(0)}%
+                          </span>
                         </div>
                       </td>
 
                       {/* Status */}
                       <td className="py-3 px-4 text-center">
                         {c.status === "SUBMITTED" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold font-mono">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-300 text-black text-[9px] font-black tracking-wide">
+                            <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
                             SUBMITTED
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold font-mono">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400 text-black text-[9px] font-black tracking-wide">
+                            <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
                             IN PROGRESS
                           </span>
                         )}
@@ -578,6 +540,7 @@ export function TeacherPodiumLeaderboard({
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

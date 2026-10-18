@@ -41,7 +41,7 @@ export default async function ManageSettersPage() {
   const pwdCount = rows.length - activeCount;
 
   return (
-    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8 rise-in">
       <SettersHero />
 
       <SetterStats

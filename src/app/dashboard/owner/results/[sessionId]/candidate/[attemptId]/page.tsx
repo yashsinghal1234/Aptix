@@ -6,8 +6,9 @@ import CandidateAuditView from "@/components/owner/CandidateAuditView";
 
 export const dynamic = "force-dynamic";
 
-function parseOptionLabelAndText(q: any, val?: string | null) {
-  if (!val || val === "—") return { label: "—", text: "Unanswered" };
+function parseOptionLabelAndText(q: any, rawVal?: string | null) {
+  let val = unwrapAnswerValue(rawVal);
+  if (!val || val === "—") return { label: "", text: "Unanswered" };
   let opts: any[] = [];
   try {
     if (Array.isArray(q.options)) opts = q.options;
@@ -24,6 +25,16 @@ function parseOptionLabelAndText(q: any, val?: string | null) {
     return { label: valUpper, text };
   }
 
+  // Multi-letter selections like "A, B" — resolve each letter to its text
+  const multiLetters = valUpper.split(/\s*,\s*/);
+  if (multiLetters.length > 1 && multiLetters.every((l) => letters.includes(l) && opts[letters.indexOf(l)])) {
+    const texts = multiLetters.map((l) => {
+      const optObj = opts[letters.indexOf(l)];
+      return typeof optObj === "string" ? optObj : optObj?.text || l;
+    });
+    return { label: valUpper, text: texts.join(" · ") };
+  }
+
   const matchIdx = opts.findIndex((o) => {
     const oText = typeof o === "string" ? o : o?.text;
     return oText && String(oText).trim().toLowerCase() === val.trim().toLowerCase();
@@ -34,7 +45,41 @@ function parseOptionLabelAndText(q: any, val?: string | null) {
     return { label, text: val };
   }
 
-  return { label: val.slice(0, 2), text: val };
+  return { label: "", text: val };
+}
+
+/**
+ * Stored answer values are sometimes JSON wrappers (e.g. {"correctAnswer":"..."} or
+ * ["A","B"]) or a JSON-encoded string of one of those. Unwrap them down to the plain
+ * answer value (letter, letter list, or literal text) so it can be matched to options.
+ */
+function unwrapAnswerValue(rawVal?: string | null): string | null {
+  if (!rawVal) return null;
+  let v = String(rawVal).trim();
+  if (!v || v === "—") return v;
+
+  const extract = (s: string): string | null => {
+    try {
+      const parsed = JSON.parse(s);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        if (typeof parsed.correctAnswer === "string") return parsed.correctAnswer.trim();
+        if (parsed.correctAnswer != null) return String(parsed.correctAnswer);
+        if (typeof parsed.answer === "string") return parsed.answer.trim();
+      }
+      if (Array.isArray(parsed)) return parsed.map(String).join(", ").trim();
+    } catch {}
+    // Regex fallback for truncated/wrapped JSON like {"correctAnswer":"..."}
+    const m = s.match(/"correctAnswer"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (m) return m[1].replace(/\\"/g, '"').trim();
+    return null;
+  };
+
+  const first = extract(v);
+  if (first != null) {
+    const second = extract(first);
+    return second ?? first;
+  }
+  return v;
 }
 
 export default async function CandidateReportPage({
@@ -85,7 +130,7 @@ export default async function CandidateReportPage({
     const hasResponse = !!resp;
     const isCorrect = hasResponse ? resp.isCorrect : null;
     const earnedPoints = resp?.earnedPoints ?? 0;
-    const timeTaken = resp?.timeTakenSeconds ?? (resp ? Math.floor(Math.random() * 60) + 40 : 0);
+    const timeTaken = resp?.timeTakenSeconds ?? 0;
 
     const { label: selLabel, text: selText } = parseOptionLabelAndText(q, resp?.selectedOption);
     const { label: corLabel, text: corText } = parseOptionLabelAndText(q, q.answerData);
@@ -116,8 +161,9 @@ export default async function CandidateReportPage({
 
   // Metrics
   const netScore = Math.round(attempt.responses.reduce((sum, r) => sum + r.earnedPoints, 0) * 10) / 10;
+  // Last fallback 0 keeps totals honest when nothing is configured (no fabricated default)
   const totalMarks =
-    sessionQuestions.reduce((sum, q) => sum + q.points, 0) || attempt.session.totalMarks || attempt.session.exam.totalMarks || 80;
+    sessionQuestions.reduce((sum, q) => sum + q.points, 0) || attempt.session.totalMarks || attempt.session.exam.totalMarks || 0;
   const correctCount = attempt.responses.filter((r) => r.isCorrect).length;
   const incorrectCount = attempt.responses.filter((r) => !r.isCorrect).length;
   const unansweredCount = Math.max(0, sessionQuestions.length - (correctCount + incorrectCount));
@@ -154,17 +200,20 @@ export default async function CandidateReportPage({
   const endWindow = new Date(startTime.getTime() + durationMin * 60000);
   const examTimeWindow = `${startIST.slice(0, 5)}-${formatIST(endWindow).slice(0, 5)} IST`;
 
-  const rollNumber = `NB2026-${String(attempt.id).slice(-4).toUpperCase()}`;
-  const receiptId = `APT-EN026-${String(attempt.id).slice(-4).toUpperCase()}-01`;
+  // Real attempt ordinal within this session (1-indexed), instead of a hardcoded 1
+  const siblingAttempts = await prisma.candidateAttempt.findMany({
+    where: { userId: attempt.userId, examSessionId: params.sessionId, },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  const attemptNumber = Math.max(1, siblingAttempts.findIndex((a) => a.id === attempt.id) + 1);
 
   const flagsFormatted = cheatFlags.map((f) => ({
     id: f.id,
     type: f.type,
-    description: f.description || "Integrity verification event recorded.",
+    description: f.description || f.type,
     timestamp: formatIST(new Date(f.timestamp)),
   }));
-
-  const verifiedEventsCount = Math.max(5, cheatFlags.length + 3);
 
   return (
     <CandidateAuditView
@@ -172,10 +221,8 @@ export default async function CandidateReportPage({
       sessionId={params.sessionId}
       candidateName={attempt.user.name}
       candidateEmail={attempt.user.email}
-      candidateRoll={rollNumber}
-      attemptNumber={1}
+      attemptNumber={attemptNumber}
       examTitle={attempt.session.exam.title}
-      examCode="ENG-26"
       sessionPin={attempt.session.pin}
       examDateStr={examDateStr}
       examTimeWindow={examTimeWindow}
@@ -191,12 +238,9 @@ export default async function CandidateReportPage({
       negativeMarks={negativeMarks}
       timeSpentFormatted={timeSpentFormatted}
       submittedIST={submittedIST}
-      startIST={startIST}
       flagsCount={cheatFlags.length}
-      verifiedEventsCount={verifiedEventsCount}
       cheatFlags={flagsFormatted}
       questionsData={questionsData}
-      receiptId={receiptId}
     />
   );
 }

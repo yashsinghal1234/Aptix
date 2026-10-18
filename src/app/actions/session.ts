@@ -470,6 +470,28 @@ export async function rescheduleSessionAction(formData: FormData) {
   return { success: true, session: updatedSession };
 }
 
+/**
+ * Map low-level database failures to clear, human error messages so users
+ * never see raw terminal/driver output.
+ */
+function friendlyDbError(e: unknown): string {
+  const err = e as { code?: string; message?: string };
+  const msg = String(err?.message || e || "").toLowerCase();
+  if (err?.code === "P1001" || msg.includes("can't reach database") || msg.includes("timed out")) {
+    return "Can't reach the exam database right now. Your change wasn't saved — please try again in a moment.";
+  }
+  if (msg.includes("invalid connection name") || msg.includes("connection string") || msg.includes("connect") || msg.includes("econnrefused") || msg.includes("enemy of the connection")) {
+    return "Database connection failed. Your change wasn't saved — the database configuration looks invalid or unreachable. Please try again or contact support if it keeps happening.";
+  }
+  if (err?.code === "P2002") {
+    return "This was just updated by someone else. Please refresh the page and try again.";
+  }
+  if (err?.code === "P2025") {
+    return "This session no longer exists. Please refresh the page.";
+  }
+  return "Couldn't save your change due to a server error. Please try again in a moment.";
+}
+
 export async function toggleReleaseResultsAction(formData: FormData) {
   const auth = await requireAuth(["OWNER", "SETTER"]);
   if ("error" in auth) return { error: auth.error };
@@ -478,36 +500,40 @@ export async function toggleReleaseResultsAction(formData: FormData) {
   const sessionId = formData.get("sessionId") as string;
   const released = formData.get("released") === "true";
 
-  const session = await prisma.examSession.findUnique({ 
-    where: { id: sessionId },
-    include: { exam: true }
-  });
-  if (!session) return { error: "Session not found" };
+  try {
+    const session = await prisma.examSession.findUnique({ 
+      where: { id: sessionId },
+      include: { exam: true }
+    });
+    if (!session) return { error: "Session not found" };
 
-  if (payload.role === "SETTER" && session.exam.createdBySetterId !== payload.userId) {
-    return { error: "Forbidden: You are not authorized to manage this session." };
-  }
-
-  let snap: any = {};
-  if (session.configSnapshot) {
-    try {
-      snap = JSON.parse(session.configSnapshot);
-    } catch {}
-  }
-  snap.resultsReleased = released;
-
-  await prisma.examSession.update({
-    where: { id: sessionId },
-    data: { configSnapshot: JSON.stringify(snap) }
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: payload.userId as string,
-      action: released ? "RELEASE_RESULTS" : "WITHHOLD_RESULTS",
-      details: `${released ? "Released" : "Withheld"} candidate results for session "${session.exam.title}" (${session.pin || session.id})`,
+    if (payload.role === "SETTER" && session.exam.createdBySetterId !== payload.userId) {
+      return { error: "Forbidden: You are not authorized to manage this session." };
     }
-  });
+
+    let snap: any = {};
+    if (session.configSnapshot) {
+      try {
+        snap = JSON.parse(session.configSnapshot);
+      } catch {}
+    }
+    snap.resultsReleased = released;
+
+    await prisma.examSession.update({
+      where: { id: sessionId },
+      data: { configSnapshot: JSON.stringify(snap) }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId as string,
+        action: released ? "RELEASE_RESULTS" : "WITHHOLD_RESULTS",
+        details: `${released ? "Released" : "Withheld"} candidate results for session "${session.exam.title}" (${session.pin || session.id})`,
+      }
+    });
+  } catch (e) {
+    return { error: friendlyDbError(e) };
+  }
 
   invalidateOwnerDashboardCache();
   revalidatePath("/dashboard/owner");
@@ -524,36 +550,40 @@ export async function togglePodiumRevealAction(formData: FormData) {
   const sessionId = String(formData.get("sessionId") || "");
   const revealed = formData.get("revealed") === "true";
 
-  const session = await prisma.examSession.findUnique({ 
-    where: { id: sessionId },
-    include: { exam: true }
-  });
-  if (!session) return { error: "Session not found" };
+  try {
+    const session = await prisma.examSession.findUnique({ 
+      where: { id: sessionId },
+      include: { exam: true }
+    });
+    if (!session) return { error: "Session not found" };
 
-  if (payload.role === "SETTER" && session.exam.createdBySetterId !== payload.userId) {
-    return { error: "Forbidden: You are not authorized to manage this session." };
-  }
-
-  let snap: any = {};
-  if (session.configSnapshot) {
-    try {
-      snap = JSON.parse(session.configSnapshot);
-    } catch {}
-  }
-  snap.podiumRevealed = revealed;
-
-  await prisma.examSession.update({
-    where: { id: sessionId },
-    data: { configSnapshot: JSON.stringify(snap) }
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: payload.userId as string,
-      action: revealed ? "REVEAL_PODIUM" : "HIDE_PODIUM",
-      details: `${revealed ? "Revealed" : "Hidden"} cohort podium for session "${session.exam.title}" (${session.pin || session.id})`,
+    if (payload.role === "SETTER" && session.exam.createdBySetterId !== payload.userId) {
+      return { error: "Forbidden: You are not authorized to manage this session." };
     }
-  });
+
+    let snap: any = {};
+    if (session.configSnapshot) {
+      try {
+        snap = JSON.parse(session.configSnapshot);
+      } catch {}
+    }
+    snap.podiumRevealed = revealed;
+
+    await prisma.examSession.update({
+      where: { id: sessionId },
+      data: { configSnapshot: JSON.stringify(snap) }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId as string,
+        action: revealed ? "REVEAL_PODIUM" : "HIDE_PODIUM",
+        details: `${revealed ? "Revealed" : "Hidden"} cohort podium for session "${session.exam.title}" (${session.pin || session.id})`,
+      }
+    });
+  } catch (e) {
+    return { error: friendlyDbError(e) };
+  }
 
   invalidateOwnerDashboardCache();
   revalidatePath("/dashboard/owner");
@@ -570,43 +600,47 @@ export async function toggleGamifiedModeAction(formData: FormData) {
   const sessionId = formData.get("sessionId") as string;
   const gamified = formData.get("gamified") === "true";
 
-  const session = await prisma.examSession.findUnique({
-    where: { id: sessionId },
-    include: { exam: true }
-  });
-  if (!session) return { error: "Session not found" };
+  try {
+    const session = await prisma.examSession.findUnique({
+      where: { id: sessionId },
+      include: { exam: true }
+    });
+    if (!session) return { error: "Session not found" };
 
-  let snap: any = {};
-  if (session.configSnapshot) {
-    try {
-      snap = JSON.parse(session.configSnapshot);
-    } catch {}
-  }
-  snap.isGamified = gamified;
-
-  await prisma.examSession.update({
-    where: { id: sessionId },
-    data: { configSnapshot: JSON.stringify(snap) }
-  });
-
-  if (session.exam) {
-    let desc: string = session.exam.description || "";
-    if (gamified && !desc.includes("[MODE:GAMIFIED]")) {
-      desc = desc ? `${desc} [MODE:GAMIFIED]` : "[MODE:GAMIFIED]";
-      await prisma.exam.update({ where: { id: session.exam.id }, data: { description: desc } });
-    } else if (!gamified && desc.includes("[MODE:GAMIFIED]")) {
-      desc = desc.replace(/\s*\[MODE:GAMIFIED\]/g, "").trim();
-      await prisma.exam.update({ where: { id: session.exam.id }, data: { description: desc } });
+    let snap: any = {};
+    if (session.configSnapshot) {
+      try {
+        snap = JSON.parse(session.configSnapshot);
+      } catch {}
     }
-  }
+    snap.isGamified = gamified;
 
-  await prisma.auditLog.create({
-    data: {
-      userId: payload.userId as string,
-      action: gamified ? "ENABLE_GAMIFIED_MODE" : "DISABLE_GAMIFIED_MODE",
-      details: `${gamified ? "Enabled" : "Disabled"} gamified mode for session "${session.exam?.title || session.id}"`,
+    await prisma.examSession.update({
+      where: { id: sessionId },
+      data: { configSnapshot: JSON.stringify(snap) }
+    });
+
+    if (session.exam) {
+      let desc: string = session.exam.description || "";
+      if (gamified && !desc.includes("[MODE:GAMIFIED]")) {
+        desc = desc ? `${desc} [MODE:GAMIFIED]` : "[MODE:GAMIFIED]";
+        await prisma.exam.update({ where: { id: session.exam.id }, data: { description: desc } });
+      } else if (!gamified && desc.includes("[MODE:GAMIFIED]")) {
+        desc = desc.replace(/\s*\[MODE:GAMIFIED\]/g, "").trim();
+        await prisma.exam.update({ where: { id: session.exam.id }, data: { description: desc } });
+      }
     }
-  });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: payload.userId as string,
+        action: gamified ? "ENABLE_GAMIFIED_MODE" : "DISABLE_GAMIFIED_MODE",
+        details: `${gamified ? "Enabled" : "Disabled"} gamified mode for session "${session.exam?.title || session.id}"`,
+      }
+    });
+  } catch (e) {
+    return { error: friendlyDbError(e) };
+  }
 
   invalidateOwnerDashboardCache();
   invalidateSessionQuestionsCache(sessionId);

@@ -187,6 +187,71 @@ body {
   }
 }
 
+/* TickStrip bars grow from the baseline on load, staggered left→right */
+@keyframes tick-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.tick-bar {
+  transform-origin: bottom;
+  animation: tick-grow 0.45s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tick-bar {
+    animation: none;
+  }
+}
+
+/* Tab panels fade + rise softly when switching tabs */
+@keyframes tab-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tab-panel {
+  animation: tab-fade 0.3s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel {
+    animation: none;
+  }
+}
+
+/* Page-level entrance: whole dashboard content rises softly on load */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise-in {
+  animation: rise-in 0.4s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 /* Question Stem & Formula Responsive Wrapping Rules */
 .question-stem-wrap {
   overflow-wrap: break-word;

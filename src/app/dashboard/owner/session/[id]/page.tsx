@@ -20,6 +20,7 @@ import {
 import { TeacherPodiumLeaderboard } from "@/components/owner/TeacherPodiumLeaderboard";
 import RosterManager from "@/components/owner/RosterManager";
 import AttendanceRegister from "@/components/owner/AttendanceRegister";
+import { Breadcrumb, HeroPill, StackStatCard, TickStrip } from "@/components/owner/Stacklane";
 
 export const dynamic = "force-dynamic";
 
@@ -121,67 +122,93 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
   const statCard = "rounded-2xl border border-white/10 bg-[#0e0f13] p-5";
 
   return (
-    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
-      {/* Heading */}
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8 rise-in">
+      {/* Breadcrumb (Stacklane overview style) */}
       <div className="px-1 pt-1">
-        <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">LIVE / MONITORING / INVENTORY</p>
-        <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
-          <span className="text-lime-300">SCREEN {screenNo}</span> inventory.
-        </h1>
-        <p className="text-xs text-neutral-400 mt-2.5">
-          {code} · {totalCount} registered · {windowLabel} · Frozen question snapshot v{totalQuestions}
-        </p>
+        <Breadcrumb items={[{ label: "Live sessions", href: "/dashboard/owner#live" }, { label: session.exam.title }]} />
       </div>
 
-      {/* Status bar */}
-      <div className="rounded-2xl border border-lime-300/20 bg-lime-300/[0.05] px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-xs font-bold text-lime-200">
-          <span className="w-2 h-2 rounded-full bg-lime-300 animate-pulse" />
-          {session.status}
-          <span className="text-neutral-400 font-semibold">· Auto-sync every 8 seconds ·</span>
-          <RefreshClock />
-        </p>
-        <div className="flex items-center gap-2">
-          <AutoRefresher active={live} />
-          <p className="text-[11px] font-semibold text-neutral-300 tabular-nums">
-            {inProgressCount} in progress · {submittedCount} submitted · {totalCount} total
-            {(session.blocked?.length || 0) > 0 && (
-              <span className="text-red-300"> · {session.blocked.length} blocked</span>
-            )}
+      {/* Hero card */}
+      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="flex items-center gap-2 text-xs font-bold text-lime-200">
+            <span className="w-2 h-2 rounded-full bg-lime-300 animate-pulse" />
+            {session.status}
+            <span className="text-neutral-500 font-semibold">· auto-sync every 8s ·</span>
+            <RefreshClock />
           </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <AutoRefresher active={live} />
+            <HeroPill tone={live ? "lime" : done ? "neutral" : "neutral"}>{done ? "ENDED" : live ? "LIVE" : session.status}</HeroPill>
+            <HeroPill>{totalCount} candidates</HeroPill>
+            <HeroPill>Screen {screenNo}</HeroPill>
+          </div>
         </div>
+
+        <div className="flex flex-wrap items-end justify-between gap-4 mt-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-neutral-400 flex items-center gap-2">
+              <svg className="w-3.5 h-3.5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+                <rect x="3" y="4" width="18" height="13" rx="2" />
+                <path strokeLinecap="round" d="M8 21h8M12 17v4" />
+              </svg>
+              Assessment
+            </p>
+            <h1 className="mt-1.5 text-2xl sm:text-[28px] font-black text-white tracking-tight leading-none truncate">
+              {session.exam.title}
+            </h1>
+            <p className="text-[11px] text-neutral-500 mt-1.5">
+              PIN {session.pin || "—"} · {domain ? `@${domain.replace(/^@/, "")}` : "open domain"} · {windowLabel} · frozen snapshot v{totalQuestions}
+            </p>
+          </div>
+        </div>
+
+        <TickStrip
+          data={session.attempts.map((a) => {
+            const fill = totalQuestions > 0 ? Math.min(1, a.responses.length / totalQuestions) : 0;
+            return {
+              fill,
+              tone: a.status === "SUBMITTED" ? "lime" : a.status === "IN_PROGRESS" ? "white" : "muted",
+            };
+          })}
+        />
       </div>
 
-      {/* Info cards */}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <div className={infoCard}>
-          <p className={infoLabel}>SESSION TITLE</p>
-          <p className="mt-2 text-sm font-black text-white leading-snug">{session.exam.title}</p>
-          <p className="mt-1.5 text-[10px] text-neutral-500">{code} · {totalCount} registered · {windowLabel}</p>
-          <p className="mt-0.5 text-[10px] text-neutral-500">Frozen snapshot weights v{totalQuestions}</p>
-        </div>
-        <div className={infoCard}>
-          <p className={infoLabel}>ACCESS PIN</p>
-          <p className="mt-2 font-mono text-xl font-black text-white tracking-widest">{session.pin || "—"}</p>
-          <p className="mt-1.5 text-[10px] text-neutral-500 leading-relaxed">Registered for candidate launch and proctor alert moderation</p>
-        </div>
-        <div className={infoCard}>
-          <p className={infoLabel}>DOMAIN &amp; CHECKS</p>
-          <p className="mt-2 text-xl font-black text-lime-300">{domain ? `@${domain.replace(/^@/, "")}` : "Open"}</p>
-          <p className="mt-1.5 text-[10px] text-neutral-500 leading-relaxed">Approved sender domains and origin checks are enforced</p>
-        </div>
-        <div className={infoCard}>
-          <p className={infoLabel}>SESSION COUNTDOWN</p>
-          <p className="mt-2 text-[26px] leading-none font-black tabular-nums">
+      {/* Metric row */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <StackStatCard
+          label="Registered"
+          value={String(totalCount)}
+          icon={<svg className="w-3.5 h-3.5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden><circle cx="9" cy="8" r="3.5" /><path strokeLinecap="round" d="M2.5 19a6.5 6.5 0 0113 0M16 11a3 3 0 10-2-5.2M21.5 19a6.5 6.5 0 00-5.5-6.4" /></svg>}
+        />
+        <StackStatCard
+          label="In progress"
+          value={String(inProgressCount)}
+          icon={<svg className="w-3.5 h-3.5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M12 7v5l3 2" /></svg>}
+        />
+        <StackStatCard
+          lime
+          label="Submitted"
+          value={String(submittedCount)}
+          icon={<svg className="w-3.5 h-3.5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M8.5 12.5l2.5 2.5 4.5-5" /></svg>}
+        />
+        <StackStatCard
+          label="Proctor flags"
+          value={String(totalFlagsCount)}
+          icon={<svg className="w-3.5 h-3.5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 21V5m0 0h11l-2 3 2 3H6" /></svg>}
+        />
+        <StackStatCard
+          label="Session countdown"
+          value={
             <SessionCountdown
               startTime={start ? start.toISOString() : null}
               durationMinutes={session.durationMinutes}
               extendedUntil={session.extendedUntil ? session.extendedUntil.toISOString() : null}
               status={session.status}
             />
-          </p>
-          <p className="mt-1.5 text-[10px] text-neutral-500 leading-relaxed">Server-calibrated lease for all active candidates</p>
-        </div>
+          }
+          icon={<svg className="w-3.5 h-3.5 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M12 7v5l3 2" /></svg>}
+        />
       </div>
 
       {/* Candidate Result Release & Podium Reveal Control */}

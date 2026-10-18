@@ -69,7 +69,7 @@ export default async function ResultsDashboard({
   const CELL = "border-l border-white/[0.06]";
 
   return (
-    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8 rise-in">
       <div className="flex items-center justify-between gap-6 px-1 pt-1">
         <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
           Assessment history, readable<span className="text-lime-300">.</span>
@@ -111,8 +111,8 @@ export default async function ResultsDashboard({
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-4 sm:p-5 overflow-hidden">
-        <div className="overflow-x-auto -mx-1 px-1">
-          <table className="w-full min-w-[1000px] border-collapse text-left border border-white/[0.08]">
+        <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+          <table className="w-full min-w-[1000px] border-collapse text-left">
             <thead>
               <tr className="border-b border-white/[0.08]">
                 <th className="px-3 py-3 text-[11px] font-medium text-neutral-400 text-center">Assessment</th>

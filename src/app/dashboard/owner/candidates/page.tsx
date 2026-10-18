@@ -103,7 +103,7 @@ export default async function CandidateRecordsPage() {
   }
 
   return (
-    <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
+    <div className="max-w-[1440px] mx-auto space-y-4 pb-8 rise-in">
       <div className="flex items-start justify-between gap-6 px-1 pt-1">
         <div>
           <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
