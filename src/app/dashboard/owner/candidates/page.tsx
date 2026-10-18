@@ -2,6 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { getCachedCandidatesData } from "@/lib/dashboard-cache";
+import { prisma } from "@/lib/prisma";
 import { CandidateRecordsOps } from "@/components/owner/CandidateRecordsOps";
 import { Flower } from "@/components/owner/OpsPanels";
 
@@ -61,7 +62,45 @@ export default async function CandidateRecordsPage() {
     id: s.id,
     pin: s.pin,
     examTitle: s.exam.title,
+    totalMarks: s.exam.totalMarks,
   }));
+
+  // Roster-aware attendance inputs per session (for report-only presence matching)
+  const attendanceRaw = await prisma.examSession.findMany({
+    where: { id: { in: sessionOpts.map((s) => s.id) }, rosters: { some: {} } },
+    select: {
+      id: true,
+      rosters: { select: { email: true, name: true }, orderBy: { email: "asc" }, take: 5000 },
+      attempts: {
+        select: {
+          userId: true,
+          id: true,
+          status: true,
+          user: { select: { email: true } },
+          responses: { select: { earnedPoints: true } },
+        },
+      },
+    },
+  });
+  const attendance: Record<
+    string,
+    { roster: { email: string; name: string | null }[]; attempted: string[]; scores: Record<string, { attemptId: string; score: number; status: string }> }
+  > = {};
+  for (const s of attendanceRaw) {
+    const scores: Record<string, { attemptId: string; score: number; status: string }> = {};
+    for (const a of s.attempts) {
+      scores[a.userId] = {
+        attemptId: a.id,
+        score: a.responses.reduce((sum: number, r: any) => sum + (r.earnedPoints || 0), 0),
+        status: a.status,
+      };
+    }
+    attendance[s.id] = {
+      roster: s.rosters.map((r) => ({ email: r.email, name: r.name })),
+      attempted: s.attempts.map((a: any) => a.user.email),
+      scores,
+    };
+  }
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-4 pb-8">
@@ -92,7 +131,7 @@ export default async function CandidateRecordsPage() {
         ))}
       </div>
 
-      <CandidateRecordsOps rows={rows} sessions={sessionOpts} />
+      <CandidateRecordsOps rows={rows} sessions={sessionOpts} attendance={attendance} />
     </div>
   );
 }

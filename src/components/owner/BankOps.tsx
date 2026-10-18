@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DeleteQuestionButton } from "@/components/DeleteQuestionButton";
+import { FilterChip } from "@/components/owner/FilterChip";
 import { reviewQuestionAction, approveAllQuestionsAction } from "@/app/actions/schedule";
 import { updateQuestionAction, deleteQuestionAction } from "@/app/actions/setter";
 
@@ -197,6 +198,7 @@ export function BankOps({
   const [approvingAll, setApprovingAll] = useState(false);
   const [queueMsg, setQueueMsg] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Drawer Edit Form States
   const [isEditing, setIsEditing] = useState(false);
@@ -311,12 +313,12 @@ export function BankOps({
   };
 
   const handleDeleteQuestion = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this question? This action cannot be undone.")) return;
+    setConfirmDeleteId(null);
     setDeletingId(id);
     const res = await deleteQuestionAction(id);
     setDeletingId(null);
     if (res?.error) {
-      alert(res.error);
+      setQueueMsg(res.error);
       return;
     }
     if (selectedId === id) {
@@ -324,6 +326,8 @@ export function BankOps({
     }
     router.refresh();
   };
+
+  const confirmTarget = confirmDeleteId ? rows.find((r) => r.id === confirmDeleteId) : null;
 
   const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -457,47 +461,51 @@ export function BankOps({
         </div>
       </div>
 
-      {/* Search + filters with uniform heights (Zinc Monochrome Theme) */}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2.5 items-end">
-        <label className="block sm:col-span-2 xl:col-span-1">
-          <span className="block text-[9px] font-bold tracking-[0.14em] text-zinc-400 mb-1.5">SEARCH</span>
-          <div className="relative">
-            <input
-              value={q}
-              onChange={(e) => { setQ(e.target.value); setPage(0); }}
-              placeholder="Search stem, tag or question ID..."
-              className="w-full h-[42px] px-3.5 text-xs bg-[#18181c] border border-zinc-800 hover:border-zinc-700 focus:border-zinc-500 rounded-xl outline-none font-medium text-zinc-100 placeholder-zinc-500 transition-colors shadow-xs"
-            />
-            {q && (
-              <button
-                type="button"
-                onClick={() => { setQ(""); setPage(0); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 text-xs cursor-pointer"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </label>
-        {[
-          { label: "Category", v: cat, set: setCat, opts: categories, all: "All categories" },
-          { label: "Type", v: type, set: setType, opts: types, all: "All types" },
-          { label: "Difficulty", v: level, set: setLevel, opts: levels, all: "All levels" },
-        ].map((f) => (
-          <label key={f.label} className="block">
-            <span className="block text-[9px] font-bold tracking-[0.14em] text-zinc-400 mb-1.5">{f.label.toUpperCase()}</span>
-            <select
-              value={f.v}
-              onChange={(e) => { f.set(e.target.value); setPage(0); }}
-              className="w-full h-[42px] px-3 text-[11px] bg-[#18181c] border border-zinc-800 hover:border-zinc-700 focus:border-zinc-500 rounded-xl outline-none font-semibold text-zinc-200 cursor-pointer transition-colors shadow-xs"
+      {/* Search + filter chips (shared FilterChip dropdowns) */}
+      <div className="flex flex-wrap items-center gap-2 px-1">
+        <div className="relative flex-1 min-w-[240px]">
+          <input
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setPage(0); }}
+            placeholder="Search stem, tag or question ID..."
+            className="w-full h-9 pl-9 pr-8 text-xs bg-[#18181c] border border-zinc-800 hover:border-zinc-700 focus:border-zinc-500 rounded-lg outline-none font-medium text-zinc-100 placeholder-zinc-500 transition-colors shadow-xs"
+          />
+          <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+            <circle cx="11" cy="11" r="7" />
+            <path strokeLinecap="round" d="M20 20l-3.5-3.5" />
+          </svg>
+          {q && (
+            <button
+              type="button"
+              onClick={() => { setQ(""); setPage(0); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 text-xs cursor-pointer"
             >
-              <option value="" className="bg-[#18181c] text-zinc-300">{f.all}</option>
-              {f.opts.map((o) => (
-                <option key={o} value={o} className="bg-[#18181c] text-zinc-100">{o}</option>
-              ))}
-            </select>
-          </label>
-        ))}
+              ✕
+            </button>
+          )}
+        </div>
+        <FilterChip
+          label={cat || "All categories"}
+          minWidth="min-w-[220px]"
+          options={[
+            { label: "All categories", active: cat === "", onSelect: () => { setCat(""); setPage(0); } },
+            ...categories.map((o) => ({ label: o, active: cat === o, onSelect: () => { setCat(o); setPage(0); } })),
+          ]}
+        />
+        <FilterChip
+          label={type || "All types"}
+          options={[
+            { label: "All types", active: type === "", onSelect: () => { setType(""); setPage(0); } },
+            ...types.map((o) => ({ label: o, active: type === o, onSelect: () => { setType(o); setPage(0); } })),
+          ]}
+        />
+        <FilterChip
+          label={level || "All levels"}
+          options={[
+            { label: "All levels", active: level === "", onSelect: () => { setLevel(""); setPage(0); } },
+            ...levels.map((o) => ({ label: o, active: level === o, onSelect: () => { setLevel(o); setPage(0); } })),
+          ]}
+        />
       </div>
 
       {/* Review feedback banner */}
@@ -593,7 +601,7 @@ export function BankOps({
                         <button
                           type="button"
                           disabled={deletingId === r.id}
-                          onClick={() => handleDeleteQuestion(r.id)}
+                          onClick={() => setConfirmDeleteId(r.id)}
                           className="inline-flex items-center gap-1.5 border border-zinc-800 bg-[#18181c] rounded-md px-2.5 py-1.5 text-[11.5px] font-bold text-zinc-400 hover:bg-rose-500/10 hover:text-rose-300 hover:border-rose-500/30 transition-colors cursor-pointer disabled:opacity-40 shadow-xs"
                           title="Delete question"
                         >
@@ -613,15 +621,14 @@ export function BankOps({
         <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between gap-3 text-[11px] text-zinc-400">
           <div className="flex items-center gap-2.5">
             <span>Rows per page</span>
-            <select
-              value={per}
-              onChange={(e) => { setPer(Number(e.target.value)); setPage(0); }}
-              className="h-9 bg-[#18181c] border border-zinc-800 hover:border-zinc-700 focus:border-zinc-500 rounded-md px-2 text-xs font-bold text-zinc-200 outline-none cursor-pointer transition-colors shadow-xs"
-            >
-              {[5, 8, 12, 20, 40].map((n) => (
-                <option key={n} value={n} className="bg-[#18181c] text-zinc-100">{n}</option>
-              ))}
-            </select>
+            <FilterChip
+              label={String(per)}
+              options={[5, 8, 12, 20, 40].map((n) => ({
+                label: String(n),
+                active: per === n,
+                onSelect: () => { setPer(n); setPage(0); },
+              }))}
+            />
             <span className="tabular-nums">
               {filtered.length === 0 ? "0 rows" : `${page * per + 1}–${Math.min(filtered.length, (page + 1) * per)} of ${filtered.length} rows`}
             </span>
@@ -674,9 +681,12 @@ export function BankOps({
         </div>
       </div>
 
-      {/* Slide-over Drawer for Question Details & Edit */}
+      {/* Slide-over Drawer for Question Details & Edit
+          IMPORTANT: inline marginTop:0 — the parent root uses space-y-4, which would
+          otherwise add margin-top to this (last-child) fixed wrapper and push the
+          slide-over down, leaving a gap above the drawer. */}
       {selected && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end" style={{ marginTop: 0 }}>
           {/* Backdrop */}
           <div
             onClick={closeDrawer}
@@ -1080,11 +1090,11 @@ export function BankOps({
                   </div>
 
                   {/* Footer actions */}
-                  <div className="pt-2 border-t border-zinc-800 flex items-center justify-between gap-3">
+                  <div className="pt-2 flex items-center justify-between gap-3">
                     <button
                       type="button"
                       disabled={deletingId === selected.id}
-                      onClick={() => handleDeleteQuestion(selected.id)}
+                      onClick={() => setConfirmDeleteId(selected.id)}
                       className="px-4 py-2 bg-rose-500 hover:brightness-110 text-white text-xs font-black rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
                     >
                       {deletingId === selected.id ? "Deleting..." : "Delete Question"}
@@ -1102,6 +1112,60 @@ export function BankOps({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {confirmTarget && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4" style={{ marginTop: 0 }} onClick={() => setConfirmDeleteId(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-[#121215] border border-zinc-800 shadow-2xl p-6"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-black text-zinc-100">Delete Question</h3>
+                <p className="mt-2.5 text-xs text-zinc-400 leading-relaxed">
+                  This permanently removes the question. Actions cannot be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+                aria-label="Close"
+                className="w-8 h-8 shrink-0 rounded-lg border border-white/10 bg-white/[0.05] text-zinc-400 hover:text-white hover:bg-white/10 flex items-center justify-center text-lg leading-none transition-colors cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-zinc-800 bg-[#18181c] p-3.5">
+              <p className="text-[10px] font-bold tracking-[0.14em] text-zinc-500 uppercase mb-1.5">
+                {confirmTarget.category} · {confirmTarget.qcode}
+              </p>
+              <p className="text-xs text-zinc-200 leading-relaxed line-clamp-3">{confirmTarget.text}</p>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 text-[11px] font-bold text-zinc-300 border border-white/10 hover:bg-white/[0.06] hover:text-white rounded-xl px-3 py-2.5 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingId === confirmTarget.id}
+                onClick={() => handleDeleteQuestion(confirmTarget.id)}
+                className="flex-1 text-[11px] font-black text-white bg-[#e5484d] hover:brightness-110 rounded-xl px-3 py-2.5 transition-all disabled:opacity-40 cursor-pointer"
+              >
+                {deletingId === confirmTarget.id ? "Deleting..." : "Delete Question"}
+              </button>
             </div>
           </div>
         </div>

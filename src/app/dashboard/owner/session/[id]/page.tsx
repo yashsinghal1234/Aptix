@@ -19,6 +19,7 @@ import {
 } from "@/components/owner/SessionMonitor";
 import { TeacherPodiumLeaderboard } from "@/components/owner/TeacherPodiumLeaderboard";
 import RosterManager from "@/components/owner/RosterManager";
+import AttendanceRegister from "@/components/owner/AttendanceRegister";
 
 export const dynamic = "force-dynamic";
 
@@ -197,6 +198,12 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
       <RosterManager
         sessionId={session.id}
         initialRosters={(session.rosters || []).map((r) => ({ email: r.email, name: r.name }))}
+      />
+      <AttendanceRegister
+        sessionId={session.id}
+        examTitle={session.exam.title}
+        roster={(session.rosters || []).map((r) => ({ email: r.email, name: r.name }))}
+        attempts={session.attempts.map((a) => ({ email: a.user.email, status: a.status }))}
       />
       <TeacherPodiumLeaderboard
         sessionId={session.id}

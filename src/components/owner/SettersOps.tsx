@@ -87,10 +87,7 @@ function Modal({ title, tag, onClose, children }: { title: string; tag?: string;
       <div className="relative w-full max-w-lg rounded-2xl border border-white/15 bg-[#0e0f13] p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between gap-3 mb-4">
           <h3 className="text-[15px] font-bold text-white">{title}</h3>
-          <div className="flex items-center gap-3">
-            {tag && <span className="text-[9px] font-bold tracking-[0.18em] text-neutral-500">{tag}</span>}
-            <button type="button" onClick={onClose} aria-label="Close" className="text-neutral-500 hover:text-white text-xl leading-none px-1">×</button>
-          </div>
+          {tag && <span className="text-[9px] font-bold tracking-[0.18em] text-neutral-500">{tag}</span>}
         </div>
         {children}
       </div>
@@ -103,7 +100,6 @@ export function AddSetterPanel() {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [password, setPassword] = useState("");
-  const [requireChange, setRequireChange] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ email: string; name: string; password: string } | null>(null);
@@ -113,9 +109,7 @@ export function AddSetterPanel() {
 
   const copy = () => {
     if (!created) return;
-    navigator.clipboard.writeText(
-      `APTIX Staff Portal Activation:\nEmail: ${created.email}\nTemporary Password: ${created.password}\nPortal URL: ${window.location.origin}/admin/login\n(You will be prompted to choose your own private permanent password upon first sign-in.)`
-    );
+    navigator.clipboard.writeText(created.password);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -138,22 +132,32 @@ export function AddSetterPanel() {
   return (
     <Panel title="Add Setter">
       {created && (
-        <div className="mb-4 p-3.5 rounded-xl bg-lime-300/[0.07] border border-lime-300/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <p className="text-xs text-lime-100">
-            <span className="font-black">Author account created.</span>{" "}
-            <span className="font-mono">{created.email}</span> · temp{" "}
-            <span className="font-mono font-black">{created.password}</span>
-          </p>
-          <button type="button" onClick={copy} className="text-[11px] font-black text-black bg-lime-300 hover:brightness-110 rounded-lg px-3 py-1.5 shrink-0 cursor-pointer">
-            {copied ? "✓ Copied!" : "Copy activation"}
-          </button>
+        <div className="mb-4 px-3 py-2.5 rounded-xl bg-lime-300/[0.07] border border-lime-300/25 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
+          <p className="text-sm font-black text-lime-200 tracking-tight">Account created.</p>
+          <div className="inline-flex items-stretch rounded-full overflow-hidden shrink-0">
+            <span className="font-mono text-xs font-medium text-neutral-200 bg-white/[0.05] border border-white/15 rounded-full px-3.5 py-1.5 whitespace-nowrap">
+              {created.email}
+            </span>
+          </div>
+          <div className="inline-flex items-center gap-2.5 rounded-full border border-lime-300/30 bg-black/40 pl-4 pr-1.5 py-1.5 shrink-0 sm:ml-auto">
+            <span className="font-mono font-black text-white text-xs tracking-wider whitespace-nowrap">
+              {created.password}
+            </span>
+            <button
+              type="button"
+              onClick={copy}
+              className="text-[11px] font-black text-black bg-lime-300 hover:brightness-110 rounded-full px-3 py-1.5 shrink-0 cursor-pointer transition-all"
+            >
+              {copied ? "✓ Copied!" : "Copy password"}
+            </button>
+          </div>
         </div>
       )}
       {error && <p className="mb-3 text-xs font-bold text-rose-300 bg-rose-950/40 border border-rose-800/50 rounded-xl px-3 py-2">{error}</p>}
 
       <form ref={formRef} action={submit} className="space-y-4 sm:space-y-5">
-        {/* Row 1: Faculty name & Institutional email */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        {/* Single line: Faculty name · Institutional email · Temporary password · Add Setter */}
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.25fr_1fr_auto] gap-3 sm:gap-4 md:items-end">
           <div>
             <label className="block text-xs font-normal text-neutral-400 mb-2">Faculty name</label>
             <input
@@ -173,67 +177,42 @@ export function AddSetterPanel() {
               className="w-full px-4 py-2.5 bg-black/60 border border-white/10 rounded-xl text-xs sm:text-sm text-neutral-200 placeholder-neutral-600 focus:border-white/30 focus:outline-none transition-colors"
             />
           </div>
-        </div>
-
-        {/* Row 2: Temporary password + Auto-Generate Random */}
-        <div>
-          <label className="block text-xs font-normal text-neutral-400 mb-2">
-            Temporary password · minimum 8 characters
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              name="password"
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••"
-              className="flex-1 px-4 py-2.5 bg-black/60 border border-white/10 rounded-xl text-xs sm:text-sm text-neutral-200 placeholder-neutral-600 focus:border-white/30 focus:outline-none transition-colors font-mono tracking-wider"
-            />
-            <button
-              type="button"
-              onClick={generate}
-              className="px-4 py-2.5 bg-[#171917] hover:bg-[#202420] border border-white/10 text-neutral-300 hover:text-white rounded-xl text-xs font-medium transition-colors shrink-0 cursor-pointer"
-            >
-              Auto-Generate Random
-            </button>
+          <div>
+            <label className="block text-xs font-normal text-neutral-400 mb-2">
+              Temporary password
+              <span className="text-neutral-600"> · 8+ chars</span>
+            </label>
+            <div className="relative">
+              <input
+                name="password"
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••"
+                className="w-full pr-10 px-4 py-2.5 bg-black/60 border border-white/10 rounded-xl text-xs sm:text-sm text-neutral-200 placeholder-neutral-600 focus:border-white/30 focus:outline-none transition-colors font-mono tracking-wider"
+              />
+              <button
+                type="button"
+                onClick={generate}
+                title="Auto-generate random password"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
           </div>
-        </div>
-
-        {/* Row 3: Toggle */}
-        <div className="flex items-center justify-between py-1">
-          <span className="text-xs sm:text-[13px] font-normal text-neutral-300">
-            Must change password on first login
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={requireChange}
-            onClick={() => setRequireChange((prev) => !prev)}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-              requireChange ? "bg-[#bef264]" : "bg-neutral-800"
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow-lg ring-0 transition duration-200 ease-in-out ${
-                requireChange ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
-
-
-        {/* Row 5: Action Button & Note */}
-        <div className="pt-1">
           <button
             type="submit"
             disabled={loading}
-            className="px-5 py-2.5 bg-[#bef264] hover:bg-[#b0e650] text-black text-xs sm:text-sm font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-sm active:scale-95"
+            className="w-full md:w-auto px-6 py-2.5 bg-[#bef264] hover:bg-[#b0e650] text-black text-xs sm:text-sm font-black rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-sm active:scale-[0.98] whitespace-nowrap"
           >
-            {loading ? "Adding..." : "Add Setter"}
+            {loading ? "Adding…" : "Add Setter"}
           </button>
         </div>
 
-        <input type="hidden" name="requireChange" value={requireChange ? "on" : "off"} />
+        <input type="hidden" name="requireChange" value="on" />
       </form>
     </Panel>
   );
@@ -356,15 +335,6 @@ export function FacultyDirectory({ setters }: { setters: SetterRow[] }) {
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] text-neutral-600">
-        <p>
-          Deployed authors: <span className="text-neutral-300 font-bold tabular-nums">{setters.reduce((a, s) => a + s.authored, 0)}</span> questions ·{" "}
-          {active} Active · {pending} Password Change Required are account states, not content approval states.
-        </p>
-        <a href="/dashboard/setter/bank" className="font-bold text-neutral-400 hover:text-lime-200 transition-colors whitespace-nowrap">
-          Next: bulk import →
-        </a>
-      </div>
     </Panel>
   );
 }
@@ -384,7 +354,6 @@ export function ResetDialog({
   const router = useRouter();
   const [email, setEmail] = useState(initialEmail || "");
   const [password, setPassword] = useState("");
-  const [requireChange, setRequireChange] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ email: string; temp: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -404,7 +373,7 @@ export function ResetDialog({
     const target = setters.find((s) => s.email.toLowerCase() === email.trim().toLowerCase());
     if (!target) return;
     setLoading(true);
-    const res = await adminResetUserPasswordAction(target.id, password || undefined, requireChange);
+    const res = await adminResetUserPasswordAction(target.id, password || undefined, true);
     setLoading(false);
     if ((res as any).error) alert((res as any).error);
     else if (res.success && (res as any).temporaryPassword) {
@@ -414,42 +383,59 @@ export function ResetDialog({
   };
 
   return (
-    <Modal title="Reset Staff Password" tag="STATIC RESET STATE" onClose={onClose}>
-      <p className="text-[10px] text-neutral-500 mb-3 font-mono">Temporarily preset to: {email || "—"}</p>
-      <label className={LABEL}>Staff email</label>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mira.nair@northbridge.edu" className={INPUT} />
-      <div className="flex items-center justify-between mt-3 mb-1.5">
-        <label className={LABEL + " !mb-0"}>Temporary password</label>
-        <button type="button" onClick={() => setPassword(generateSecureTemporaryPassword("Reset"))} className="text-[10px] font-bold text-neutral-400 hover:text-lime-200 transition-colors">
-          ⟳ Auto-generate
-        </button>
-      </div>
-      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="e.g. Reset#k8M2!vP9" className={`${INPUT} font-mono`} />
-      {result && (
+    <Modal title="Reset Staff Password" onClose={onClose}>
+      <label className={LABEL}>Temporary password · min 8 characters</label>
+      <div className="relative">
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••••"
+          className={`${INPUT} pr-10 font-mono tracking-wider`}
+        />
         <button
           type="button"
-          onClick={() => {
-            navigator.clipboard.writeText(`APTIX Password Reset:\nEmail: ${result.email}\nTemporary Password: ${result.temp}`);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2500);
-          }}
-          className="mt-2.5 w-full text-[11px] font-bold text-lime-200 bg-lime-300/10 border border-lime-300/25 rounded-xl px-3 py-2"
+          onClick={() => setPassword(generateSecureTemporaryPassword("Reset"))}
+          title="Auto-generate random password"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
         >
-          {copied ? "✓ Copied!" : `New temp for ${result.email}: ${result.temp} — tap to copy`}
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
         </button>
-      )}
-      <div className="mt-3 border-t border-white/[0.07] pt-3">
-        <Toggle on={requireChange} onChange={setRequireChange} label="Require password change on next login" hint="Minimum 8 characters (letters & numbers). The previous password is replaced, never retrieved." />
       </div>
+      {result && (
+        <div className="mt-3 inline-flex items-center gap-2.5 rounded-full border border-lime-300/30 bg-black/40 pl-4 pr-1.5 py-1.5 shrink-0 w-full">
+          <span className="font-mono font-black text-white text-xs tracking-wider whitespace-nowrap overflow-hidden text-ellipsis">
+            {result.temp}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(result.temp);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2500);
+            }}
+            className="ml-auto text-[11px] font-black text-black bg-lime-300 hover:brightness-110 rounded-full px-3 py-1.5 shrink-0 cursor-pointer transition-all"
+          >
+            {copied ? "✓ Copied!" : "Copy password"}
+          </button>
+        </div>
+      )}
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={onClose} className="text-[11px] font-bold text-neutral-400 hover:text-white px-3 py-2">Cancel</button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 text-[11px] font-bold text-neutral-300 border border-white/10 hover:bg-white/[0.06] hover:text-white rounded-xl px-3 py-2.5 transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
         <button
           type="button"
           disabled={loading || !setters.some((s) => s.email.toLowerCase() === email.trim().toLowerCase())}
           onClick={reset}
-          className="flex-1 text-[11px] font-black text-black bg-lime-300 hover:brightness-110 rounded-xl px-3 py-2.5 transition-all disabled:opacity-40"
+          className="flex-1 text-[11px] font-black text-black bg-lime-300 hover:brightness-110 rounded-xl px-3 py-2.5 transition-all disabled:opacity-40 cursor-pointer"
         >
-          {loading ? "Resetting..." : "✓ Issue temporary password"}
+          {loading ? "Resetting..." : "Reset Password"}
         </button>
       </div>
     </Modal>
@@ -494,27 +480,25 @@ export function RemoveDialog({
   };
 
   return (
-    <Modal title="Remove Setter" tag="STATE CONFIRMATION" onClose={onClose}>
-      <p className="text-[10px] text-neutral-500 mb-3 font-mono">Revoke {email || "—"}</p>
-      <div className="rounded-xl bg-[#f2a488]/[0.06] border border-[#f2a488]/20 p-3 mb-3">
-        <p className="text-[11px] font-bold text-[#f2a488]">Staff access will be revoked</p>
-        <p className="text-[10px] text-neutral-400 mt-1 leading-relaxed">
-          Removes this setter&rsquo;s account access. Existing authored questions and the question bank stay untouched. This is not a question-bank deletion.
-        </p>
-      </div>
-      <label className={LABEL}>Staff email</label>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="staff@northbridge.edu" className={INPUT} />
-      <label className={LABEL + " mt-3"}>Type REMOVE to confirm</label>
-      <input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="REMOVE" className={`${INPUT} font-mono uppercase`} />
+    <Modal title="Remove Setter" onClose={onClose}>
+      <label className={LABEL}>Type REMOVE to confirm</label>
+      <input
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        placeholder="••••••"
+        className="w-full px-6 py-3.5 bg-black/50 border border-white/10 rounded-2xl text-center text-white text-base font-mono tracking-[0.25em] uppercase focus:border-white/30 focus:outline-none transition-colors placeholder:tracking-[0.25em] placeholder:text-neutral-700 cursor-text"
+      />
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={onClose} className="text-[11px] font-bold text-neutral-400 hover:text-white px-3 py-2">Cancel</button>
+        <button type="button" onClick={onClose} className="flex-1 text-[11px] font-bold text-neutral-300 border border-white/10 hover:bg-white/[0.06] hover:text-white rounded-xl px-3 py-2.5 transition-colors cursor-pointer">
+          Cancel
+        </button>
         <button
           type="button"
           disabled={!ready || loading}
           onClick={remove}
-          className="flex-1 text-[11px] font-black text-white bg-[#e5484d] hover:brightness-110 rounded-xl px-3 py-2.5 transition-all disabled:opacity-40"
+          className="flex-1 text-[11px] font-black text-white bg-[#e5484d] hover:brightness-110 rounded-xl px-3 py-2.5 transition-all disabled:opacity-40 cursor-pointer"
         >
-          {loading ? "Removing..." : "⛔ Remove Setter"}
+          {loading ? "Removing..." : "Remove Setter"}
         </button>
       </div>
     </Modal>

@@ -272,7 +272,7 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col md:flex-row" suppressHydrationWarning>
+      <div className="flex flex-1 flex-col md:flex-row lg:min-h-[calc(111.11vh-104px)]" suppressHydrationWarning>
         {/* ── Sidebar ─────────────────────────────── */}
         <aside className={`${mobileMenuOpen ? "flex" : "hidden"} md:flex w-full md:w-[228px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-white/10 bg-[#060607] z-30 md:fixed md:top-16 md:bottom-10 md:left-0 md:overflow-y-auto`}>
           <div className="p-4 flex-1 md:overflow-y-auto">

@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { FilterChip } from "@/components/owner/FilterChip";
 
 export interface CandidateRow {
   id: string;
@@ -24,6 +25,16 @@ export interface RecordSession {
   id: string;
   pin: string | null;
   examTitle: string;
+  totalMarks?: number;
+}
+
+export interface AttendanceData {
+  /** Roster (expected students) for the session, by email + name. */
+  roster: { email: string; name: string | null }[];
+  /** Emails that actually attempted this session. */
+  attempted: string[];
+  /** Per-candidate attempt summary within this session. */
+  scores: Record<string, { attemptId: string; score: number; status: string }>;
 }
 
 function UserIconC({ className }: { className?: string }) {
@@ -111,9 +122,11 @@ function DotPillC({ dot, label, text = "text-neutral-300" }: { dot: string; labe
 export function CandidateRecordsOps({
   rows,
   sessions,
+  attendance = {},
 }: {
   rows: CandidateRow[];
   sessions: RecordSession[];
+  attendance?: Record<string, AttendanceData>;
 }) {
   const [q, setQ] = useState("");
   const [cohort, setCohort] = useState("");
@@ -129,12 +142,32 @@ export function CandidateRecordsOps({
     [rows]
   );
 
+  // Roster-aware attendance for the selected cohort (report-only).
+  const cohortAtt = useMemo(() => {
+    const data = cohort ? attendance?.[cohort] : null;
+    if (!data || data.roster.length === 0) return null;
+    const rosterSet = new Set(data.roster.map((r) => r.email.toLowerCase()));
+    const attemptedSet = new Set(data.attempted.map((e) => e.toLowerCase()));
+    const counts = { present: 0, absent: 0, unrostered: 0 };
+    for (const e of rosterSet) attemptedSet.has(e) ? counts.present++ : counts.absent++;
+    for (const e of attemptedSet) if (!rosterSet.has(e)) counts.unrostered++;
+    return { rosterSet, attemptedSet, scores: data.scores || {}, counts };
+  }, [cohort, attendance]);
+  const cohortSession = cohort ? sessions.find((s) => s.id === cohort) || null : null;
+
   const filtered = rows.filter((r) => {
     if (q) {
       const s = `${r.name} ${r.email} ${r.roll}`.toLowerCase();
       if (!s.includes(q.toLowerCase())) return false;
     }
-    if (cohort && r.latest?.sessionId !== cohort) return false;
+    if (cohort) {
+      if (cohortAtt) {
+        // Roster mode: show only students relevant to this exam (expected or attempted)
+        const isAttempted = cohortAtt.attemptedSet.has(r.email.toLowerCase());
+        const isRostered = cohortAtt.rosterSet.has(r.email.toLowerCase());
+        if (!isAttempted && !isRostered) return false;
+      } else if (r.latest?.sessionId !== cohort) return false;
+    }
     if (exam && r.latest?.examTitle !== exam) return false;
     if (integrity === "clean" && r.flags > 0) return false;
     if (integrity === "flagged" && r.flags === 0) return false;
@@ -146,7 +179,6 @@ export function CandidateRecordsOps({
 
   const pages = Math.max(1, Math.ceil(filtered.length / per));
   const shown = filtered.slice(page * per, page * per + per);
-  const selected = rows.find((r) => r.id === selectedId) || null;
 
   // Numbered pagination window: first + surrounding current + last, "…" between gaps.
   const pageNumbers = useMemo(() => {
@@ -164,10 +196,20 @@ export function CandidateRecordsOps({
   const resetPage = () => setPage(0);
 
   const exportCsv = () => {
-    const head = "Name,Email,Roll,Total Exams,Latest Exam,Score,Status,Flags\n";
+    const head = "Name,Email,Roll,Total Exams,Latest Exam,Score,Status,Flags,Session Attendance\n";
     const body = filtered
-      .map((r) =>
-        [
+      .map((r) => {
+        const emailL = r.email.toLowerCase();
+        const isAttempted = !!cohortAtt && cohortAtt.attemptedSet.has(emailL);
+        const isRostered = !!cohortAtt && cohortAtt.rosterSet.has(emailL);
+        const sessionAttendance = cohortAtt
+          ? isRostered && isAttempted
+            ? "Present"
+            : isRostered
+              ? "Absent"
+              : "Unrostered"
+          : "";
+        return [
           `"${r.name.replace(/"/g, '""')}"`,
           r.email,
           r.roll,
@@ -176,8 +218,9 @@ export function CandidateRecordsOps({
           r.latest ? r.latest.score.toFixed(1) : "",
           r.latest ? r.latest.status : "NO_ATTEMPT",
           r.flags,
-        ].join(",")
-      )
+          sessionAttendance,
+        ].join(",");
+      })
       .join("\n");
     const url = URL.createObjectURL(new Blob([head + body], { type: "text/csv" }));
     const a = document.createElement("a");
@@ -187,56 +230,64 @@ export function CandidateRecordsOps({
     URL.revokeObjectURL(url);
   };
 
-  const selectCls =
-    "text-[11px] bg-black/60 border border-white/10 rounded-xl px-3 py-2.5 outline-none font-semibold text-neutral-200 cursor-pointer w-full";
-
   return (
     <div className="space-y-4">
       {/* Finder */}
       <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-        <h2 className="text-[15px] font-bold text-white">Find a candidate</h2>
-        <input
-          value={q}
-          onChange={(e) => { setQ(e.target.value); resetPage(); }}
-          placeholder="Search candidate name, email or registration ID"
-          className="mt-3 w-full px-4 py-2.5 text-xs bg-black/60 border border-white/10 rounded-xl outline-none font-medium text-white placeholder-neutral-600 focus:border-lime-300/50"
-        />
-        <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-          <label className="block">
-            <span className="block text-[9px] font-bold tracking-[0.14em] text-neutral-600 mb-1">COHORT</span>
-            <select value={cohort} onChange={(e) => { setCohort(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All cohorts</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>{s.pin || s.examTitle}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-[9px] font-bold tracking-[0.14em] text-neutral-600 mb-1">LATEST EXAM</span>
-            <select value={exam} onChange={(e) => { setExam(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All exams</option>
-              {examTitles.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-[9px] font-bold tracking-[0.14em] text-neutral-600 mb-1">INTEGRITY FILTER</span>
-            <select value={integrity} onChange={(e) => { setIntegrity(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All candidates</option>
-              <option value="clean">Clean only</option>
-              <option value="flagged">Flagged only</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-[9px] font-bold tracking-[0.14em] text-neutral-600 mb-1">ATTEMPT STATUS</span>
-            <select value={status} onChange={(e) => { setStatus(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All statuses</option>
-              <option value="in_progress">In progress</option>
-              <option value="submitted">Submitted</option>
-              <option value="none">No attempt</option>
-            </select>
-          </label>
+        <h2 className="text-[15px] font-bold text-white mb-3">Find a candidate</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative grow basis-[240px]">
+            <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-600 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path strokeLinecap="round" d="M20 20l-3.5-3.5" />
+            </svg>
+            <input
+              value={q}
+              onChange={(e) => { setQ(e.target.value); resetPage(); }}
+              placeholder="Search candidate name, email or registration ID"
+              className="w-full h-9 pl-9 pr-3 text-xs bg-black/60 border border-white/10 rounded-lg outline-none font-medium text-white placeholder-neutral-600 focus:border-lime-300/50"
+            />
+          </div>
+          <FilterChip
+            label={(sessions.find((s) => s.id === cohort)?.pin || sessions.find((s) => s.id === cohort)?.examTitle) || "All cohorts"}
+            minWidth="min-w-[220px]"
+            options={[
+              { label: "All cohorts", active: cohort === "", onSelect: () => { setCohort(""); resetPage(); } },
+              ...sessions.map((s) => ({
+                label: s.pin || s.examTitle,
+                active: cohort === s.id,
+                onSelect: () => { setCohort(s.id); resetPage(); },
+              })),
+            ]}
+          />
+          <FilterChip
+            label={exam || "All exams"}
+            options={[
+              { label: "All exams", active: exam === "", onSelect: () => { setExam(""); resetPage(); } },
+              ...examTitles.map((t) => ({
+                label: t,
+                active: exam === t,
+                onSelect: () => { setExam(t); resetPage(); },
+              })),
+            ]}
+          />
+          <FilterChip
+            label={integrity === "clean" ? "Clean only" : integrity === "flagged" ? "Flagged only" : "All candidates"}
+            options={[
+              { label: "All candidates", active: integrity === "", onSelect: () => { setIntegrity(""); resetPage(); } },
+              { label: "Clean only", active: integrity === "clean", onSelect: () => { setIntegrity("clean"); resetPage(); } },
+              { label: "Flagged only", active: integrity === "flagged", onSelect: () => { setIntegrity("flagged"); resetPage(); } },
+            ]}
+          />
+          <FilterChip
+            label={status === "in_progress" ? "In progress" : status === "submitted" ? "Submitted" : status === "none" ? "No attempt" : "All statuses"}
+            options={[
+              { label: "All statuses", active: status === "", onSelect: () => { setStatus(""); resetPage(); } },
+              { label: "In progress", active: status === "in_progress", onSelect: () => { setStatus("in_progress"); resetPage(); } },
+              { label: "Submitted", active: status === "submitted", onSelect: () => { setStatus("submitted"); resetPage(); } },
+              { label: "No attempt", active: status === "none", onSelect: () => { setStatus("none"); resetPage(); } },
+            ]}
+          />
         </div>
       </div>
 
@@ -253,28 +304,30 @@ export function CandidateRecordsOps({
           </button>
         </div>
         <p className="text-[10px] text-neutral-500 mb-3">
-          Showing {shown.length} of {filtered.length} total records · latest score reflects the selected session
+          {cohortAtt && cohortSession
+            ? `Showing ${shown.length} roster/attempt records · ${cohortSession.examTitle}: ${cohortAtt.counts.present} present · ${cohortAtt.counts.absent} absent · ${cohortAtt.counts.unrostered} unrostered`
+            : `Showing ${shown.length} of ${filtered.length} total records · latest score reflects the selected session`}
         </p>
         <div className="overflow-x-auto -mx-1 px-1">
           <table className="w-full min-w-[1000px] border-collapse text-left">
             <thead>
               <tr className="border-b border-white/[0.08] text-neutral-400">
-                <th className="pb-3 text-xs font-semibold text-left">
+                <th className="pb-3 text-xs font-semibold text-left pl-1">
                   <span className="inline-flex items-center gap-2"><UserIconC className="w-4 h-4" /> Candidate</span>
                 </th>
-                <th className="pb-3 text-xs font-semibold text-center w-[120px]">
+                <th className="pb-3 text-xs font-semibold text-center w-[110px]">
                   <span className="inline-flex items-center gap-2 justify-center"><ListIconC className="w-4 h-4" /> Exams</span>
                 </th>
-                <th className="pb-3 text-xs font-semibold text-left">
+                <th className="pb-3 text-xs font-semibold text-left w-[200px]">
                   <span className="inline-flex items-center gap-2"><DocIconC className="w-4 h-4" /> Latest exam</span>
                 </th>
-                <th className="pb-3 text-xs font-semibold text-center w-[180px]">
+                <th className="pb-3 text-xs font-semibold text-center w-[160px]">
                   <span className="inline-flex items-center gap-2 justify-center"><GaugeIconC className="w-4 h-4" /> Score</span>
                 </th>
                 <th className="pb-3 text-xs font-semibold text-center w-[90px]">
                   <span className="inline-flex items-center gap-2 justify-center"><FlagIconC className="w-4 h-4" /> Flags</span>
                 </th>
-                <th className="pb-3 text-xs font-semibold text-right w-[110px]">Action</th>
+                <th className="pb-3 text-xs font-semibold text-center w-[110px]">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.06]">
@@ -288,6 +341,19 @@ export function CandidateRecordsOps({
                 shown.map((r) => {
                   const pct = r.latest && r.latest.totalMarks > 0 ? (r.latest.score / r.latest.totalMarks) * 100 : null;
                   const sel = selectedId === r.id;
+                  const emailL = r.email.toLowerCase();
+                  const isAttempted = !!cohortAtt && cohortAtt.attemptedSet.has(emailL);
+                  const isRostered = !!cohortAtt && cohortAtt.rosterSet.has(emailL);
+                  const cohortScore = cohortAtt ? cohortAtt.scores[r.id] || null : null;
+                  const attPill =
+                    cohortAtt && isRostered && isAttempted
+                      ? { dot: "bg-emerald-400", label: "Present", text: "text-emerald-300" }
+                      : cohortAtt && isRostered
+                        ? { dot: "bg-rose-400", label: "Absent", text: "text-rose-300" }
+                        : cohortAtt
+                          ? { dot: "bg-amber-400", label: "Unrostered", text: "text-amber-300" }
+                          : null;
+                  const examTitle = cohortAtt ? cohortSession?.examTitle || "—" : r.latest?.examTitle || "";
                   return (
                     <tr
                       key={r.id}
@@ -296,20 +362,38 @@ export function CandidateRecordsOps({
                         sel ? "bg-lime-300/[0.04]" : ""
                       }`}
                     >
-                      <td className="py-3 pr-4 align-middle">
+                      <td className="py-3 px-3 align-middle">
                         <p className={`text-[13px] font-bold truncate transition-colors ${sel ? "text-lime-200" : "text-white group-hover:text-lime-200"}`}>
                           {r.name}
                         </p>
-                        <p className="text-[11px] text-neutral-500 font-mono truncate">{r.roll}</p>
                       </td>
                       <td className="py-3 px-3 text-[13px] font-bold text-white tabular-nums text-center align-middle">
                         {r.totalExams}
                       </td>
-                      <td className="py-3 px-3 text-xs text-neutral-300 truncate max-w-[320px] align-middle">
-                        {r.latest?.examTitle || <span className="text-neutral-600">—</span>}
+                      <td className="py-3 px-3 align-middle">
+                        <div className="text-xs text-neutral-300 truncate">
+                          {examTitle || <span className="text-neutral-600">—</span>}
+                        </div>
                       </td>
                       <td className="py-3 px-3 text-xs text-neutral-200 tabular-nums text-center whitespace-nowrap align-middle">
-                        {r.latest ? (
+                        {cohortAtt ? (
+                          <div className="flex flex-col items-center gap-1">
+                            {attPill && (
+                              <DotPillC dot={attPill.dot} label={attPill.label} text={attPill.text} />
+                            )}
+                            {cohortScore ? (
+                              cohortScore.status === "SUBMITTED" && cohortSession && (cohortSession.totalMarks || 0) > 0 ? (
+                                <span className="text-[11px] text-neutral-200 tabular-nums">
+                                  {cohortScore.score.toFixed(0)} / {((cohortScore.score / (cohortSession.totalMarks as number)) * 100).toFixed(1)}%
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-neutral-500">Attempt in progress · {cohortScore.score.toFixed(0)} pts</span>
+                              )
+                            ) : (
+                              <span className="text-[10px] text-neutral-600">Rostered · no attempt</span>
+                            )}
+                          </div>
+                        ) : r.latest ? (
                           `${r.latest.score.toFixed(0)} / ${pct !== null ? pct.toFixed(1) : "—"}%`
                         ) : (
                           <span className="text-neutral-600">Absent · no attempt</span>
@@ -322,11 +406,11 @@ export function CandidateRecordsOps({
                           text={r.flags > 0 ? "text-rose-300" : "text-neutral-400"}
                         />
                       </td>
-                      <td className="py-3 pl-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                        {r.latest ? (
+                      <td className="py-3 px-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                        {(cohortAtt ? cohortScore : r.latest) ? (
                           <Link
-                            href={`/dashboard/owner/results/${r.latest.sessionId}/candidate/${r.latest.attemptId}`}
-                            className="text-[11.5px] font-bold text-neutral-300 bg-white/[0.05] hover:bg-white/[0.1] hover:text-white border border-white/10 rounded-md px-2.5 py-1.5 transition-colors whitespace-nowrap"
+                            href={`/dashboard/owner/results/${cohortAtt ? cohort : r.latest!.sessionId}/candidate/${cohortAtt ? cohortScore!.attemptId : r.latest!.attemptId}`}
+                            className="inline-flex items-center text-[11.5px] font-bold text-neutral-300 bg-white/[0.05] hover:bg-white/[0.1] hover:text-white border border-white/10 rounded-md px-2.5 py-1.5 transition-colors whitespace-nowrap"
                           >
                             Audit →
                           </Link>
@@ -347,15 +431,14 @@ export function CandidateRecordsOps({
         <div className="mt-2 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-3 text-[11px] text-neutral-400">
           <div className="flex items-center gap-2.5">
             <span>Rows per page</span>
-            <select
-              value={per}
-              onChange={(e) => { setPer(Number(e.target.value)); setPage(0); }}
-              className="h-9 bg-black/60 border border-white/10 rounded-md px-2 text-xs font-bold text-neutral-200 outline-none cursor-pointer"
-            >
-              {[10, 20, 50].map((n) => (
-                <option key={n} value={n} className="bg-[#12141a]">{n}</option>
-              ))}
-            </select>
+            <FilterChip
+              label={String(per)}
+              options={[10, 20, 50].map((n) => ({
+                label: String(n),
+                active: per === n,
+                onSelect: () => { setPer(n); setPage(0); },
+              }))}
+            />
             <span className="tabular-nums">
               {filtered.length === 0 ? "0 rows" : `${page * per + 1}–${Math.min(filtered.length, (page + 1) * per)} of ${filtered.length} rows`}
             </span>
@@ -408,42 +491,6 @@ export function CandidateRecordsOps({
         </div>
       </div>
 
-      {/* Selected record + explainer */}
-      <div className="grid lg:grid-cols-2 gap-4 items-stretch">
-        <div className="rounded-2xl border border-lime-300/20 bg-lime-300/[0.03] p-5">
-          {selected ? (
-            <>
-              <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500">SELECTED RECORD · {selected.name}</p>
-              <p className="mt-2 text-xs text-neutral-300 leading-relaxed">
-                <span className="font-mono">{selected.roll}</span> · {selected.totalExams} exam{selected.totalExams === 1 ? "" : "s"} ·{" "}
-                {selected.latest
-                  ? `${selected.latest.score.toFixed(1)} in ${selected.latest.examTitle}`
-                  : "no attempts yet"}
-                {selected.flags > 0 ? ` · ${selected.flags} flag${selected.flags === 1 ? "" : "s"} on file` : " · clean record"}
-              </p>
-              {selected.latest && (
-                <Link
-                  href={`/dashboard/owner/results/${selected.latest.sessionId}/candidate/${selected.latest.attemptId}`}
-                  className="mt-3 inline-flex text-[11px] font-black text-black bg-lime-300 hover:brightness-110 rounded-lg px-3.5 py-2 transition-all"
-                >
-                  Open Audit →
-                </Link>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500">SELECTED RECORD</p>
-              <p className="mt-2 text-xs text-neutral-500">Click any candidate row to inspect their record here.</p>
-            </>
-          )}
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-          <p className="text-[13px] font-bold text-white">Flags are review signals</p>
-          <p className="mt-1.5 text-[11px] text-neutral-400 leading-relaxed">
-            Dismissing an integrity flag is not a cheating verdict. Overruling stays with the reviewer: evidence, context and reviewer identity remain recorded separately.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
