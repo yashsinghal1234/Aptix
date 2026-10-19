@@ -50,17 +50,10 @@ export function OpsHero() {
   return (
     <div className="flex items-start justify-between gap-6 px-1 pt-1">
       <div>
-        <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">
-          CONTROL PLANE · ADMINISTRATOR
-        </p>
         <h1 className="text-3xl sm:text-[44px] font-black text-white tracking-tight leading-[1.02]">
           Big exams. Calm operations<span className="text-lime-300">.</span>
         </h1>
-        <p className="text-[13px] text-neutral-400 mt-2.5">
-          One view of every session, signal and candidate. You&rsquo;re in control.
-        </p>
       </div>
-      <Flower className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 mt-1" />
     </div>
   );
 }
@@ -87,7 +80,6 @@ export function StatCards({ stats }: { stats: StatItem[] }) {
           >
             {s.value}
           </p>
-          <p className="mt-2 text-[10px] font-medium text-neutral-500">{s.sub}</p>
         </div>
       ))}
     </div>
@@ -191,15 +183,6 @@ export function IntegrityMonitor({
           </div>
         )}
       </div>
-
-      <div className="mt-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] border-l-2 border-l-[#f2a488] p-3.5 relative">
-        <p className="text-xs font-bold text-[#f2a488]">
-          {nearThreshold} candidates near policy threshold
-        </p>
-        <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
-          Force submission triggers at 5 verified violations. Review evidence before action.
-        </p>
-      </div>
     </Panel>
   );
 }
@@ -217,7 +200,7 @@ export interface AgendaItem {
 
 export function AgendaPanel({ items }: { items: AgendaItem[] }) {
   return (
-    <Panel title="Next on the agenda" className="h-full">
+    <Panel title="Scheduled Exams" className="h-full">
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 items-center">
         <p className="text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-1">EXAM / SUBJECT</p>
         <p className="text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-1">TIMETABLE</p>

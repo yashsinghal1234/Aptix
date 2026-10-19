@@ -196,7 +196,7 @@ export function LiveSessionsTable({ initialSessions, serverNow }: { initialSessi
     <Panel
       id="live"
       title="Live Sessions"
-      tag="LIVE SESSIONS"
+      className="h-full flex flex-col"
       action={
         <Link href="/dashboard/owner/template/new" className="text-[11px] font-bold text-neutral-300 hover:text-white border border-white/15 rounded-lg px-3 py-1.5 transition-colors">
           ↗ Open command center
@@ -204,9 +204,8 @@ export function LiveSessionsTable({ initialSessions, serverNow }: { initialSessi
       }
     >
       {sessions.length === 0 ? (
-        <div className="py-10 text-center">
-          <p className="text-sm font-bold text-white">No Active Sessions</p>
-          <p className="text-xs text-neutral-500 mt-1">Launched assessments will appear here with live controls.</p>
+        <div className="flex-1 flex items-center justify-center min-h-[320px]">
+          <p className="text-xs text-neutral-500">No active sessions yet.</p>
         </div>
       ) : (
         <div className="overflow-x-auto -mx-1 px-1">
@@ -280,15 +279,6 @@ export function LiveSessionsTable({ initialSessions, serverNow }: { initialSessi
           </div>
         </div>
       )}
-      <p className="mt-3 text-[10px] text-neutral-600">
-        {joined} candidates joined across live sessions. Invite window remains open.
-      </p>
-      <div className="mt-3 rounded-xl border-l-2 border-lime-300/60 bg-white/[0.02] p-3.5">
-        <p className="text-[11px] font-bold text-white flex items-center gap-1.5">🛡 Resilient by design</p>
-        <p className="text-[10px] text-neutral-400 mt-1 leading-relaxed">
-          Cached question snapshots isolate live exams from bank changes. Local answer queues retry after reconnect; server-side leases and deadline enforcement remain authoritative.
-        </p>
-      </div>
     </Panel>
   );
 }
@@ -426,9 +416,6 @@ export function QualityQueue({ questions }: { questions: any[] }) {
           </React.Fragment>
         ))}
       </div>
-      <p className="mt-3 text-[10px] text-neutral-600">
-        Showing {shown.length} of {list.length} {tab.toLowerCase()} questions. All reviews are logged to the audit trail.
-      </p>
     </Panel>
   );
 }
@@ -509,7 +496,7 @@ export function TemplateCards({ templates }: { templates: TemplateCard[] }) {
           <p className="text-xs text-neutral-500 mt-1">Create your first assessment blueprint to get started.</p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 gap-3">
           {templates.map((t) => (
             <div key={t.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 flex flex-col">
               <p className="text-[13px] font-bold text-white leading-snug">{t.title}</p>

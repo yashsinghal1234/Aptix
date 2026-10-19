@@ -346,6 +346,7 @@ async function fetchApprovedQuestions() {
       points: true,
       type: true,
       options: true,
+      answerData: true,
       imageUrl: true
     },
     orderBy: { createdAt: "desc" }

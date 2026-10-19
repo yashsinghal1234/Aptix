@@ -75,8 +75,13 @@ const config: Config = {
         'glass-celestial': '0 20px 50px -10px rgba(4, 7, 16, 0.8)',
       },
       fontFamily: {
-        sans: ['Helvetica Now Text', 'Helvetica Neue', 'Helvetica', 'Arial', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['Helvetica Now Text', 'Helvetica Neue', 'Helvetica', 'Arial', 'Menlo', 'ui-monospace', 'monospace'],
+        // Body / labels / numbers: Source Sans 3 ("Old Money" body pairing)
+        sans: ['Source Sans 3', 'Helvetica Neue', 'Helvetica', 'Arial', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['Source Sans 3', 'Helvetica Neue', 'Helvetica', 'Arial', 'Menlo', 'ui-monospace', 'monospace'],
+        // Hero title + logo + brand name: engraved small-caps serif (unchanged)
+        display: ['Playfair Display SC', 'Playfair Display', 'Manrope', 'Georgia', 'serif'],
+        // Card titles / headings: Playfair Display serif
+        serif: ['Playfair Display', 'Georgia', 'serif'],
       },
     },
   },

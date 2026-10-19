@@ -253,44 +253,6 @@ export default function CandidateScorecardView({
     .slice(0, 2)
     .toUpperCase() || "CD";
 
-  // Dynamic streaks computation across question sequence and categories
-  const { maxStreak, categoryStreaks } = React.useMemo(() => {
-    let currentStreak = 0;
-    let maxS = 0;
-    const catMap: Record<string, { current: number; max: number }> = {};
-
-    questionRows.forEach((row) => {
-      const cat = row.category || "General";
-      if (!catMap[cat]) {
-        catMap[cat] = { current: 0, max: 0 };
-      }
-
-      if (row.isCorrect) {
-        currentStreak++;
-        if (currentStreak > maxS) maxS = currentStreak;
-
-        catMap[cat].current++;
-        if (catMap[cat].current > catMap[cat].max) {
-          catMap[cat].max = catMap[cat].current;
-        }
-      } else {
-        currentStreak = 0;
-        catMap[cat].current = 0;
-      }
-    });
-
-    const streaksList = Object.entries(catMap).map(([cat, val]) => ({
-      name: cat,
-      streak: val.max,
-    }));
-    streaksList.sort((a, b) => b.streak - a.streak);
-
-    return {
-      maxStreak: maxS,
-      categoryStreaks: streaksList.length > 0 ? streaksList : [{ name: "General", streak: maxS }],
-    };
-  }, [questionRows]);
-
   // Dynamic podium: real submitted cohort members with emblems, never fabricated
   const podium = React.useMemo(() => {
     const entries = Array.isArray(cohort?.podium) ? cohort.podium.slice(0, 3) : [];

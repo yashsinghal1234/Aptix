@@ -59,6 +59,8 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
   const [statusFilter, setStatusFilter] = useState<"ALL" | "LIVE" | "DRAFT" | "SCHEDULED">("ALL");
   const [activeTab, setActiveTab] = useState<"specification" | "pool" | "history">("specification");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  // Editing side-panel visibility: cards stay full-width until a card is clicked
+  const [panelOpen, setPanelOpen] = useState(false);
 
   // Success / error message
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -67,6 +69,7 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
 
   // Local editing state for the active template
   const [editForm, setEditForm] = useState<TemplateItem | null>(selectedTemplate);
+  const twoCol = panelOpen && !!editForm;
   const [reschedAt, setReschedAt] = useState("");
   const [reschedMsg, setReschedMsg] = useState<string | null>(null);
   const [launchOpen, setLaunchOpen] = useState<"launch" | "schedule" | null>(null);
@@ -112,15 +115,9 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
     return (
       <div className="space-y-6 pb-12 font-sans selection:bg-lime-400 selection:text-black">
         <div>
-          <div className="text-[10px] font-mono tracking-widest text-lime-400 font-bold uppercase mb-1">
-            BLUEPRINTS / VERSIONED & REUSABLE
-          </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
             Set the standard<span className="text-lime-400">.</span>
           </h1>
-          <p className="text-xs text-neutral-400 font-mono mt-1">
-            Define the rules once. Deliver a consistent assessment every time.
-          </p>
         </div>
         <div className="p-12 text-center border border-white/10 rounded-2xl bg-[#0c0d12]">
           <p className="text-sm font-bold text-white">No blueprints yet</p>
@@ -149,8 +146,9 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
     fd.append("durationMinutes", String(editForm.durationMinutes));
     fd.append("passCriteria", String(editForm.passScorePct));
     fd.append("allowedEmailDomain", editForm.domainLock.replace(/@|·\s*required/g, "").trim());
-    fd.append("negativeMarkingEnabled", editForm.negativeMarking !== "0" ? "true" : "false");
-    fd.append("negativeMarksValue", editForm.negativeMarking.replace(/[^0-9.]/g, "") || "0.5");
+    const negOff = editForm.negativeMarking === "Off";
+    fd.append("negativeMarkingEnabled", negOff ? "false" : "true");
+    fd.append("negativeMarksValue", negOff ? "0" : editForm.negativeMarking.match(/[0-9.]+/)?.[0] || "0.5");
     fd.append("requireFullscreen", editForm.proctoring.fullscreen ? "true" : "false");
     fd.append("tabSwitchLimit", editForm.proctoring.forceSubmit ? "5" : "10");
 
@@ -171,33 +169,15 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
 
   return (
     <div className="space-y-6 pb-12 font-sans selection:bg-lime-400 selection:text-black">
-      {/* ── Top Header ────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <div className="text-[10px] font-mono tracking-widest text-lime-400 font-bold uppercase mb-1">
-            BLUEPRINTS / VERSIONED & REUSABLE
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Set the standard<span className="text-lime-400">.</span>
-          </h1>
-          <p className="text-xs text-neutral-400 font-mono mt-1">
-            Define the rules once. Deliver a consistent assessment every time.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
-          <Link
-            href="/dashboard/owner/template/new"
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-black font-extrabold text-xs shadow-lg transition-all cursor-pointer"
-          >
-            <span className="text-base leading-none font-black">+</span>
-            <span>Create Template Studio</span>
-          </Link>
-        </div>
+      {/* ── Header ────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Set the standard<span className="text-lime-400">.</span>
+        </h1>
       </div>
 
-      {/* ── Search & Filter Controls ──────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      {/* ── Search + Create + Status on one line ──────────── */}
+      <div className="flex items-center gap-3">
         {/* Search input */}
         <div className="relative flex-1 max-w-xl">
           <svg
@@ -217,8 +197,8 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
           />
         </div>
 
-        {/* Status Dropdown */}
-        <div className="relative">
+        {/* Status Dropdown — sits right next to the search bar */}
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
@@ -248,12 +228,20 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
             </div>
           )}
         </div>
+
+        <Link
+          href="/dashboard/owner/template/new"
+          className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-black font-extrabold text-xs shadow-lg transition-all cursor-pointer shrink-0 ml-auto"
+        >
+          <span className="text-base leading-none font-black">+</span>
+          <span>Create Template Studio</span>
+        </Link>
       </div>
 
-      {/* ── Two-Column Layout ──────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: Template Cards List (span 6 or 7) */}
-        <div className="lg:col-span-6 xl:col-span-6 space-y-3.5">
+      {/* ── Layout: full-width cards → two columns when a card is clicked ── */}
+      <div className={`grid grid-cols-1 ${twoCol ? "lg:grid-cols-12" : ""} gap-6 items-start`}>
+        {/* Template Cards List — full width until the panel opens */}
+        <div className={twoCol ? "lg:col-span-6 xl:col-span-6 space-y-3.5" : "space-y-3.5"}>
           {filteredTemplates.length === 0 ? (
             <div className="p-12 text-center border border-white/10 rounded-2xl bg-[#0c0d12] text-neutral-500 text-xs">
               No templates match your search criteria.
@@ -278,10 +266,18 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
               return (
                 <div
                   key={item.id}
-                  onClick={() => setSelectedId(item.id)}
+                  onClick={() => {
+                    if (twoCol && isSelected) {
+                      setPanelOpen(false);
+                      setSelectedId("");
+                    } else {
+                      setSelectedId(item.id);
+                      setPanelOpen(true);
+                    }
+                  }}
                   className={`rounded-2xl p-5 space-y-2 cursor-pointer transition-all ${
                     isSelected
-                      ? "bg-[#0c0d12] border-2 border-lime-400 shadow-[0_0_20px_rgba(163,230,53,0.15)]"
+                      ? "bg-[#0c0d12] border border-white/25"
                       : "bg-[#0c0d12] border border-white/10 hover:border-white/20"
                   }`}
                 >
@@ -322,14 +318,10 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
             })
           )}
 
-          {/* Footer note below cards */}
-          <p className="text-[11px] text-neutral-500 font-mono pt-2">
-            {filteredTemplates.length} of {templates.length} templates shown · Scheduled drafts are checked for pool sufficiency.
-          </p>
         </div>
 
-        {/* RIGHT COLUMN: Editing Drawer / Panel (span 6 or 6) */}
-        {editForm ? (
+        {/* Editing side panel — opens only when a card was clicked */}
+        {twoCol && editForm ? (
           <div className="lg:col-span-6 xl:col-span-6 bg-[#0c0d12] border border-white/10 rounded-2xl p-6 space-y-5 shadow-2xl relative sticky top-6">
             {/* Drawer Top Header Badge & Close */}
             <div className="flex items-center justify-between">
@@ -338,7 +330,10 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
               </span>
               <button
                 type="button"
-                onClick={() => setSelectedId("")}
+                onClick={() => {
+                  setPanelOpen(false);
+                  setSelectedId("");
+                }}
                 aria-label="Close panel"
                 className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
               >
@@ -346,12 +341,9 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
               </button>
             </div>
 
-            {/* Title & Owner line */}
+            {/* Title */}
             <div>
               <h2 className="text-2xl font-black text-white tracking-tight">{editForm.title}</h2>
-              <p className="text-xs text-neutral-400 font-mono mt-0.5">
-                Owner: {editForm.ownerName} · {editForm.createdLabel}
-              </p>
             </div>
 
             {/* Tabs Bar */}
@@ -410,24 +402,64 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-neutral-400">Duration</label>
-                    <input
-                      type="text"
-                      value={`${editForm.durationMinutes} minutes`}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10) || 60;
-                        setEditForm({ ...editForm, durationMinutes: val });
-                      }}
-                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-white/20"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={5}
+                        max={600}
+                        step={5}
+                        value={editForm.durationMinutes}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          setEditForm({ ...editForm, durationMinutes: Math.min(600, Math.max(5, isNaN(v) ? 0 : v)) });
+                        }}
+                        className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-white outline-none focus:border-white/20"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 font-mono pointer-events-none">
+                        min
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-neutral-400">Negative marking</label>
-                    <input
-                      type="text"
-                      value={editForm.negativeMarking}
-                      onChange={(e) => setEditForm({ ...editForm, negativeMarking: e.target.value })}
-                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-white/20"
-                    />
+                    <div className="inline-flex w-full rounded-xl bg-black/60 border border-white/10 p-0.5">
+                      {(["Off", "On"] as const).map((m) => {
+                        const active = (m === "On") === (editForm.negativeMarking !== "Off");
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() =>
+                              setEditForm({ ...editForm, negativeMarking: m === "On" ? "-0.5 / incorrect" : "Off" })
+                            }
+                            className={`flex-1 py-1.5 rounded-[10px] text-xs font-semibold transition-colors cursor-pointer ${
+                              active ? "bg-white/10 text-white" : "text-neutral-500 hover:text-neutral-300"
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {editForm.negativeMarking !== "Off" && (
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          max={5}
+                          step={0.25}
+                          value={editForm.negativeMarking.match(/[0-9.]+/)?.[0] ?? "0.5"}
+                          onChange={(e) => {
+                            const pen = Math.min(5, Math.max(0, parseFloat(e.target.value) || 0));
+                            setEditForm({ ...editForm, negativeMarking: `-${pen} / incorrect` });
+                          }}
+                          className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 pr-14 text-xs text-white outline-none focus:border-white/20"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 font-mono pointer-events-none">
+                          marks
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -435,40 +467,47 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-neutral-400">Passing score</label>
-                    <input
-                      type="text"
-                      value={`${editForm.passScorePct}% net score`}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10) || 50;
-                        setEditForm({ ...editForm, passScorePct: val });
-                      }}
-                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-white/20"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={editForm.passScorePct}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          setEditForm({ ...editForm, passScorePct: Math.min(100, Math.max(0, isNaN(v) ? 0 : v)) });
+                        }}
+                        className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 pr-9 text-xs text-white outline-none focus:border-white/20"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 font-mono pointer-events-none">
+                        %
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-neutral-400">Points</label>
-                    <input
-                      type="text"
-                      value={`${editForm.pointsPerQ} per question`}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10) || 2;
-                        setEditForm({ ...editForm, pointsPerQ: val });
-                      }}
-                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-white/20"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        value={editForm.pointsPerQ}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          setEditForm({ ...editForm, pointsPerQ: Math.min(100, Math.max(0, isNaN(v) ? 0 : v)) });
+                        }}
+                        className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-white outline-none focus:border-white/20"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 font-mono pointer-events-none">
+                        pts
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Institutional domain lock */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-neutral-400">Institutional domain lock</label>
-                  <input
-                    type="text"
-                    value={editForm.domainLock}
-                    onChange={(e) => setEditForm({ ...editForm, domainLock: e.target.value })}
-                    className="w-full bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white outline-none focus:border-white/20"
-                  />
-                </div>
+                {/* Institutional domain lock: managed at authentication level, not editable here */}
 
                 {/* Question pool & auto-pick rules */}
                 <div className="space-y-2 pt-2 border-t border-white/10">
@@ -588,27 +627,6 @@ export default function TemplateStudioView({ initialTemplates }: TemplateStudioV
                       )}
                     </>
                   )}
-                </div>
-
-                {/* Alert Box: Snapshots protect live exams */}
-                <div className="bg-white/[0.02] border border-white/10 rounded-xl p-3.5 flex items-start gap-3">
-                  <div className="text-lime-400 shrink-0 mt-0.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-white">Snapshots protect live exams</h5>
-                    <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
-                      LIVE and COMPLETED specifications are immutable. Duplicate a blueprint to change questions; draft
-                      edits apply only before scheduling.
-                    </p>
-                  </div>
                 </div>
 
                 {/* Action Buttons */}

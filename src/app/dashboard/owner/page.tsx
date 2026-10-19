@@ -4,9 +4,8 @@ import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 
 import { getCachedOwnerDashboardData } from "@/lib/dashboard-cache";
-import { OpsHero, StatCards, EngineHealthPanel, IntegrityMonitor, AgendaPanel, TriagePanel, BankHealthPanel } from "@/components/owner/OpsPanels";
+import { OpsHero, StatCards, IntegrityMonitor, AgendaPanel, TriagePanel, BankHealthPanel } from "@/components/owner/OpsPanels";
 import {
-  EngineClock,
   ScoreDistributionPanel,
   LiveSessionsTable,
   QualityQueue,
@@ -260,13 +259,17 @@ export default async function OwnerDashboard() {
         ]}
       />
 
-      <div className="grid xl:grid-cols-[1fr_300px] gap-4 items-stretch">
+      <div className="grid xl:grid-cols-[1.5fr_1fr] gap-4 items-stretch">
         <LiveSessionsTable initialSessions={activeSessions as any[]} serverNow={new Date().toISOString()} />
-        <EngineHealthPanel leases={inProgressAttemptsCount} clock={<EngineClock />} />
+        <ScoreDistributionPanel options={withAll} defaultId={defaultOption.id} />
       </div>
 
-      <div className="grid lg:grid-cols-[1.45fr_1fr] gap-4 items-stretch">
-        <ScoreDistributionPanel options={withAll} defaultId={defaultOption.id} />
+      <div className="grid lg:grid-cols-[1fr_1.7fr] gap-4 items-stretch">
+        <AgendaPanel items={agenda} />
+        <TemplateCards templates={templateCards} />
+      </div>
+
+      <div className="grid lg:grid-cols-[1.2fr_1fr] gap-4 items-stretch">
         <IntegrityMonitor
           cleanRate={cleanRate}
           cleanCount={cleanCount}
@@ -274,24 +277,18 @@ export default async function OwnerDashboard() {
           rows={flagRows}
           nearThreshold={nearThresholdFinal}
         />
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4 items-stretch">
-        <AgendaPanel items={agenda} />
-        <TriagePanel flagCount={totalCheatFlagsCount} topType={topType} />
-      </div>
-
-      <div className="grid lg:grid-cols-[5fr_7fr] gap-4 items-stretch">
         <BankHealthPanel
           total={bankApproved + bankPending}
           approved={bankApproved}
           pending={bankPending}
           rows={bankRows}
         />
-        <QualityQueue questions={allQuestions as any[]} />
       </div>
 
-      <TemplateCards templates={templateCards} />
+      <div className="grid lg:grid-cols-[1fr_1.7fr] gap-4 items-stretch">
+        <TriagePanel flagCount={totalCheatFlagsCount} topType={topType} />
+        <QualityQueue questions={allQuestions as any[]} />
+      </div>
     </div>
   );
 }

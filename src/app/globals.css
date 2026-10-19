@@ -10,10 +10,41 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Helvetica Now Text', 'Helvetica Neue', 'Helvetica', 'Arial', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Source Sans 3', 'Helvetica Neue', 'Helvetica', 'Arial', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-x: none;
+}
+
+/* "Old Money" engraved serif (Playfair Display SC) for the hero title + brand name */
+h1,
+.font-display {
+  font-family: 'Playfair Display SC', 'Playfair Display', 'Manrope', Georgia, serif;
+  letter-spacing: 0.01em;
+}
+
+/* Card titles + section headings: Playfair Display serif */
+h2,
+h3,
+.font-serifdisplay {
+  font-family: 'Playfair Display', 'Manrope', Georgia, serif;
+}
+
+/* Footer strips (all pages): delicate Josefin Sans from the Old Money pairing */
+footer {
+  font-family: 'Josefin Sans', 'Source Sans 3', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+/* Numeric inputs: strip the native spin-button arrows (all fields, site-wide) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 /*

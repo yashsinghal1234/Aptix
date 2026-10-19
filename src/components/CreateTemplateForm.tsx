@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createTemplateAction } from "@/app/actions/template";
 import { useRouter } from "next/navigation";
 import { FIXED_TOPICS, FIXED_DIFFICULTIES } from "@/lib/ai-question-analyzer";
+import * as XLSX from "xlsx";
 
 const DRAFT_KEY = "aptix_template_draft_v1";
 
@@ -162,12 +163,7 @@ const CARD = "rounded-2xl border border-white/10 bg-[#0e0f13] p-5 sm:p-7";
 const STEPS = [
   "Basic information",
   "Question strategy",
-  "Scoring",
-  "Timing",
-  "Navigation",
-  "Feedback",
-  "Proctoring",
-  "Gamification",
+  "Scoring, timing & navigation",
 ];
 
 /* ── Form ────────────────────────────────────────── */
@@ -202,6 +198,80 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     return new Set();
   });
 
+  // Roster (approved students) upload state
+  const [rosterMsg, setRosterMsg] = useState<string | null>(null);
+  const [rosterCount, setRosterCount] = useState<number>(0);
+  const rosterPreview = (fields.rosterText || "").trim().split("\n").filter(Boolean);
+
+  const handleRosterFile = async (file: File) => {
+    setRosterMsg(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      let rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false });
+      const cellText = (c: unknown): string => {
+        if (c == null) return "";
+        if (typeof c === "object") return String((c as { v?: unknown }).v ?? "").trim();
+        return String(c).trim();
+      };
+      const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+      // Header-aware column detection: find the Email column, then a Name column
+      // (anything else in the sheet — remarks, roll numbers, phone, dates — is ignored)
+      let emailCol = -1;
+      let nameCol = -1;
+      if (rows.length > 0 && Array.isArray(rows[0])) {
+        const header: string[] = rows[0].map(cellText);
+        emailCol = header.findIndex((h) => /e-?mail|mail/i.test(h));
+        nameCol = header.findIndex((h) => /\bfull\s*name\b|\bname\b|student|candidate/i.test(h) && !/e-?mail|mail/i.test(h));
+        if (emailCol !== -1) rows = rows.slice(1).filter((r) => Array.isArray(r));
+      }
+
+      const lines: string[] = [];
+      for (const row of rows) {
+        if (!Array.isArray(row)) continue;
+        let email = "";
+        let name = "";
+
+        if (emailCol !== -1) {
+          // Header-based mode: read strictly from the detected columns
+          const ev = cellText(row[emailCol]);
+          if (isEmail(email = ev.toLowerCase()) === false) continue;
+          if (nameCol !== -1 && nameCol !== emailCol && cellText(row[nameCol])) {
+            name = cellText(row[nameCol]);
+          }
+        } else {
+          // No recognizable header: scan each cell; first valid email = email,
+          // last cell that looks like a human name = name
+          for (const v0 of row) {
+            const v = cellText(v0);
+            if (!v) continue;
+            if (!email && isEmail(v)) {
+              email = v.toLowerCase();
+            } else if (email && !isEmail(v) && !/^\d+(\.\d+)?$/.test(v) && v.length <= 60) {
+              name = v;
+            }
+          }
+        }
+        if (!email) continue;
+        lines.push(name ? `${email},${name}` : email);
+      }
+      const uniq = Array.from(new Set(lines));
+      if (uniq.length === 0) {
+        setRosterMsg("No valid email addresses found in the file.");
+        setRosterCount(0);
+        return;
+      }
+      updateField("rosterText", uniq.join("\n"));
+      setRosterCount(uniq.length);
+      setRosterMsg(`${uniq.length} student${uniq.length === 1 ? "" : "s"} imported from ${file.name}. Only the Email and Name columns were read.`);
+    } catch {
+      setRosterMsg("Could not read the file — use an .xlsx or .csv with one student per row.");
+      setRosterCount(0);
+    }
+  };
+
   const [rules, setRules] = useState<{ id: string; category: string; difficultyLevel: string; count: number }[]>(() => {
     if (typeof window !== "undefined") {
       const saved = loadDraft();
@@ -228,16 +298,58 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     return "1";
   });
 
-  const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [filterTopic, setFilterTopic] = useState("");
   const [filterDiff, setFilterDiff] = useState("");
   const [query, setQuery] = useState("");
   const [qPage, setQPage] = useState(0);
-  const Q_PER = 4;
+  const Q_PER = 6;
+
+  // Read-only question info drawer (like the question bank drawer, but info only)
+  const [detailId, setDetailId] = useState<string | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDetailId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const detailQ = detailId ? allQuestions.find((q) => q.id === detailId) || null : null;
+
+  const parseQuestionDetail = (q: any) => {
+    let options: string[] = [];
+    let optionImages: (string | null)[] = [];
+    let optionCorrect: string | undefined;
+    let optionExplanation: string | undefined;
+    try {
+      const parsed = JSON.parse(q.options || "[]");
+      options = parsed.map((o: any) => {
+        if (typeof o === "string") {
+          optionImages.push(null);
+          return o;
+        }
+        if (o.isCorrect && !optionCorrect) optionCorrect = o.text;
+        if (o.explanation && !optionExplanation) optionExplanation = o.explanation;
+        optionImages.push(o.imageUrl || null);
+        return o.text;
+      });
+    } catch {}
+    let ans: any = {};
+    try {
+      ans = JSON.parse(q.answerData || "{}");
+    } catch {}
+    return {
+      options,
+      optionImages,
+      correctAnswer: ans.correctAnswer ?? (ans.exact !== undefined ? String(ans.exact) : optionCorrect),
+      correctAnswers: ans.correctAnswers ?? (ans.acceptedAnswers ?? undefined),
+      explanation: ans.explanation ?? optionExplanation,
+    };
+  };
 
   const updateField = (name: string, val: string) => {
     setFields((prev) => ({ ...prev, [name]: val }));
@@ -268,7 +380,6 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
       if (saved.selectedIds) setSelectedIds(new Set(saved.selectedIds));
       if (saved.selectionMode) setSelectionMode(saved.selectionMode);
       if (saved.marksPerQuestion) setMarksPerQuestion(saved.marksPerQuestion);
-      setDraftNote("Draft restored from this browser.");
     }
     isLoadedRef.current = true;
   }, []);
@@ -363,24 +474,8 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     setSavingDraft(true);
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(collectDraft()));
-      setDraftNote("Draft saved in this browser.");
-    } catch {
-      setDraftNote("Could not save draft in this browser.");
-    }
-    setSavingDraft(false);
-  };
-
-  const discardDraft = () => {
-    try {
-      localStorage.removeItem(DRAFT_KEY);
     } catch {}
-    setFields(DEFAULT_FIELDS);
-    setChecks(DEFAULT_CHECKS);
-    setRules([]);
-    setSelectedIds(new Set());
-    setSelectionMode("MANUAL");
-    setMarksPerQuestion("1");
-    setDraftNote(null);
+    setSavingDraft(false);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -410,6 +505,11 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
       else formData.delete(k);
     });
     formData.set("marksPerQuestion", marksPerQuestion);
+    // Derive selection strategy from what the owner actually built — no manual mode switcher
+    formData.set(
+      "selectionMode",
+      rules.length > 0 && selectedIds.size > 0 ? "HYBRID" : rules.length > 0 ? "RULE_BASED" : "MANUAL"
+    );
     formData.set("totalMarks", String(maxMarks));
 
     const cleanedRules = rules.map(({ category, difficultyLevel, count }) => ({ category, difficultyLevel, count }));
@@ -437,8 +537,6 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   };
 
   const currentSelectionMode = fields.selectionMode || selectionMode;
-  const modeLabel = currentSelectionMode === "MANUAL" ? "Manual only" : currentSelectionMode === "RULE_BASED" ? "Hybrid selection" : "Hybrid selection";
-
   const isGamified = !!checks.isGamified;
   const negOn = !!checks.negativeMarkingEnabled;
 
@@ -446,21 +544,11 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     <form ref={formRef} onSubmit={handleSubmit} noValidate className="pb-24">
       {/* Header */}
       <div className="px-1 pt-1">
-        <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500 mb-2 font-mono">
-          BLUEPRINT / NEW · /dashboard/owner/template/new
-        </p>
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
               Build a better assessment<span className="text-lime-300">.</span>
             </h1>
-            <p className="text-[13px] text-neutral-400 mt-2.5">
-              A new draft based on the Quantitative Aptitude · Q4 specification. No changes to the existing live template.
-            </p>
-            <p className="mt-2 text-[10px] font-mono text-neutral-500">
-              <span className="text-lime-200/80 font-bold">DRAFT ONLY · Max {STEPS.length}</span>
-              {"  "}{step + 1} complete section{step === 0 ? "" : "s"} · {modeLabel} · All settings visible
-            </p>
           </div>
           <div className="flex gap-2 shrink-0">
             <button
@@ -480,100 +568,27 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
             </button>
           </div>
         </div>
-        {(draftNote || error) && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {draftNote && (
-              <p className="text-[11px] font-semibold text-lime-200 bg-lime-300/10 border border-lime-300/25 rounded-xl px-3 py-2">
-                {draftNote}{" "}
-                <button type="button" onClick={discardDraft} className="underline underline-offset-2 hover:text-white ml-1">
-                  Discard
-                </button>
-              </p>
-            )}
-            {error && (
-              <p className="text-[11px] font-bold text-rose-300 bg-rose-950/40 border border-rose-800/50 rounded-xl px-3 py-2">{error}</p>
-            )}
+        {error && (
+          <div className="mt-3">
+            <p className="text-[11px] font-bold text-rose-300 bg-rose-950/40 border border-rose-800/50 rounded-xl px-3 py-2">{error}</p>
           </div>
         )}
       </div>
 
-      <div className="mt-5 grid lg:grid-cols-[220px_1fr] gap-4 items-start">
-        {/* Left rail */}
-        <div className="space-y-4 lg:sticky lg:top-4">
-          <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-4">
-            <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 mb-2.5">JUMP TO SECTION</p>
-            <div className="space-y-1">
-              {STEPS.map((s, i) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => goStep(i)}
-                  className={`w-full text-left text-xs rounded-lg px-3 py-2 transition-all flex items-center gap-2.5 ${
-                    i === step
-                      ? "bg-white/[0.07] text-white font-bold"
-                      : "text-neutral-400 hover:text-white hover:bg-white/[0.04] font-medium"
-                  }`}
-                >
-                  <span className={`font-mono ${i === step ? "text-lime-300" : "text-neutral-600"}`}>{i + 1}</span>
-                  <span className="capitalize">{s}</span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-3 text-[10px] text-neutral-600 leading-relaxed">Static section anchors. Read downward to view the complete builder.</p>
-          </div>
-
-          {/* Blueprint summary */}
-          <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-4">
-            <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 mb-2">BLUEPRINT SUMMARY</p>
-            <p className="text-[26px] leading-none font-black text-lime-300 tabular-nums">
-              {totalQuestions} <span className="text-neutral-500">/ {Math.round(maxMarks)}</span>
-            </p>
-            <p className="text-[10px] text-neutral-500 mt-1">questions / maximum marks</p>
-            <div className="mt-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-2 gap-y-1.5 items-center text-[10px] min-w-0">
-              <p className="text-neutral-600 font-bold">SUBJECT</p>
-              <p className="text-neutral-600 font-bold text-right">DIFFICULTY</p>
-              <p className="text-neutral-600 font-bold text-right">COUNT</p>
-              <p className="text-neutral-600 font-bold text-right">AVAILABLE</p>
-              {rules.length === 0 && <p className="col-span-4 text-neutral-600 py-2">No blueprint rules yet.</p>}
-              {rules.map((r) => {
-                const avail = approvedFor(r.category, r.difficultyLevel);
-                const ok = (Number(r.count) || 0) <= avail;
-                return (
-                  <div key={r.id} className="contents">
-                    <p className="text-neutral-300 truncate min-w-0">{r.category.split(" ")[0]}</p>
-                    <p className="text-neutral-500 text-right">{r.difficultyLevel.slice(0, 4)}</p>
-                    <p className="text-white font-bold tabular-nums text-right">{r.count}</p>
-                    <p className={`font-bold tabular-nums text-right ${ok ? "text-lime-200" : "text-[#f2a488]"}`}>{avail}</p>
-                  </div>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={() => { addRule(); goStep(1); }}
-              className="mt-3 text-[11px] font-bold text-lime-200 hover:text-lime-100 transition-colors"
-            >
-              + Add blueprint rule
-            </button>
-            <p className="mt-2 text-[10px] text-neutral-500 tabular-nums">
-              Dynamic totals: {totalQuestions} questions, {Math.round(maxMarks)} marks · {selectedCount} fixed + {rulesDemand} dynamic
-            </p>
-            <p className="text-[10px] text-neutral-500">Fixed question selected · {selectedCount} selected</p>
-            <div className={`mt-2.5 rounded-xl border p-2.5 text-[10px] leading-relaxed ${poolReady || rules.length === 0 ? "border-lime-300/25 bg-lime-300/[0.05] text-neutral-300" : "border-[#f2a488]/30 bg-[#f2a488]/[0.06] text-[#f2a488]"}`}>
-              {rules.length === 0
-                ? "Pool sufficiency: add a rule or fixed question to validate the bank."
-                : poolReady
-                  ? `Pool sufficiency: ready — bank covers every rule demand.`
-                  : `Pool shortfall: ${shortfall.map((r) => `${r.category.split(" ")[0]} ${r.difficultyLevel.slice(0, 4)} needs ${r.count}`).join("; ")}.`}
-            </div>
-          </div>
-        </div>
-
+      <div className="mt-5">
         {/* Main column */}
         <div className="space-y-4 min-w-0">
           {/* STEP 1 */}
           <section className={`${CARD} ${step !== 0 ? "hidden" : ""}`} hidden={step !== 0}>
-            <h2 className="text-[15px] font-bold text-white mb-4">1 · Basic information</h2>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-[15px] font-bold text-white">Basic information</h2>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={() => goStep(step - 1)} disabled={step === 0} className="px-4 py-2 text-xs font-bold text-neutral-200 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-xl transition-all disabled:opacity-40 cursor-pointer">← Back</button>
+                {step < STEPS.length - 1 && (
+                  <button type="button" onClick={() => goStep(step + 1)} className="px-4 py-2 text-xs font-black text-black bg-lime-300 hover:brightness-110 rounded-xl transition-all cursor-pointer">Next →</button>
+                )}
+              </div>
+            </div>
             <div className="grid md:grid-cols-2 gap-x-5 gap-y-4">
               <div>
                 <label className={LABEL}>Assessment title</label>
@@ -582,7 +597,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   required
                   value={fields.title}
                   onChange={(e) => updateField("title", e.target.value)}
-                  placeholder="Quantitative Aptitude · Q4"
+                  placeholder="Final Term Examination"
                   className={INPUT}
                 />
               </div>
@@ -592,7 +607,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   name="subject"
                   value={fields.subject}
                   onChange={(e) => updateField("subject", e.target.value)}
-                  placeholder="Quantitative Aptitude"
+                  placeholder="Mathematics"
                   className={INPUT}
                 />
               </div>
@@ -602,7 +617,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   name="description"
                   value={fields.description}
                   onChange={(e) => updateField("description", e.target.value)}
-                  placeholder="Engineering cohort 2026 · foundational quantitative reasoning across algebra, arithmetic and data."
+                  placeholder="Assessment description"
                   className={INPUT}
                 />
               </div>
@@ -613,134 +628,132 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   rows={2}
                   value={fields.instructions}
                   onChange={(e) => updateField("instructions", e.target.value)}
-                  placeholder="Answer all 40 questions. Calculators are not permitted. Review marked questions before submitting."
+                  placeholder="Shown to candidates before the exam starts"
                   className={`${INPUT} resize-none`}
                 />
               </div>
               <div className="md:col-span-2">
-                <label className={LABEL}>Restricted email domain <span className="normal-case font-medium text-neutral-600">(optional)</span></label>
-                <input
-                  name="allowedEmailDomain"
-                  value={fields.allowedEmailDomain}
-                  onChange={(e) => updateField("allowedEmailDomain", e.target.value)}
-                  placeholder="@northbridge.edu"
-                  className={INPUT}
-                />
-                <p className="text-[10px] text-neutral-600 mt-1.5">Institution: KIET Deemed to be University · Cohort: ENG-26. Domain restriction applies at candidate authentication.</p>
-              </div>
-              <div className="md:col-span-2">
-                <label className={LABEL}>Approved students <span className="normal-case font-medium text-neutral-600">(optional - only these emails can take exams from this blueprint)</span></label>
-                <textarea
-                  name="rosterText"
-                  rows={4}
-                  value={fields.rosterText || ""}
-                  onChange={(e) => updateField("rosterText", e.target.value)}
-                  placeholder={"One per line:\nyash.2428c@example.edu\npriya@example.edu,Priya Sharma"}
-                  className={`${INPUT} resize-y font-mono`}
-                />
-                <p className="text-[10px] text-neutral-600 mt-1.5">Copied to every session launched from this blueprint. You can add more at schedule time or in Live Monitor. Empty = open session.</p>
+                <label className={LABEL}>Approved students</label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-white/[0.05] hover:bg-white/10 text-neutral-200 text-xs font-bold transition-colors cursor-pointer">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Upload Excel / CSV
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleRosterFile(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <span className="text-xs text-neutral-400 font-mono tabular-nums">
+                    {rosterCount > 0 ? `${rosterCount} approved` : ""}
+                  </span>
+                </div>
+
+                {rosterMsg && (
+                  <p className={`text-[10px] mt-1.5 ${rosterCount > 0 ? "text-lime-300" : "text-[#f2a488]"}`}>{rosterMsg}</p>
+                )}
+
+                {rosterPreview.length > 0 && fields.rosterText?.trim() && (
+                  <div className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
+                    <div className="font-mono text-[10px] text-neutral-400 leading-relaxed overflow-hidden max-h-24">
+                      {rosterPreview.slice(0, 4).map((line) => (
+                        <p key={line} className="truncate">{line}</p>
+                      ))}
+                      {rosterPreview.length > 4 && (
+                        <p className="text-neutral-600">+{rosterPreview.length - 4} more…</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { updateField("rosterText", ""); setRosterCount(0); setRosterMsg(null); }}
+                      className="text-[10px] font-bold text-neutral-500 hover:text-rose-300 transition-colors shrink-0 cursor-pointer"
+                    >
+                      Clear roster
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </section>
 
           {/* STEP 2 */}
           <section className={`${CARD} ${step !== 1 ? "hidden" : ""}`} hidden={step !== 1}>
-            <h2 className="text-[15px] font-bold text-white mb-4">2 · Question Selection Strategy</h2>
-            <div className="flex flex-wrap items-center gap-2 mb-1.5">
-              <span className="text-[9px] font-black tracking-[0.14em] text-neutral-500">MODE</span>
-              <Segmented
-                name="selectionMode"
-                value={(["MANUAL", "RULE_BASED", "HYBRID"] as const).includes(currentSelectionMode as any) ? (currentSelectionMode as "MANUAL" | "RULE_BASED" | "HYBRID") : "MANUAL"}
-                onChange={(v) => {
-                  updateField("selectionMode", v);
-                  setSelectionMode(v);
-                }}
-                options={[
-                  { value: "MANUAL", label: "MANUAL ONLY" },
-                  { value: "RULE_BASED", label: "HYBRID BLUEPRINT" },
-                  { value: "HYBRID", label: "HYBRID" },
-                ]}
-              />
-            </div>
-
-            <div className="bg-black/50 p-5 rounded-2xl border border-white/10 mb-4">
-              <div className="flex justify-between items-center gap-3 mb-3">
-                <h4 className="font-extrabold text-white text-[12px] uppercase tracking-[0.12em]">Dynamic Auto-Pick Rules</h4>
-                <button type="button" onClick={addRule} className="text-[11px] font-black text-black bg-lime-300 hover:brightness-110 px-3 py-1.5 rounded-lg transition-all shrink-0">
-                  + Add Rule
-                </button>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-[15px] font-bold text-white">Question Selection Strategy</h2>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={() => goStep(step - 1)} disabled={step === 0} className="px-4 py-2 text-xs font-bold text-neutral-200 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-xl transition-all disabled:opacity-40 cursor-pointer">← Back</button>
+                {step < STEPS.length - 1 && (
+                  <button type="button" onClick={() => goStep(step + 1)} className="px-4 py-2 text-xs font-black text-black bg-lime-300 hover:brightness-110 rounded-xl transition-all cursor-pointer">Next →</button>
+                )}
               </div>
-              {rules.length > 0 && (
-                <div className="space-y-2.5">
-                  {rules.map((rule) => (
-                    <div key={rule.id} className="flex gap-2 items-center bg-[#16171c] p-2.5 rounded-xl border border-white/10">
-                      <select value={rule.category} onChange={(e) => updateRule(rule.id, "category", e.target.value)} className="text-xs border border-white/10 rounded-lg p-2 flex-1 bg-black font-medium text-neutral-200 outline-none cursor-pointer min-w-0">
-                        {allCategories.map((t) => (<option key={t} value={t}>{t}</option>))}
-                      </select>
-                      <select value={rule.difficultyLevel} onChange={(e) => updateRule(rule.id, "difficultyLevel", e.target.value)} className="text-xs border border-white/10 rounded-lg p-2 bg-black font-medium text-neutral-200 outline-none cursor-pointer">
-                        {FIXED_DIFFICULTIES.map((df) => (<option key={df} value={df}>{df === "MEDIUM" ? "Med" : df.charAt(0) + df.slice(1).toLowerCase()}</option>))}
-                      </select>
-                      <input type="number" min="1" value={rule.count} onChange={(e) => updateRule(rule.id, "count", parseInt(e.target.value) || 1)} className="text-xs border border-white/10 rounded-lg p-2 w-16 bg-black font-bold text-white outline-none tabular-nums" />
-                      <span className="text-[10px] text-neutral-500 tabular-nums whitespace-nowrap">/ {approvedFor(rule.category, rule.difficultyLevel)}</span>
-                      <button type="button" onClick={() => removeRule(rule.id)} aria-label="Remove rule" className="text-neutral-500 hover:text-rose-400 p-1.5 text-lg font-bold leading-none">×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="bg-black/50 p-5 rounded-2xl border border-white/10">
-              <input
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setQPage(0); }}
-                placeholder="Search stem, category or question ID"
-                className={`${INPUT} mb-3`}
-              />
-              <div className="grid sm:grid-cols-2 gap-2.5 mb-3">
-                <label className="block">
-                  <span className={LABEL}>Subject filter</span>
-                  <select value={filterTopic} onChange={(e) => { setFilterTopic(e.target.value); setQPage(0); }} className={`${INPUT} cursor-pointer`}>
-                    <option value="">All categories</option>
-                    {allCategories.map((t) => (<option key={t} value={t}>{t}</option>))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className={LABEL}>Difficulty filter</span>
-                  <select value={filterDiff} onChange={(e) => { setFilterDiff(e.target.value); setQPage(0); }} className={`${INPUT} cursor-pointer`}>
-                    <option value="">All levels</option>
-                    <option value="EASY">Easy</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HARD">Hard</option>
-                  </select>
-                </label>
+              <div className="flex flex-wrap items-center gap-2.5 mb-3">
+                <input
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setQPage(0); }}
+                  placeholder="Search stem, category or question ID"
+                  className={`${INPUT} flex-1 min-w-[200px]`}
+                />
+                <select value={filterTopic} onChange={(e) => { setFilterTopic(e.target.value); setQPage(0); }} className={`${INPUT} w-auto pr-8 cursor-pointer`}>
+                  <option value="">All categories</option>
+                  {allCategories.map((t) => (<option key={t} value={t}>{t}</option>))}
+                </select>
+                <select value={filterDiff} onChange={(e) => { setFilterDiff(e.target.value); setQPage(0); }} className={`${INPUT} w-auto pr-8 cursor-pointer`}>
+                  <option value="">All levels</option>
+                  <option value="EASY">Easy</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HARD">Hard</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      const all = filteredQuestions.every((q) => next.has(q.id));
+                      filteredQuestions.forEach((q) => { if (all) next.delete(q.id); else next.add(q.id); });
+                      return next;
+                    });
+                  }}
+                  className="flex items-center gap-2 text-[11px] font-bold text-neutral-200 hover:text-white bg-white/[0.06] hover:bg-white/10 px-3 py-2 rounded-xl border border-white/15 transition-colors shrink-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id))}
+                    onChange={() => {}}
+                    className="accent-[#bef264] w-4 h-4 cursor-pointer"
+                  />
+                  {filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id))
+                    ? `Deselect all ${filteredQuestions.length} questions`
+                    : `Select all ${filteredQuestions.length} questions`}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    const all = filteredQuestions.every((q) => next.has(q.id));
-                    filteredQuestions.forEach((q) => { if (all) next.delete(q.id); else next.add(q.id); });
-                    return next;
-                  });
-                }}
-                className="text-[11px] font-bold text-neutral-200 hover:text-white bg-white/[0.06] hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/15 transition-colors mb-3"
-              >
-                ☑ Select all filtered · {filteredQuestions.length} questions
-              </button>
               <div className="space-y-2">
                 {qShown.length === 0 && (
                   <p className="text-xs text-neutral-500 italic py-4 text-center">No questions match the current filter.</p>
                 )}
                 {qShown.map((q) => {
                   const sel = selectedIds.has(q.id);
+                  const imgUrl = (q as any).imageUrl as string | undefined;
                   return (
-                    <div key={q.id} onClick={() => toggleQuestion(q.id)} className="grid grid-cols-[auto_auto_1fr_auto_auto] gap-3 items-center p-3 rounded-xl border text-xs cursor-pointer transition-all bg-white/[0.02] border-white/10 hover:bg-white/[0.05]">
-                      <input type="checkbox" checked={sel} readOnly className="accent-[#bef264] w-4 h-4 cursor-pointer" />
-                      {(q as any).imageUrl ? (
-                        <img src={(q as any).imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
-                      ) : (
-                        <span className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center text-[9px] font-black text-neutral-600 shrink-0">Q</span>
+                    <div key={q.id} onClick={() => setDetailId(q.id)} className={`grid ${imgUrl ? "grid-cols-[auto_auto_1fr_auto_auto]" : "grid-cols-[auto_1fr_auto_auto]"} gap-3 items-center p-3 rounded-xl border text-xs cursor-pointer transition-all bg-white/[0.02] border-white/10 hover:bg-white/[0.05]`}>
+                      <input
+                        type="checkbox"
+                        checked={sel}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleQuestion(q.id)}
+                        className="accent-[#bef264] w-4 h-4 cursor-pointer"
+                      />
+                      {imgUrl && (
+                        <img src={imgUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
                       )}
                       <p className="text-neutral-200 line-clamp-2 leading-relaxed min-w-0">{q.text}</p>
                       <p className="text-[10px] text-neutral-500 whitespace-nowrap hidden sm:block">{q.category}</p>
@@ -749,26 +762,27 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   );
                 })}
               </div>
-              <div className="mt-3 flex items-center justify-between text-[10px] text-neutral-500">
-                <span>Showing {selectedShown} of {selectedCount} selected · page {qPage + 1}–{qPages}</span>
-                <span className="flex gap-1.5">
-                  <button type="button" disabled={qPage === 0} onClick={() => setQPage((p) => p - 1)} className="px-2.5 py-1 rounded-md border border-white/10 text-neutral-300 disabled:opacity-40 hover:bg-white/5">← Previous</button>
-                  <button type="button" disabled={qPage + 1 >= qPages} onClick={() => setQPage((p) => p + 1)} className="px-2.5 py-1 rounded-md border border-white/10 text-neutral-300 disabled:opacity-40 hover:bg-white/5">Next →</button>
-                </span>
-              </div>
-              <div className="mt-3 rounded-xl border border-lime-300/25 bg-lime-300/[0.05] p-3">
-                <p className="text-[11px] font-bold text-lime-200">Selection totals reconcile</p>
-                <p className="text-[10px] text-neutral-400 mt-1 tabular-nums">
-                  {selectedCount} fixed + {rulesDemand} dynamic = {totalQuestions} questions, {Math.round(maxMarks)} marks · pool {poolReady || rules.length === 0 ? "sufficient" : "short — see sidebar"}.
-                </p>
+              <div className="mt-3 flex items-center justify-end gap-1.5">
+                <button type="button" disabled={qPage === 0} onClick={() => setQPage((p) => p - 1)} className="px-2.5 py-1 rounded-md border border-white/10 text-neutral-300 disabled:opacity-40 hover:bg-white/5">← Previous</button>
+                <button type="button" disabled={qPage + 1 >= qPages} onClick={() => setQPage((p) => p + 1)} className="px-2.5 py-1 rounded-md border border-white/10 text-neutral-300 disabled:opacity-40 hover:bg-white/5">Next →</button>
               </div>
             </div>
           </section>
 
-          {/* STEP 3 */}
+          {/* STEP 3 · merged Scoring + Timing + Navigation */}
           <section className={`${CARD} ${step !== 2 ? "hidden" : ""}`} hidden={step !== 2}>
-            <h2 className="text-[15px] font-bold text-white mb-4">3 · Scoring</h2>
-            <div className="grid md:grid-cols-2 gap-x-5 gap-y-4">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-[15px] font-bold text-white">Scoring, Timing &amp; Navigation</h2>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={() => goStep(step - 1)} disabled={step === 0} className="px-4 py-2 text-xs font-bold text-neutral-200 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-xl transition-all disabled:opacity-40 cursor-pointer">← Back</button>
+                {step < STEPS.length - 1 && (
+                  <button type="button" onClick={() => goStep(step + 1)} className="px-4 py-2 text-xs font-black text-black bg-lime-300 hover:brightness-110 rounded-xl transition-all cursor-pointer">Next →</button>
+                )}
+              </div>
+            </div>
+
+            {/* Row 1 · points + pass % */}
+            <div className="grid sm:grid-cols-2 gap-x-5 gap-y-4 mb-3">
               <div>
                 <label className={LABEL}>Points per question</label>
                 <input
@@ -797,51 +811,63 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                 />
               </div>
             </div>
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
-                <div>
-                  <p className="text-xs font-bold text-white">Negative marking</p>
-                  <p className="text-[10px] text-neutral-500 mt-0.5">Deduction for incorrect response</p>
+
+            {/* Row 2 · switches */}
+            <div className="space-y-2.5 mb-3">
+              <div className="flex flex-wrap gap-2.5">
+                <div className="flex-1 min-w-[280px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+                  <span className="text-xs font-bold text-white shrink-0">Negative marking</span>
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <input
+                      type="number"
+                      name="negativeMarksValue"
+                      value={fields.negativeMarksValue}
+                      onChange={(e) => updateField("negativeMarksValue", e.target.value)}
+                      step="0.01"
+                      min="0"
+                      disabled={!negOn}
+                      className={`${INPUT} tabular-nums w-20 disabled:cursor-not-allowed ${negOn ? "" : "opacity-40 pointer-events-none"}`}
+                    />
+                    <Switch
+                      name="negativeMarkingEnabled"
+                      checked={checks.negativeMarkingEnabled}
+                      onChange={(v) => updateCheck("negativeMarkingEnabled", v)}
+                    />
+                  </div>
                 </div>
-                <Switch
-                  name="negativeMarkingEnabled"
-                  checked={checks.negativeMarkingEnabled}
-                  onChange={(v) => updateCheck("negativeMarkingEnabled", v)}
-                />
-              </div>
-              <div className={negOn ? "" : "opacity-40 pointer-events-none select-none"}>
-                <input
-                  type="number"
-                  name="negativeMarksValue"
-                  value={fields.negativeMarksValue}
-                  onChange={(e) => updateField("negativeMarksValue", e.target.value)}
-                  step="0.01"
-                  min="0"
-                  disabled={!negOn}
-                  className={`${INPUT} tabular-nums disabled:cursor-not-allowed`}
-                />
-                {!negOn && <p className="mt-1.5 text-[10px] text-neutral-600">Enable Negative marking above to set a deduction.</p>}
-              </div>
-              <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
-                <div>
-                  <p className="text-xs font-bold text-white">MSQ partial credit</p>
-                  <p className="text-[10px] text-neutral-500 mt-0.5">Unanswered: 0. Partial credit is OFF for this blueprint; MSQ requires the full correct set, otherwise −0.5. If enabled, award proportional credit only when no incorrect option is selected. Maximum marks remain {Math.round(maxMarks)}.</p>
+                <div className="flex-1 min-w-[240px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+                  <span className="text-xs font-bold text-white shrink-0">MSQ partial credit</span>
+                  <Switch
+                    name="partialCreditEnabled"
+                    checked={checks.partialCreditEnabled}
+                    onChange={(v) => updateCheck("partialCreditEnabled", v)}
+                  />
                 </div>
-                <Switch
-                  name="partialCreditEnabled"
-                  checked={checks.partialCreditEnabled}
-                  onChange={(v) => updateCheck("partialCreditEnabled", v)}
-                />
+              </div>
+
+              {/* Navigation toggles on one line */}
+              <div className="flex flex-wrap gap-2.5">
+                {[
+                  ["allowQuestionSkip", "Allow Skip", true],
+                  ["allowAnswerReview", "Review Before Submit", true],
+                  ["allowBackNavigation", "Allow Back Navigation", true],
+                ].map(([n, l, fb]) => (
+                  <div key={n as string} className="flex-1 min-w-[190px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+                    <p className="text-xs font-bold text-white">{l}</p>
+                    <Switch
+                      name={n as string}
+                      checked={checks[n as string] ?? (fb as boolean)}
+                      onChange={(v) => updateCheck(n as string, v)}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
-          </section>
 
-          {/* STEP 4 */}
-          <section className={`${CARD} ${step !== 3 ? "hidden" : ""}`} hidden={step !== 3}>
-            <h2 className="text-[15px] font-bold text-white mb-4">4 · Timing</h2>
-            <div className="grid md:grid-cols-2 gap-x-5 gap-y-4">
+            {/* Row 3 · duration + start window + attempts on one line */}
+            <div className="grid grid-cols-3 gap-x-4 gap-y-4 mb-3">
               <div>
-                <label className={LABEL}>Duration in minutes</label>
+                <label className={LABEL}>Duration (min)</label>
                 <input
                   type="number"
                   name="durationMinutes"
@@ -853,7 +879,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                 />
               </div>
               <div>
-                <label className={LABEL}>Default start window in hours</label>
+                <label className={LABEL}>Start window (hrs)</label>
                 <input
                   type="number"
                   name="defaultStartWindowHours"
@@ -863,109 +889,34 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   className={`${INPUT} tabular-nums`}
                 />
               </div>
-            </div>
-            <p className="mt-3 text-[10px] text-neutral-500 leading-relaxed">
-              Session example: 10 Oct 2026, 09:00–10:00 IST. Server-calibrated time is authoritative. A scheduled session may set an explicit opening and deadline; this draft does not open an exam.
-            </p>
-          </section>
-
-          {/* STEP 5 */}
-          <section className={`${CARD} ${step !== 4 ? "hidden" : ""}`} hidden={step !== 4}>
-            <h2 className="text-[15px] font-bold text-white mb-4">5 · Navigation</h2>
-            <label className={LABEL}>Maximum attempts</label>
-            <input
-              type="number"
-              name="maxAttempts"
-              value={fields.maxAttempts}
-              onChange={(e) => updateField("maxAttempts", e.target.value)}
-              min="1"
-              className={`${INPUT} tabular-nums mb-4`}
-            />
-            <div className="flex items-center gap-2 mb-4">
-              <Segmented
-                name="questionDisplayMode"
-                value={(fields.questionDisplayMode as "ONE_AT_A_TIME" | "ALL_ON_ONE_PAGE") === "ALL_ON_ONE_PAGE" ? "ALL_ON_ONE_PAGE" : "ONE_AT_A_TIME"}
-                onChange={(v) => updateField("questionDisplayMode", v)}
-                options={[
-                  { value: "ONE_AT_A_TIME", label: "● ONE AT A TIME" },
-                  { value: "ALL_ON_ONE_PAGE", label: "○ ALL ON ONE PAGE" },
-                ]}
-              />
-            </div>
-            <div className="space-y-2.5">
-              {[
-                ["allowQuestionSkip", "Allow Skip", true],
-                ["allowAnswerReview", "Review Before Submit", true],
-                ["allowBackNavigation", "Allow Back Navigation", true],
-              ].map(([n, l, fb]) => (
-                <div key={n as string} className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
-                  <p className="text-xs font-bold text-white">{l}</p>
-                  <Switch
-                    name={n as string}
-                    checked={checks[n as string] ?? (fb as boolean)}
-                    onChange={(v) => updateCheck(n as string, v)}
-                  />
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-[10px] text-neutral-500">Review markers may overlap answered questions. Returning to a question retains its saved response.</p>
-          </section>
-
-          {/* STEP 6 */}
-          <section className={`${CARD} ${step !== 5 ? "hidden" : ""}`} hidden={step !== 5}>
-            <h2 className="text-[15px] font-bold text-white mb-4">6 · Feedback</h2>
-            <div className="flex items-center gap-2 mb-4">
-              <Segmented
-                name="resultVisibility"
-                value={(["IMMEDIATE", "AFTER_RELEASE", "NEVER"] as const).includes(fields.resultVisibility as any) ? (fields.resultVisibility as "IMMEDIATE" | "AFTER_RELEASE" | "NEVER") : "IMMEDIATE"}
-                onChange={(v) => updateField("resultVisibility", v)}
-                options={[
-                  { value: "IMMEDIATE", label: "○ IMMEDIATE" },
-                  { value: "AFTER_RELEASE", label: "● AFTER SESSION RELEASE" },
-                  { value: "NEVER", label: "○ NEVER" },
-                ]}
-              />
-            </div>
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
-                <p className="text-xs font-bold text-white">Show correct answers after owner release</p>
-                <Switch
-                  name="showCorrectAnswers"
-                  checked={checks.showCorrectAnswers}
-                  onChange={(v) => updateCheck("showCorrectAnswers", v)}
-                />
-              </div>
-              <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
-                <p className="text-xs font-bold text-white">Show explanations after owner release</p>
-                <Switch
-                  name="showExplanation"
-                  checked={checks.showExplanation}
-                  onChange={(v) => updateCheck("showExplanation", v)}
+              <div>
+                <label className={LABEL}>Max attempts</label>
+                <input
+                  type="number"
+                  name="maxAttempts"
+                  value={fields.maxAttempts}
+                  onChange={(e) => updateField("maxAttempts", e.target.value)}
+                  min="1"
+                  className={`${INPUT} tabular-nums`}
                 />
               </div>
             </div>
-            <div className="mt-3 rounded-xl border border-white/10 bg-black/40 p-3">
-              <p className="text-[10px] text-neutral-400 leading-relaxed">Owner-controlled candidate visibility. Explanations stay hidden until the session is released. Owner audit answer keys are always available to the authorized owner, independently of this setting.</p>
-            </div>
-          </section>
 
-          {/* STEP 7 */}
-          <section className={`${CARD} ${step !== 6 ? "hidden" : ""}`} hidden={step !== 6}>
-            <h2 className="text-[15px] font-bold text-white mb-4">7 · Proctoring</h2>
-            <div className="mb-3">
-              <label className={LABEL}>Tab-switch threshold N · auto-submit</label>
-              <input
-                type="number"
-                name="tabSwitchLimit"
-                value={fields.tabSwitchLimit}
-                onChange={(e) => updateField("tabSwitchLimit", e.target.value)}
-                min="1"
-                placeholder="5 verified events"
-                className={`${INPUT} tabular-nums`}
-              />
-            </div>
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+            {/* Row 4 · proctoring on one line */}
+            <div className="flex flex-wrap gap-2.5 mb-3">
+              <div className="flex-1 min-w-[240px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+                <span className="text-xs font-bold text-white shrink-0">Tab-switch limit</span>
+                <input
+                  type="number"
+                  name="tabSwitchLimit"
+                  value={fields.tabSwitchLimit}
+                  onChange={(e) => updateField("tabSwitchLimit", e.target.value)}
+                  min="1"
+                  placeholder="5"
+                  className={`${INPUT} tabular-nums w-16`}
+                />
+              </div>
+              <div className="flex-1 min-w-[200px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
                 <p className="text-xs font-bold text-white">Require fullscreen</p>
                 <Switch
                   name="requireFullscreen"
@@ -973,7 +924,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                   onChange={(v) => updateCheck("requireFullscreen", v)}
                 />
               </div>
-              <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+              <div className="flex-1 min-w-[200px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
                 <p className="text-xs font-bold text-white">Disable copy / paste</p>
                 <Switch
                   name="disableCopyPaste"
@@ -982,97 +933,181 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                 />
               </div>
             </div>
-            <p className="mt-3 text-[10px] text-neutral-500 leading-relaxed">Warnings appear before the threshold. Focus events require context; a flag is not an automatic cheating verdict. Optional display, VM/RDP and extension checks depend on browser capability and cannot guarantee detection.</p>
-          </section>
 
-          {/* STEP 8 */}
-          <section className={`${CARD} ${step !== 7 ? "hidden" : ""}`} hidden={step !== 7}>
-            <h2 className="text-[15px] font-bold text-white mb-4">8 · Gamification</h2>
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
-                <div>
-                  <p className="text-xs font-bold text-white">Kahoot / Wayground-inspired mode · Idrisified</p>
-                  <p className="text-[10px] text-neutral-500 mt-0.5">Master switch for every playful mechanic below.</p>
-                </div>
+            {/* Row 5 · result visibility + feedback toggles on one line */}
+            <div className="flex flex-wrap items-center gap-2.5 mb-3">
+              <Segmented
+                name="resultVisibility"
+                value={(["IMMEDIATE", "AFTER_RELEASE", "NEVER"] as const).includes(fields.resultVisibility as any) ? (fields.resultVisibility as "IMMEDIATE" | "AFTER_RELEASE" | "NEVER") : "IMMEDIATE"}
+                onChange={(v) => updateField("resultVisibility", v)}
+                options={[
+                  { value: "IMMEDIATE", label: "IMMEDIATE" },
+                  { value: "AFTER_RELEASE", label: "AFTER RELEASE" },
+                  { value: "NEVER", label: "NEVER" },
+                ]}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              <div className="flex-1 min-w-[220px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+                <p className="text-xs font-bold text-white">Show correct answers</p>
+                <Switch
+                  name="showCorrectAnswers"
+                  checked={checks.showCorrectAnswers}
+                  onChange={(v) => updateCheck("showCorrectAnswers", v)}
+                />
+              </div>
+              <div className="flex-1 min-w-[220px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+                <p className="text-xs font-bold text-white">Show explanations</p>
+                <Switch
+                  name="showExplanation"
+                  checked={checks.showExplanation}
+                  onChange={(v) => updateCheck("showExplanation", v)}
+                />
+              </div>
+              <div className="flex-1 min-w-[220px] flex items-center justify-between gap-3 bg-black/40 rounded-xl border border-white/10 px-4 py-3">
+                <p className="text-xs font-bold text-white">Gamified quiz mode</p>
                 <Switch
                   name="isGamified"
                   checked={checks.isGamified}
                   onChange={(v) => updateCheck("isGamified", v)}
                 />
               </div>
-              <div className="rounded-xl border border-white/10 bg-black/40 px-4 py-3 space-y-3">
-                <LockedSwitch on={isGamified} label="Spirit Mascot selector" hint="Candidates pick an emblem before launch." />
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold text-neutral-200">Correct-answer streak highlights</p>
-                    <p className="text-[10px] text-neutral-500 mt-0.5">Live multipliers stay cosmetic.</p>
-                  </div>
-                  <Switch
-                    name="enableStreakHighlights"
-                    checked={checks.enableStreakHighlights}
-                    onChange={(v) => updateCheck("enableStreakHighlights", v)}
-                  />
-                </div>
-                <LockedSwitch on={isGamified} label="Result podium display" hint="Celebration board on the scorecard." />
-              </div>
-            </div>
-            <div className="mt-3 rounded-xl border border-lime-300/25 bg-lime-300/[0.05] p-3">
-              <p className="text-[10px] text-neutral-300 leading-relaxed">Flavor only. Never extra marks. Six mascot choices are cosmetic. The selected spirit appears in the exam header, invigilator roster and result podium. No scoring, timing, partial-credit or ranking advantage is granted.</p>
             </div>
           </section>
 
           {/* Hidden inputs for computed totals */}
           <input type="hidden" name="totalMarks" value={maxMarks} />
-
-          {/* Wizard nav */}
-          <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-            <p className="text-[13px] font-bold text-white">Ready to save</p>
-            <p className="text-[11px] text-neutral-400 mt-1 tabular-nums">
-              {totalQuestions} questions · {Math.round(maxMarks)} maximum marks · {selectedCount} fixed + {rulesDemand} dynamic picks{poolReady || rules.length === 0 ? "" : " · pool shortfall — see sidebar"}. Saving creates a versioned draft, not a live session.
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => goStep(step - 1)}
-                disabled={step === 0}
-                className="px-5 py-2.5 text-xs font-bold text-neutral-200 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-xl transition-all disabled:opacity-40"
-              >
-                ← Back
-              </button>
-              {step < STEPS.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={() => goStep(step + 1)}
-                  className="px-5 py-2.5 text-xs font-black text-black bg-lime-300 hover:brightness-110 rounded-xl transition-all"
-                >
-                  Next →
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2.5 text-xs font-black text-black bg-lime-300 hover:brightness-110 rounded-xl transition-all disabled:opacity-50"
-                >
-                  {loading ? "Saving…" : "Save Blueprint"}
-                </button>
-              )}
-              <span className="ml-auto flex gap-2">
-                <button type="button" onClick={() => goStep(0)} className="px-4 py-2.5 text-xs font-bold text-neutral-400 hover:text-white transition-colors">
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveDraft}
-                  disabled={savingDraft}
-                  className="px-4 py-2.5 text-xs font-bold text-neutral-200 bg-white/[0.05] hover:bg-white/10 border border-white/10 rounded-xl transition-all disabled:opacity-50"
-                >
-                  Save Draft
-                </button>
-              </span>
-            </div>
-          </div>
         </div>
       </div>
+
+      {/* ── Read-only question info drawer (question bank style, info only) ── */}
+      {detailQ && (() => {
+        const d = parseQuestionDetail(detailQ);
+        const correctSet = new Set<string>(
+          [
+            ...(d.correctAnswer ? [d.correctAnswer] : []),
+            ...(Array.isArray(d.correctAnswers) ? d.correctAnswers : []),
+          ].map((s: string) => s.trim().toLowerCase())
+        );
+        const levelLabel = detailQ.difficultyLevel === "EASY" ? "Easy" : detailQ.difficultyLevel === "HARD" ? "Hard" : "Medium";
+        return (
+          <div className="fixed inset-0 z-[60] overflow-hidden flex justify-end" style={{ marginTop: 0 }}>
+            <div
+              onClick={() => setDetailId(null)}
+              className="fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity cursor-pointer"
+            />
+            <div className="relative w-full sm:max-w-2xl md:max-w-3xl lg:max-w-[820px] bg-[#121215] border-l border-neutral-800 shadow-2xl h-full flex flex-col z-10 overflow-hidden">
+              {/* Header */}
+              <div className="p-5 sm:p-6 border-b border-neutral-800 bg-[#0e0e11] shrink-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center flex-wrap gap-2 mb-2.5">
+                      <span className="bg-lime-300 text-black text-xs font-extrabold px-3.5 h-7 flex items-center max-w-[260px] truncate rounded-full">
+                        {detailQ.category || "General"}
+                      </span>
+                      <span className="bg-neutral-700 text-white text-xs font-extrabold px-3.5 h-7 flex items-center rounded-full">
+                        {detailQ.type || "MCQ"}
+                      </span>
+                      <span
+                        className={`text-xs font-extrabold px-3.5 h-7 flex items-center rounded-full ${
+                          levelLabel === "Easy" ? "bg-emerald-500 text-black" : levelLabel === "Hard" ? "bg-rose-500 text-white" : "bg-amber-400 text-black"
+                        }`}
+                      >
+                        {levelLabel}
+                      </span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-black text-neutral-100 tracking-tight">Question Details</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(null)}
+                    title="Close (Esc)"
+                    className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+                {/* Figure (only when the question actually has an image) */}
+                {detailQ.imageUrl && (
+                  <div className="bg-black/60 rounded-xl p-4 border border-neutral-800 flex items-center justify-center">
+                    <img src={detailQ.imageUrl} alt="" className="max-h-60 rounded-lg object-contain" />
+                  </div>
+                )}
+
+                {/* Stem */}
+                <div className="rounded-2xl border border-neutral-800/80 bg-[#18181c]/70 p-4 sm:p-5">
+                  <span className="block text-[10px] font-bold tracking-[0.14em] text-neutral-400 uppercase mb-2">Question Stem</span>
+                  <p className="text-sm sm:text-base font-bold text-neutral-100 leading-relaxed select-text">{detailQ.text}</p>
+                </div>
+
+                {/* Options */}
+                <div className="rounded-2xl border border-neutral-800/80 bg-[#18181c]/70 p-4 sm:p-5">
+                  <span className="block text-[10px] font-bold tracking-[0.14em] text-neutral-400 uppercase mb-3">Options &amp; Correct Answer</span>
+                  {d.options.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {d.options.map((opt, i) => {
+                        const letter = String.fromCharCode(65 + i);
+                        const isCorrect = correctSet.has(opt.trim().toLowerCase());
+                        const optImg = d.optionImages[i];
+                        return (
+                          <div
+                            key={i}
+                            className={`p-3 rounded-xl border flex items-start gap-3 transition-colors ${
+                              isCorrect ? "bg-lime-400/[0.08] border-lime-400/40 text-white" : "bg-[#131316] border-neutral-800 text-neutral-300"
+                            }`}
+                          >
+                            <span
+                              className={`w-6 h-6 rounded-lg text-xs font-mono font-bold flex items-center justify-center shrink-0 ${
+                                isCorrect ? "bg-lime-300 text-black font-black" : "bg-neutral-800 text-neutral-400 font-semibold"
+                              }`}
+                            >
+                              {letter}
+                            </span>
+                            <p className="flex-1 text-xs leading-relaxed pt-0.5 break-words select-text font-medium">{opt}</p>
+                            {optImg && (
+                              <img src={optImg} alt="" className="h-12 w-12 object-cover rounded-xl border border-neutral-800 shrink-0" />
+                            )}
+                            {isCorrect && (
+                              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-black tracking-wide text-lime-300 bg-lime-400/20 border border-lime-400/30 px-2 py-0.5 rounded-full">
+                                ✓ Correct Answer
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : d.correctAnswer ? (
+                    <div className="p-3.5 rounded-xl border border-lime-400/30 bg-lime-400/[0.08]">
+                      <span className="block text-[10px] font-bold text-lime-300 uppercase tracking-wider mb-1">Accepted Answer</span>
+                      <p className="text-sm font-mono font-bold text-white select-text">{d.correctAnswer}</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-neutral-500 italic">No structured options attached.</p>
+                  )}
+                </div>
+
+                {/* Explanation */}
+                <div className="rounded-2xl border border-neutral-800/80 bg-[#18181c]/70 p-4 sm:p-5">
+                  <span className="block text-[10px] font-bold tracking-[0.14em] text-neutral-400 uppercase mb-2">Explanation &amp; Solution Notes</span>
+                  {d.explanation ? (
+                    <div className="p-3.5 rounded-xl border border-neutral-800 bg-[#131316] text-xs sm:text-[13px] text-neutral-200 leading-relaxed select-text">
+                      {d.explanation}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-neutral-500 italic">No explanation set for this question.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </form>
   );
 }
