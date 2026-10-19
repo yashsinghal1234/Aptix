@@ -75,8 +75,8 @@ const config: Config = {
         'glass-celestial': '0 20px 50px -10px rgba(4, 7, 16, 0.8)',
       },
       fontFamily: {
-        sans: ['Geist', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+        sans: ['Helvetica Now Text', 'Helvetica Neue', 'Helvetica', 'Arial', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['Helvetica Now Text', 'Helvetica Neue', 'Helvetica', 'Arial', 'Menlo', 'ui-monospace', 'monospace'],
       },
     },
   },
