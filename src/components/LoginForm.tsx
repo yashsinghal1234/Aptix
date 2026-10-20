@@ -7,6 +7,7 @@ import { ToastBanner } from "@/components/ToastBanner";
 import { signIn, signOut } from "next-auth/react";
 import Link from "next/link";
 import { ChunkedVideo } from "@/components/ChunkedVideo";
+import { HostExamModal } from "@/components/HostExamModal";
 
 interface LoginFormProps {
   initialMode?: "candidate" | "staff";
@@ -41,6 +42,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
   const [shake, setShake] = useState(false);
   const [showForgotNotice, setShowForgotNotice] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hostModalOpen, setHostModalOpen] = useState(false);
   const [examPin, setExamPin] = useState("");
   const [candidateName, setCandidateName] = useState("");
   const [candidateEmail, setCandidateEmail] = useState("");
@@ -484,7 +486,7 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
 
           {/* Heading tailored to Aptix requirements */}
           <div className="mb-7">
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight font-sans">
               {mode === "candidate" ? "Candidate Access" : "Faculty Command"}
             </h1>
           </div>
@@ -901,31 +903,21 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
             </div>
           )}
 
-          {/* Footer action link */}
-          <div className="text-center text-xs sm:text-sm text-neutral-400 mt-7 sm:mt-9">
-            {mode === "candidate" ? (
-              <span>
-                Faculty or exam setter?{" "}
-                <button
-                  type="button"
-                  onClick={() => switchMode("staff")}
-                  className="text-[#00e599] font-semibold hover:underline cursor-pointer ml-1"
-                >
-                  Sign in to Staff Portal
-                </button>
-              </span>
-            ) : (
-              <span>
-                Candidate taking an examination?{" "}
-                <button
-                  type="button"
-                  onClick={() => switchMode("candidate")}
-                  className="text-[#00e599] font-semibold hover:underline cursor-pointer ml-1"
-                >
-                  Enter with Exam PIN
-                </button>
-              </span>
-            )}
+          {/* Footer action link: Contact Us */}
+          <div className="text-center text-xs sm:text-sm text-neutral-400 mt-7 sm:mt-9 space-y-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span>Want to conduct exams on this platform?</span>
+              <button
+                type="button"
+                onClick={() => setHostModalOpen(true)}
+                className="text-lime-300 hover:text-lime-200 font-extrabold hover:underline cursor-pointer transition-colors inline-flex items-center gap-1.5"
+              >
+                <span>Contact Us</span>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -945,6 +937,28 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
           </div>
           <div className="relative w-full h-[500px] sm:h-[550px] lg:h-[600px] xl:h-[620px] rounded-[32px] sm:rounded-[36px] overflow-hidden bg-[#07080c] border border-[#1e222d] shadow-[0_20px_60px_rgba(0,0,0,0.85)] flex flex-col justify-end p-8 sm:p-10 lg:p-11 group">
             
+            {/* Top Corner Creator Pill */}
+            <a
+              href="https://github.com/yashsinghal1234"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="absolute top-5 right-5 sm:top-6 sm:right-6 z-20 group/pill inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full bg-black/60 hover:bg-black/85 backdrop-blur-md border border-white/15 hover:border-white/30 transition-all shadow-[0_4px_24px_rgba(0,0,0,0.6)]"
+              title="View Yash Singhal on GitHub"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/yash-avatar.jpg"
+                alt="Yash Singhal"
+                className="w-4 h-4 rounded-full ring-1 ring-white/30 object-cover shrink-0"
+                onError={(e) => {
+                  e.currentTarget.src = "https://avatars.githubusercontent.com/u/173256800?v=4";
+                }}
+              />
+              <span className="text-[11px] text-zinc-300 font-medium">
+                Made by <span className="text-white font-bold group-hover/pill:text-lime-300 transition-colors">Yash Singhal</span>
+              </span>
+            </a>
+
             {/* Background Chunked Videos with Smooth HLS Streaming */}
             <div className="absolute inset-0 z-0 overflow-hidden bg-black">
               {CAROUSEL_SLIDES.map((slide, idx) => (
@@ -996,6 +1010,14 @@ export function LoginForm({ initialMode = "candidate" }: LoginFormProps) {
         </div>
 
       </div>
+
+      {/* Host Exam & Contact Modal */}
+      {hostModalOpen && (
+        <HostExamModal
+          isOpen={hostModalOpen}
+          onClose={() => setHostModalOpen(false)}
+        />
+      )}
     </main>
   );
 }

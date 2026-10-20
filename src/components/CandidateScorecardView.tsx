@@ -706,14 +706,6 @@ export default function CandidateScorecardView({
 
         {/* ── SECTION 4: Question-by-Question Review ────────── */}
         <div className="space-y-4">
-          {/* Purple Notification Banner */}
-          <div className="p-4 rounded-xl bg-[#261539] border border-purple-500/40 text-purple-200 text-xs flex items-center gap-3 shadow-lg">
-            <span className="text-base text-purple-300">ⓘ</span>
-            <span>
-              <strong>Answer review enabled by the assessment owner.</strong> Per-question answers, selected choices, and verified explanations are shown below. Reviews are server-verified and final scores cannot be changed.
-            </span>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left: Table of questions */}
             <div className="bg-[#0c0d12] rounded-2xl border border-white/10 p-6 shadow-2xl">
@@ -840,12 +832,6 @@ export default function CandidateScorecardView({
                     </p>
                   </div>
                 )}
-
-                <div className="pt-1">
-                  <span className="text-[11px] font-mono text-lime-300 hover:text-lime-200 cursor-pointer inline-flex items-center gap-1.5 transition-colors">
-                    → Practice {selectedQ.category.toLowerCase()}
-                  </span>
-                </div>
               </div>
             ) : null}
           </div>

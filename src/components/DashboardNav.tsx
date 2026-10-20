@@ -403,7 +403,7 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
             </span>
           </a>
 
-          {/* LinkedIn Logo Link with crisp white icon */}
+          {/* LinkedIn Profile */}
           <a
             href="https://www.linkedin.com/in/yash-singhal-94894b317/"
             target="_blank"
@@ -414,6 +414,18 @@ export function DashboardNav({ isOwner, userName = "Administrator", children }: 
           >
             <svg className="w-3.5 h-3.5 fill-white text-white" viewBox="0 0 24 24">
               <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64c-.9 0-1.63.73-1.63 1.63 0 .9.73 1.63 1.63 1.63.9 0 1.63-.73 1.63-1.63 0-.9-.73-1.63-1.63-1.63Z" />
+            </svg>
+          </a>
+
+          {/* Direct Email */}
+          <a
+            href="mailto:singhalyash307@gmail.com"
+            className="w-7 h-7 rounded-full bg-white/[0.12] hover:bg-lime-400/20 border border-white/20 hover:border-lime-400/50 flex items-center justify-center text-white hover:text-lime-300 transition-all shadow-xs group"
+            title="Send Email"
+            aria-label="Email Yash Singhal"
+          >
+            <svg className="w-3.5 h-3.5 text-neutral-300 group-hover:text-lime-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </a>
         </div>

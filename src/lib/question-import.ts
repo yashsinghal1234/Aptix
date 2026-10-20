@@ -7,8 +7,8 @@
 export type ImportQType = "MCQ_SINGLE" | "MCQ_MULTI" | "TRUE_FALSE" | "FILL_BLANK" | "NUMERIC";
 
 export const IMPORT_TYPE_LABELS: Record<ImportQType, string> = {
-  MCQ_SINGLE: "MCQ · Single",
-  MCQ_MULTI: "MCQ · Multi",
+  MCQ_SINGLE: "MCQ Single",
+  MCQ_MULTI: "MCQ Multi",
   TRUE_FALSE: "True / False",
   FILL_BLANK: "Fill blank",
   NUMERIC: "Numeric",

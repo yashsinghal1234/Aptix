@@ -354,3 +354,38 @@ export async function getAttemptStatusAction(attemptId: string, clientDeviceId?:
     concurrentSessionDetected
   };
 }
+
+/**
+ * Lightweight per-attempt deadline re-sync for the open candidate tab.
+ * Extensions applied by the owner (global session or per-candidate) after the
+ * tab already loaded must reach the running exam timer, or the owner monitor
+ * and the candidate countdown drift apart. Deliberately cheap: two columns on
+ * the attempt + one on the session.
+ */
+export async function getAttemptDeadlineAction(attemptId: string) {
+  const auth = await requireAuth();
+  if ("error" in auth || !auth.user) return { error: "Unauthorized" };
+
+  const attempt = await prisma.candidateAttempt.findUnique({
+    where: { id: attemptId },
+    select: {
+      userId: true,
+      status: true,
+      extendedUntil: true,
+      session: { select: { extendedUntil: true } },
+    },
+  });
+  if (!attempt || attempt.userId !== auth.user.id) return { error: "Attempt not found" };
+  if (attempt.status === "SUBMITTED") return { isSubmitted: true, extendedUntil: null };
+
+  // The candidate always gets whichever deadline is LATER (a later global
+  // extension must not be shadowed by an older per-candidate one).
+  const attemptEndMs = attempt.extendedUntil ? attempt.extendedUntil.getTime() : 0;
+  const sessionEndMs = attempt.session.extendedUntil ? attempt.session.extendedUntil.getTime() : 0;
+  const maxEndMs = Math.max(attemptEndMs, sessionEndMs);
+
+  return {
+    isSubmitted: false,
+    extendedUntil: maxEndMs > 0 ? new Date(maxEndMs) : null,
+  };
+}

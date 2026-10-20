@@ -25,30 +25,6 @@ function DotPillA({ dot, label, text }: { dot: string; label: string; text: stri
   );
 }
 
-function ListIconA({ className }: { className?: string }) {
-  return (
-    <svg className={className || "w-4 h-4"} fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
-    </svg>
-  );
-}
-
-function UserIconA({ className }: { className?: string }) {
-  return (
-    <svg className={className || "w-4 h-4"} fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.1a8.25 8.25 0 0115 0" />
-    </svg>
-  );
-}
-
-function GaugeIconA({ className }: { className?: string }) {
-  return (
-    <svg className={className || "w-4 h-4"} fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
 function DownloadIconA({ className }: { className?: string }) {
   return (
     <svg className={className || "w-3.5 h-3.5"} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
@@ -204,32 +180,35 @@ export default function AttendanceRegister({
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5" id={`attendance-${sessionId}`}>
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500">ATTENDANCE REGISTER</p>
-          <p className="mt-1.5 text-[13px] font-bold text-white">Who was expected, who appeared</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <p className="text-[10px] font-bold tracking-[0.18em] text-neutral-500">ATTENDANCE REGISTER</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {rows.length > 0 && (
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name or email…"
+              className="w-full sm:w-72 px-3 py-2 bg-black/60 border border-white/10 rounded-xl outline-none font-medium text-xs text-white placeholder-neutral-600 focus:border-lime-300/50"
+            />
+          )}
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-2 border border-white/10 rounded-xl px-3 py-2 text-[11.5px] font-bold text-neutral-300 hover:bg-white/[0.06] hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap"
+          >
+            <DownloadIconA /> Export CSV
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={filtered.length === 0}
-          className="inline-flex items-center gap-2 border border-white/10 rounded-md px-3 py-2 text-[11.5px] font-bold text-neutral-300 hover:bg-white/[0.06] hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-        >
-          <DownloadIconA /> Export CSV
-        </button>
       </div>
 
       <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
-        {roster.length === 0 ? (
-          <span>
-            No roster uploaded for this session — upload one in the approved-students panel above. Only actual attempts are listed as present.
-          </span>
-        ) : (
+        {roster.length > 0 && (
           <>
             <span className="inline-flex items-center gap-2 text-emerald-300 font-bold"><span className="w-2 h-2 rounded-full bg-emerald-400" />{counts.Present} present</span>
-            <span className="text-neutral-700">·</span>
+            <span className="text-neutral-700"> </span>
             <span className="inline-flex items-center gap-2 text-rose-300 font-bold"><span className="w-2 h-2 rounded-full bg-rose-400" />{counts.Absent} absent</span>
-            <span className="text-neutral-700">·</span>
+            <span className="text-neutral-700"> </span>
             <span className="inline-flex items-center gap-2 text-amber-300 font-bold"><span className="w-2 h-2 rounded-full bg-amber-400" />{counts.Unrostered} unrostered</span>
           </>
         )}
@@ -242,35 +221,19 @@ export default function AttendanceRegister({
         </div>
       ) : (
         <>
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name or email…"
-              className="w-full sm:w-72 px-3 py-2 bg-black/60 border border-white/10 rounded-xl outline-none font-medium text-xs text-white placeholder-neutral-600 focus:border-lime-300/50"
-            />
-            <span className="text-[11px] text-neutral-500 tabular-nums whitespace-nowrap">{filtered.length} of {rows.length}</span>
-          </div>
-
-          <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full min-w-[640px] border-collapse text-left">
+          <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#101116] mt-3">
+            <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-white/[0.08] text-neutral-400">
-                  <th className="pb-3 text-xs font-semibold text-left">
-                    <span className="inline-flex items-center gap-2"><UserIconA className="w-4 h-4" /> Candidate</span>
-                  </th>
-                  <th className="pb-3 text-xs font-semibold text-center w-[180px]">
-                    <span className="inline-flex items-center gap-2 justify-center"><GaugeIconA className="w-4 h-4" /> Status</span>
-                  </th>
-                  <th className="pb-3 text-xs font-semibold text-left w-[180px]">
-                    <span className="inline-flex items-center gap-2"><ListIconA className="w-4 h-4" /> Detail</span>
-                  </th>
+                <tr className="border-b border-white/10 text-[10px] font-semibold tracking-[0.14em] text-neutral-500 uppercase">
+                  <th className="py-3 px-4 text-left font-semibold">Candidate</th>
+                  <th className="py-3 px-4 text-center font-semibold w-[180px]">Status</th>
+                  <th className="py-3 px-4 text-left font-semibold">Detail</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-white/[0.06]">
                 {shown.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-6 text-center text-[13px] text-neutral-500">No candidates match “{query}”.</td>
+                    <td colSpan={3} className="py-8 text-center text-xs text-neutral-500">No candidates match “{query}”.</td>
                   </tr>
                 )}
                 {shown.map((r) => {
@@ -278,21 +241,21 @@ export default function AttendanceRegister({
                   const detail =
                     r.status === "PRESENT"
                       ? r.submitted
-                        ? "Attempted · submitted"
-                        : "Attempted · still in progress"
+                        ? "Attempted submitted"
+                        : "Attempted still in progress"
                       : r.status === "ABSENT"
-                        ? "Rostered · no attempt"
-                        : "Attempted · not on roster";
+                        ? "Rostered no attempt"
+                        : "Attempted not on roster";
                   return (
-                    <tr key={`${r.email}-${r.status}`} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
-                      <td className="py-3 pr-4">
+                    <tr key={`${r.email}-${r.status}`} className="transition-colors hover:bg-white/[0.04]">
+                      <td className="py-3 px-4">
                         <p className="text-[13px] font-bold text-white truncate max-w-[260px]">{r.name}</p>
                         <p className="text-[11px] text-neutral-500 font-mono truncate max-w-[260px]">{r.email}</p>
                       </td>
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3 px-4 text-center">
                         <DotPillA dot={meta.dot} label={meta.label} text={meta.text} />
                       </td>
-                      <td className="py-3 px-3 text-[11.5px] text-neutral-400">{detail}</td>
+                      <td className="py-3 px-4 text-[11.5px] text-neutral-400">{detail}</td>
                     </tr>
                   );
                 })}
@@ -363,10 +326,6 @@ export default function AttendanceRegister({
               </div>
             </div>
           )}
-
-          <p className="mt-3 text-[11px] text-neutral-500">
-            Report-only register for <span className="text-neutral-300 font-semibold">{examTitle}</span>. Entry access is still governed by the approved-students panel; unrostered attempts are flagged here for hygiene, not blocked.
-          </p>
         </>
       )}
     </div>

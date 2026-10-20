@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createTemplateAction } from "@/app/actions/template";
 import { useRouter } from "next/navigation";
 import { FIXED_TOPICS, FIXED_DIFFICULTIES } from "@/lib/ai-question-analyzer";
+import { ExamTemplateReviewModal } from "@/components/ExamTemplateReviewModal";
 import * as XLSX from "xlsx";
 
 const DRAFT_KEY = "aptix_template_draft_v1";
@@ -301,6 +302,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   const [filterTopic, setFilterTopic] = useState("");
   const [filterDiff, setFilterDiff] = useState("");
@@ -478,8 +480,8 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     setSavingDraft(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleOpenReview = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!fields.title.trim()) {
       setError("Please enter an assessment title.");
       setStep(0);
@@ -492,10 +494,15 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
+    setError(null);
+    setShowReviewModal(true);
+  };
+
+  const executeFinalSubmit = async () => {
     setLoading(true);
     setError(null);
 
-    const formData = new FormData(e.currentTarget);
+    const formData = formRef.current ? new FormData(formRef.current) : new FormData();
     // Explicitly enforce state fields and checks into formData so nothing can ever desync
     Object.entries(fields).forEach(([k, v]) => {
       formData.set(k, v || "");
@@ -519,11 +526,11 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
     if (res.error) {
       setError(res.error);
       setLoading(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       try {
         localStorage.removeItem(DRAFT_KEY);
       } catch {}
+      setShowReviewModal(false);
       const target = res.templateId
         ? `/dashboard/owner?highlight=${res.templateId}#templates`
         : `/dashboard/owner#templates`;
@@ -541,7 +548,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
   const negOn = !!checks.negativeMarkingEnabled;
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} noValidate className="pb-24">
+    <form ref={formRef} onSubmit={handleOpenReview} noValidate className="pb-24">
       {/* Header */}
       <div className="px-1 pt-1">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -696,22 +703,30 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
             </div>
 
             <div className="bg-black/50 p-5 rounded-2xl border border-white/10">
-              <div className="flex flex-wrap items-center gap-2.5 mb-3">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 mb-3 w-full">
                 <input
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setQPage(0); }}
                   placeholder="Search stem, category or question ID"
-                  className={`${INPUT} flex-1 min-w-[200px]`}
+                  className="flex-1 min-w-0 px-4 py-2.5 text-xs bg-black/60 border border-white/10 rounded-xl outline-none transition-all font-medium text-white placeholder-neutral-600 hover:border-white/20 focus:border-lime-300/50"
                 />
-                <select value={filterTopic} onChange={(e) => { setFilterTopic(e.target.value); setQPage(0); }} className={`${INPUT} w-auto pr-8 cursor-pointer`}>
-                  <option value="">All categories</option>
-                  {allCategories.map((t) => (<option key={t} value={t}>{t}</option>))}
+                <select
+                  value={filterTopic}
+                  onChange={(e) => { setFilterTopic(e.target.value); setQPage(0); }}
+                  className="w-full md:w-44 shrink-0 px-3 py-2.5 text-xs bg-black/60 border border-white/10 rounded-xl outline-none transition-all font-medium text-white hover:border-white/20 focus:border-lime-300/50 cursor-pointer"
+                >
+                  <option value="" className="bg-[#12141a] text-white">All categories</option>
+                  {allCategories.map((t) => (<option key={t} value={t} className="bg-[#12141a] text-white">{t}</option>))}
                 </select>
-                <select value={filterDiff} onChange={(e) => { setFilterDiff(e.target.value); setQPage(0); }} className={`${INPUT} w-auto pr-8 cursor-pointer`}>
-                  <option value="">All levels</option>
-                  <option value="EASY">Easy</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="HARD">Hard</option>
+                <select
+                  value={filterDiff}
+                  onChange={(e) => { setFilterDiff(e.target.value); setQPage(0); }}
+                  className="w-full md:w-32 shrink-0 px-3 py-2.5 text-xs bg-black/60 border border-white/10 rounded-xl outline-none transition-all font-medium text-white hover:border-white/20 focus:border-lime-300/50 cursor-pointer"
+                >
+                  <option value="" className="bg-[#12141a] text-white">All levels</option>
+                  <option value="EASY" className="bg-[#12141a] text-white">Easy</option>
+                  <option value="MEDIUM" className="bg-[#12141a] text-white">Medium</option>
+                  <option value="HARD" className="bg-[#12141a] text-white">Hard</option>
                 </select>
                 <button
                   type="button"
@@ -723,7 +738,7 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                       return next;
                     });
                   }}
-                  className="flex items-center gap-2 text-[11px] font-bold text-neutral-200 hover:text-white bg-white/[0.06] hover:bg-white/10 px-3 py-2 rounded-xl border border-white/15 transition-colors shrink-0"
+                  className="flex items-center justify-center gap-2 text-[11px] font-bold text-neutral-200 hover:text-white bg-white/[0.06] hover:bg-white/10 px-3.5 py-2.5 rounded-xl border border-white/15 transition-colors shrink-0 whitespace-nowrap cursor-pointer"
                 >
                   <input
                     type="checkbox"
@@ -731,9 +746,11 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                     onChange={() => {}}
                     className="accent-[#bef264] w-4 h-4 cursor-pointer"
                   />
-                  {filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id))
-                    ? `Deselect all ${filteredQuestions.length} questions`
-                    : `Select all ${filteredQuestions.length} questions`}
+                  <span>
+                    {filteredQuestions.length > 0 && filteredQuestions.every((q) => selectedIds.has(q.id))
+                      ? `Deselect all (${filteredQuestions.length})`
+                      : `Select all (${filteredQuestions.length})`}
+                  </span>
                 </button>
               </div>
               <div className="space-y-2">
@@ -973,6 +990,21 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
                 />
               </div>
             </div>
+
+            {/* Bottom Step 3 Action: Review & Submit Blueprint */}
+            <div className="mt-6 pt-5 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold text-white">Step 3 of 3 complete</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5">Audit question allocation, scoring, and proctoring rules before finalizing.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenReview()}
+                className="w-full sm:w-auto px-6 py-3 text-xs font-black text-black bg-lime-300 hover:brightness-110 rounded-xl transition-all shadow-[0_0_24px_rgba(190,242,100,0.25)] flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Review &amp; Submit Blueprint →</span>
+              </button>
+            </div>
           </section>
 
           {/* Hidden inputs for computed totals */}
@@ -1108,6 +1140,29 @@ export function CreateTemplateForm({ allQuestions }: { allQuestions: any[] }) {
           </div>
         );
       })()}
+
+      {/* ── Exam Template Review Dialog Box ── */}
+      <ExamTemplateReviewModal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        onConfirmSubmit={executeFinalSubmit}
+        isSubmitting={loading}
+        error={error}
+        onJumpToStep={(s) => {
+          setShowReviewModal(false);
+          goStep(s);
+        }}
+        fields={fields}
+        checks={checks}
+        rules={rules}
+        selectedIds={selectedIds}
+        allQuestions={allQuestions}
+        rosterCount={rosterCount}
+        rosterPreview={rosterPreview}
+        totalMarks={maxMarks}
+        totalQuestions={totalQuestions}
+        shortfall={shortfall}
+      />
     </form>
   );
 }

@@ -23,7 +23,6 @@ export async function uploadRosterAction(sessionId: string, formData: FormData) 
   if ("error" in check) return { error: check.error };
   const { auth } = check;
 
-  const mode = String(formData.get("mode") || "replace");
   let text = String(formData.get("text") || "");
   const file = formData.get("file");
   if ((!text || !text.trim()) && file && typeof file !== "string") {
@@ -37,9 +36,7 @@ export async function uploadRosterAction(sessionId: string, formData: FormData) 
   const { entries, skipped } = parseRosterText(text);
   if (entries.length === 0) return { error: "No valid emails found. Use lines like yash@example.com or yash@example.com,Yash Singhal." };
 
-  if (mode === "replace") {
-    await prisma.sessionRoster.deleteMany({ where: { examSessionId: sessionId } });
-  }
+  // Uploads always append — every add simply adds students to the approved list
   await prisma.sessionRoster.createMany({
     data: entries.map((e) => ({ examSessionId: sessionId, email: e.email, name: e.name })),
     skipDuplicates: true,
@@ -49,7 +46,7 @@ export async function uploadRosterAction(sessionId: string, formData: FormData) 
     data: {
       userId: (auth.payload.userId as string) || (auth.user.id as string),
       action: "ROSTER_UPLOAD",
-      details: `Uploaded ${entries.length} roster emails (skipped ${skipped}) to session ${sessionId} mode=${mode}`,
+      details: `Uploaded ${entries.length} roster emails (skipped ${skipped}) to session ${sessionId}`,
     },
   }).catch(() => {});
 

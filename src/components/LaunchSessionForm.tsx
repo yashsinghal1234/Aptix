@@ -165,24 +165,24 @@ export function LaunchSessionForm({
 
       {/* Success Notification with PIN and Live Monitor Link */}
       {successData && (
-        <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl space-y-2 animate-fadeIn">
+        <div className="p-3 bg-[#0a0a0d] border border-white/10 rounded-xl space-y-2 animate-fadeIn">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-emerald-300 font-semibold">
+              <span className="text-xs text-neutral-200 font-semibold">
                 Session Created!{successData.rosterAdded ? ` · ${successData.rosterAdded} approved students` : ""}
               </span>
             </div>
             <button
               type="button"
               onClick={() => setSuccessData(null)}
-              className="text-emerald-400 hover:text-white font-bold text-xs"
+              className="text-neutral-500 hover:text-white font-bold text-xs"
             >
               &times;
             </button>
           </div>
 
-          <div className="flex items-center justify-between gap-2 flex-wrap bg-black/60 p-2 rounded-lg border border-emerald-900/40">
+          <div className="flex items-center justify-between gap-2 flex-wrap bg-black/60 p-2 rounded-lg border border-white/10">
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-neutral-400">PIN:</span>
               <span className="font-mono font-black text-white text-sm tracking-wider">
@@ -200,7 +200,7 @@ export function LaunchSessionForm({
             {successData.sessionId && (
               <Link
                 href={`/dashboard/owner/session/${successData.sessionId}`}
-                className="text-xs font-bold text-emerald-300 hover:text-white flex items-center gap-1 transition-colors"
+                className="text-xs font-bold text-neutral-200 hover:text-white flex items-center gap-1 transition-colors"
               >
                 <span>Live Monitor</span>
                 <span>&rarr;</span>

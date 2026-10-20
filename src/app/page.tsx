@@ -67,7 +67,7 @@ export default async function Home() {
     });
     const pq = preview?._count.questions ?? 0;
     return (
-      <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
+      <div className="min-h-[111vh] bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
         <CandidateTopbar candidateName={name} roll={roll} />
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-4">
           {/* Heading */}

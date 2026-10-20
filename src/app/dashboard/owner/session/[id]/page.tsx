@@ -20,7 +20,8 @@ import {
 import { TeacherPodiumLeaderboard } from "@/components/owner/TeacherPodiumLeaderboard";
 import RosterManager from "@/components/owner/RosterManager";
 import AttendanceRegister from "@/components/owner/AttendanceRegister";
-import { Breadcrumb, HeroPill, StackStatCard, TickStrip } from "@/components/owner/Stacklane";
+import { FileTabs } from "@/components/owner/FileTabs";
+import { Breadcrumb, HeroPill, StackStatCard } from "@/components/owner/Stacklane";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,6 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
   const end = start ? new Date(start.getTime() + session.durationMinutes * 60000) : null;
   const windowLabel = start ? `${istTime(start)}–${end ? istTime(end) : ""} IST` : "Unscheduled";
   const code = session.exam.subject || session.exam.title;
-  const screenNo = session.pin ? session.pin.split("-")[1] || session.pin : "—";
   const domain = session.allowedEmailDomain || session.exam.allowedEmailDomain;
 
   let snap: any = {};
@@ -123,25 +123,16 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-4 pb-8 rise-in">
-      {/* Breadcrumb (Stacklane overview style) */}
-      <div className="px-1 pt-1">
-        <Breadcrumb items={[{ label: "Live sessions", href: "/dashboard/owner#live" }, { label: session.exam.title }]} />
-      </div>
-
       {/* Hero card */}
       <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <p className="flex items-center gap-2 text-xs font-bold text-lime-200">
             <span className="w-2 h-2 rounded-full bg-lime-300 animate-pulse" />
-            {session.status}
-            <span className="text-neutral-500 font-semibold">· auto-sync every 8s ·</span>
             <RefreshClock />
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             <AutoRefresher active={live} />
-            <HeroPill tone={live ? "lime" : done ? "neutral" : "neutral"}>{done ? "ENDED" : live ? "LIVE" : session.status}</HeroPill>
-            <HeroPill>{totalCount} candidates</HeroPill>
-            <HeroPill>Screen {screenNo}</HeroPill>
+            <HeroPill>APT-{session.pin ? session.pin.replace("APT-", "") : "——"}</HeroPill>
           </div>
         </div>
 
@@ -157,23 +148,9 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
             <h1 className="mt-1.5 text-2xl sm:text-[28px] font-black text-white tracking-tight leading-none truncate">
               {session.exam.title}
             </h1>
-            <p className="text-[11px] text-neutral-500 mt-1.5">
-              PIN {session.pin || "—"} · {domain ? `@${domain.replace(/^@/, "")}` : "open domain"} · {windowLabel} · frozen snapshot v{totalQuestions}
-            </p>
           </div>
         </div>
-
-        <TickStrip
-          data={session.attempts.map((a) => {
-            const fill = totalQuestions > 0 ? Math.min(1, a.responses.length / totalQuestions) : 0;
-            return {
-              fill,
-              tone: a.status === "SUBMITTED" ? "lime" : a.status === "IN_PROGRESS" ? "white" : "muted",
-            };
-          })}
-        />
       </div>
-
       {/* Metric row */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <StackStatCard
@@ -211,7 +188,7 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
         />
       </div>
 
-      {/* Candidate Result Release & Podium Reveal Control */}
+      {/* Candidate Result Release, Podium Reveal, Gamified Mode + Global Time Extension (single line) */}
       <ResultReleaseControl
         sessionId={session.id}
         initialReleased={resultsReleased}
@@ -219,93 +196,172 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
         initialGamified={Boolean(snap.isGamified || session.exam.description?.includes("[MODE:GAMIFIED]"))}
         resultVisibility={resultVisibility}
         submittedCount={submittedCount}
-      />
+      >
+        <div className="rounded-xl border border-white/10 bg-[#0e0f13] px-3 py-1.5 flex items-center gap-2 shrink-0">
+          <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-400 uppercase whitespace-nowrap">Global time extension</span>
+          {[5, 10, 15].map((mins) => (
+            <form
+              key={mins}
+              action={async (formData) => {
+                "use server";
+                await extendSessionTimeAction(formData);
+              }}
+            >
+              <input type="hidden" name="sessionId" value={session.id} />
+              <input type="hidden" name="minutes" value={mins} />
+              <button className="px-3 py-1.5 bg-white hover:bg-neutral-200 text-black text-xs font-bold rounded-lg transition-all cursor-pointer">
+                +{mins}m
+              </button>
+            </form>
+          ))}
+          <form
+            id="auto-end-session-form"
+            action={async (formData) => {
+              "use server";
+              await endSessionAction(formData);
+            }}
+          >
+            <input type="hidden" name="sessionId" value={session.id} />
+            <button className="px-3 py-1.5 bg-[#e5484d] hover:brightness-110 text-white text-xs font-black rounded-lg transition-all cursor-pointer">
+              Force End Exam
+            </button>
+          </form>
+        </div>
+      </ResultReleaseControl>
 
-      {/* ── TEACHER EXCLUSIVE: Live Podium & Leaderboard ── */}
       <RosterManager
         sessionId={session.id}
         initialRosters={(session.rosters || []).map((r) => ({ email: r.email, name: r.name }))}
       />
-      <AttendanceRegister
-        sessionId={session.id}
-        examTitle={session.exam.title}
-        roster={(session.rosters || []).map((r) => ({ email: r.email, name: r.name }))}
-        attempts={session.attempts.map((a) => ({ email: a.user.email, status: a.status }))}
-      />
-      <TeacherPodiumLeaderboard
-        sessionId={session.id}
-        candidates={attempts.map((a) => ({
-          id: a.id,
-          userId: a.userId,
-          userName: a.userName,
-          userEmail: a.userEmail,
-          status: a.status,
-          score: a.earned,
-          totalMarks: totalMarks,
-          answeredCount: a.answered,
-          totalQuestions: totalQuestions,
-          mascotId: (sessionMascots as Record<string, string>)[a.userId] || null,
-          emoji: a.emoji,
-          gifUrl: a.gifUrl,
-          flagsCount: a.flags,
-          lastActivity: a.lastActivity,
-          passCriteria: session.exam.passCriteria ?? 50,
-          createdAt: a.createdAt,
-          submittedAt: a.submittedAt,
-          timeTakenSeconds: a.timeTakenSeconds,
-        }))}
-        totalMarks={totalMarks}
-        passCriteria={session.exam.passCriteria ?? 50}
-        isLive={!done}
-      />
 
-      {/* Global extension */}
-      {!done && (
-        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-          <p className={infoLabel}>GLOBAL TIME EXTENSION</p>
-          <div className="mt-3 flex flex-col lg:flex-row lg:items-center gap-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              {[5, 10, 15].map((mins) => (
-                <form
-                  key={mins}
-                  action={async (formData) => {
-                    "use server";
-                    await extendSessionTimeAction(formData);
-                  }}
-                >
-                  <input type="hidden" name="sessionId" value={session.id} />
-                  <input type="hidden" name="minutes" value={mins} />
-                  <button className="px-5 py-2.5 bg-white hover:bg-neutral-200 text-black text-xs font-bold rounded-xl transition-all cursor-pointer">
-                    +{mins}m
-                  </button>
-                </form>
-              ))}
-              <form
-                id="auto-end-session-form"
-                action={async (formData) => {
-                  "use server";
-                  await endSessionAction(formData);
-                }}
-              >
-                <input type="hidden" name="sessionId" value={session.id} />
-                <button className="px-5 py-2.5 bg-[#e5484d] hover:brightness-110 text-white text-xs font-black rounded-xl transition-all cursor-pointer">
-                  Force End Exam
-                </button>
-              </form>
-            </div>
-            <Link
-              href={`/dashboard/owner/results/${session.id}`}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-bold text-neutral-100 rounded-xl transition-colors w-fit"
-            >
-              View Full Cohort Report <span aria-hidden>→</span>
-            </Link>
-          </div>
-          <div className="mt-2.5 flex flex-col sm:flex-row gap-1 sm:gap-10 text-[10px] text-neutral-600">
-            <p>Applies to all active candidates and shifted deadlines</p>
-            <p>Exports summary of all candidates and integrity signals</p>
-          </div>
-        </div>
-      )}
+      {/* ── Live monitoring tabs: Leaderboard / Podium / Attendance (same structure as the results page) ── */}
+      <FileTabs
+        items={[
+          {
+            key: "leaderboard",
+            label: "Leaderboard",
+            icon: (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h7" />
+              </svg>
+            ),
+            content: (
+              <TeacherPodiumLeaderboard
+                sessionId={session.id}
+                candidates={attempts.map((a) => ({
+                  id: a.id,
+                  userId: a.userId,
+                  userName: a.userName,
+                  userEmail: a.userEmail,
+                  status: a.status,
+                  score: a.earned,
+                  totalMarks: totalMarks,
+                  answeredCount: a.answered,
+                  totalQuestions: totalQuestions,
+                  mascotId: (sessionMascots as Record<string, string>)[a.userId] || null,
+                  emoji: a.emoji,
+                  gifUrl: a.gifUrl,
+                  flagsCount: a.flags,
+                  lastActivity: a.lastActivity,
+                  passCriteria: session.exam.passCriteria ?? 50,
+                  createdAt: a.createdAt,
+                  submittedAt: a.submittedAt,
+                  timeTakenSeconds: a.timeTakenSeconds,
+                }))}
+                totalMarks={totalMarks}
+                passCriteria={session.exam.passCriteria ?? 50}
+                isLive={!done}
+                view="leaderboard"
+              />
+            ),
+          },
+          {
+            key: "podium",
+            label: "Podium",
+            icon: (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4M5 4h14l-1.5 6a5.5 5.5 0 01-11 0L5 4zM4 6H2.5c0 3 1.2 4.5 2.7 4.9M20 6h1.5c0 3-1.2 4.5-2.7 4.9" />
+              </svg>
+            ),
+            content: (
+              <TeacherPodiumLeaderboard
+                sessionId={session.id}
+                candidates={attempts.map((a) => ({
+                  id: a.id,
+                  userId: a.userId,
+                  userName: a.userName,
+                  userEmail: a.userEmail,
+                  status: a.status,
+                  score: a.earned,
+                  totalMarks: totalMarks,
+                  answeredCount: a.answered,
+                  totalQuestions: totalQuestions,
+                  mascotId: (sessionMascots as Record<string, string>)[a.userId] || null,
+                  emoji: a.emoji,
+                  gifUrl: a.gifUrl,
+                  flagsCount: a.flags,
+                  lastActivity: a.lastActivity,
+                  passCriteria: session.exam.passCriteria ?? 50,
+                  createdAt: a.createdAt,
+                  submittedAt: a.submittedAt,
+                  timeTakenSeconds: a.timeTakenSeconds,
+                }))}
+                totalMarks={totalMarks}
+                passCriteria={session.exam.passCriteria ?? 50}
+                isLive={!done}
+                view="podium"
+              />
+            ),
+          },
+          {
+            key: "candidates",
+            label: "Candidates",
+            icon: (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM4.5 20.1a8.25 8.25 0 0115 0" />
+              </svg>
+            ),
+            content: (
+              <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
+                <CandidateTable
+                  attempts={attempts}
+                  totalQuestions={totalQuestions}
+                  totalMarks={totalMarks}
+                  sessionId={session.id}
+                  blockedEmails={(session.blocked || []).map((b) => b.email)}
+                />
+              </div>
+            ),
+          },
+          {
+            key: "attendance",
+            label: "Attendance",
+            icon: (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h7M7 6v12" />
+              </svg>
+            ),
+            content: (
+              <AttendanceRegister
+                sessionId={session.id}
+                examTitle={session.exam.title}
+                roster={(session.rosters || []).map((r) => ({ email: r.email, name: r.name }))}
+                attempts={session.attempts.map((a) => ({ email: a.user.email, status: a.status }))}
+              />
+            ),
+          },
+          {
+            key: "integrity",
+            label: "Integrity",
+            icon: (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z" />
+              </svg>
+            ),
+            content: <IntegrityFeed flags={flags} />,
+          },
+        ]}
+      />
 
       {done && (
         <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -318,36 +374,6 @@ export default async function LiveSessionMonitor({ params }: { params: { id: str
           </Link>
         </div>
       )}
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { l: "REGISTERED", v: String(totalCount), s: "Candidates enrolled for this session" },
-          { l: "IN PROGRESS", v: String(inProgressCount), s: "Candidates currently answering" },
-          { l: "SUBMITTED", v: String(submittedCount), s: "Candidates who completed the exam" },
-          { l: "INTEGRITY FLAGS", v: String(totalFlagsCount), s: "Active flags requiring review" },
-        ].map((c) => (
-          <div key={c.l} className={statCard}>
-            <p className={infoLabel}>{c.l}</p>
-            <p className="mt-2 text-[26px] leading-none font-black text-white tabular-nums">{c.v}</p>
-            <p className="mt-1.5 text-[10px] text-neutral-500">{c.s}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Candidate table */}
-      <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
-        <CandidateTable
-          attempts={attempts}
-          totalQuestions={totalQuestions}
-          totalMarks={totalMarks}
-          sessionId={session.id}
-          blockedEmails={(session.blocked || []).map((b) => b.email)}
-        />
-      </div>
-
-      {/* Integrity feed */}
-      <IntegrityFeed flags={flags} />
     </div>
   );
 }

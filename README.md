@@ -323,5 +323,4 @@ Copyright © 2024–2026 **Yash Singhal**. All Rights Reserved.
 
 This software, including all source code, algorithms, user interface designs, visual assets, and documentation, is **strictly proprietary**. 
 
-* **No Unauthorized Use**: Duplication, modification, redistribution, reverse engineering, or commercial use without prior explicit written permission from **Yash Singhal** is strictly prohibited.
-* For licensing inquiries, institutional partnerships, or authorizations, please contact: **[singhalyash307@gmail.com](mailto:singhalyash307@gmail.com)**.
+* For licensing inquiries, institutional partnerships, or authorizations, please submit an inquiry via the Aptix platform.

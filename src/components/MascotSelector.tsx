@@ -41,26 +41,31 @@ export function MascotSelector({ candidateName, sessionId, examTitle, examMeta, 
     <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
       <CandidateTopbar candidateName={candidateName} roll={`SES-${sessionId.slice(-4).toUpperCase()}`} />
       <main className="flex-1 w-full max-w-[1800px] mx-auto px-4 sm:px-8 py-6 space-y-4">
-        <div className="flex items-start justify-between gap-6 px-1 pt-1">
+        <div className="flex items-center justify-between gap-6 px-1 pt-1">
           <div>
-            <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">
-              PRE-EXAM / Q4-26 · GAMIFIED MODE
-            </p>
             <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
               Bring your spirit<span className="text-lime-300">.</span>
             </h1>
-            <p className="text-[13px] text-neutral-400 mt-2.5">
-              {candidateName} · {examTitle || "Quantitative Aptitude · Q4"}{examMeta ? ` · ${examMeta}` : " · 40 questions · 60 minutes"}
-            </p>
           </div>
-          <Flower className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 mt-1" />
+          <Flower className="w-10 h-10 sm:w-12 sm:h-12 shrink-0" />
         </div>
 
         <div className="w-full rounded-2xl border border-white/10 bg-[#0e0f13] p-5 sm:p-7 shadow-2xl">
-          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Choose your Spirit Mascot</h2>
-          <p className="text-xs text-neutral-400 mt-1.5">
-            Select one companion for this attempt. Power-bluff descriptions are playful cosmetic flavor, never a scoring advantage.
-          </p>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Choose your Spirit Mascot</h2>
+              <p className="text-xs text-neutral-400 mt-1.5">
+                Select one companion for this attempt. Power-bluff descriptions are playful cosmetic flavor, never a scoring advantage.
+              </p>
+            </div>
+            <button
+              onClick={handleConfirm}
+              disabled={isSubmitting}
+              className="px-6 py-3 rounded-xl bg-lime-300 hover:brightness-110 text-black font-black text-xs transition-all disabled:opacity-50 whitespace-nowrap"
+            >
+              {isSubmitting ? "Locking in…" : `Continue with ${selectedMascot.name}`}
+            </button>
+          </div>
 
           {error && (
             <p className="mt-3 text-xs font-bold text-rose-300 bg-rose-950/40 border border-rose-800/50 rounded-xl px-3 py-2">{error}</p>
@@ -108,21 +113,13 @@ export function MascotSelector({ candidateName, sessionId, examTitle, examMeta, 
             })}
           </div>
 
-          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <p className="text-xs text-neutral-300">
-              Selected: <span className="font-bold text-white">● {selectedMascot.name}</span>
-            </p>
-            <button
-              onClick={handleConfirm}
-              disabled={isSubmitting}
-              className="px-6 py-3 rounded-xl bg-lime-300 hover:brightness-110 text-black font-black text-xs transition-all disabled:opacity-50 whitespace-nowrap"
-            >
-              {isSubmitting ? "Locking in…" : `Continue with ${selectedMascot.name}`}
-            </button>
-          </div>
+          <div className="mt-4" />
         </div>
       </main>
-      <CandidateFooter />
+      <div className="fixed bottom-0 inset-x-0 z-30 bg-[#060607]/95 backdrop-blur-sm">
+        <CandidateFooter />
+      </div>
+      <div className="h-12 shrink-0" />
     </div>
   );
 }

@@ -173,14 +173,11 @@ export function CandidateTable({
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-[13px] font-bold text-white">Candidate table</h3>
-        <span className="text-[10px] font-bold text-neutral-500 tabular-nums">
-          {shown.length} OF {attempts.length}
-        </span>
       </div>
-      <div className="overflow-x-auto -mx-1 px-1">
+      <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#101116]">
         <div className="grid grid-cols-[1.6fr_auto_auto_auto_auto_auto_auto] gap-x-4 gap-y-1 items-center min-w-[840px]">
           {(["NAME / EMAIL", "MASCOT", "STATUS", "PROGRESS", "CURRENT SCORE", "FLAGS", "INDIVIDUAL CONTROLS"] as const).map((h, i) => (
-            <p key={h} className={`text-[9px] font-bold tracking-[0.16em] text-neutral-600 pb-2 ${i >= 2 ? "text-center" : ""} ${i === 6 ? "text-right" : ""}`}>
+            <p key={h} className={`text-[10px] font-semibold tracking-[0.14em] text-neutral-500 uppercase py-3 px-4 ${i >= 2 ? "text-center" : ""} ${i === 6 ? "text-right" : ""}`}>
               {h}
             </p>
           ))}
@@ -192,13 +189,13 @@ export function CandidateTable({
             const toggle = () => setExpanded((prev) => (prev === a.id ? null : a.id));
             return (
             <React.Fragment key={a.id}>
-              <div onClick={toggle} className="py-3 border-t border-white/[0.06] pr-2 min-w-0 cursor-pointer group">
+              <div onClick={toggle} className="py-3 px-4 border-t border-white/[0.06] pr-2 min-w-0 cursor-pointer group">
                 <p className="text-xs font-bold text-white group-hover:text-lime-200 transition-colors truncate">
                   {a.userName}
                 </p>
                 <p className="text-[10px] text-neutral-500 truncate">{a.userEmail}</p>
               </div>
-              <div onClick={toggle} className="py-3 border-t border-white/[0.06] cursor-pointer">
+              <div onClick={toggle} className="py-3 px-4 border-t border-white/[0.06] cursor-pointer">
                 <span className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-base overflow-hidden">
                   {a.gifUrl ? (
                     <img src={a.gifUrl} alt="" className="w-6 h-6 object-contain" />
@@ -211,7 +208,7 @@ export function CandidateTable({
                   )}
                 </span>
               </div>
-              <div onClick={toggle} className="py-3 border-t border-white/[0.06] text-center cursor-pointer">
+              <div onClick={toggle} className="py-3 px-4 border-t border-white/[0.06] text-center cursor-pointer">
                 {a.status === "SUBMITTED" ? (
                   <span className="text-[9px] font-black tracking-wider text-neutral-300 bg-white/[0.07] border border-white/10 rounded px-1.5 py-0.5 whitespace-nowrap">SUBMITTED</span>
                 ) : a.status === "IN_PROGRESS" ? (
@@ -220,20 +217,20 @@ export function CandidateTable({
                   <span className="text-[10px] font-bold tracking-wider text-neutral-500 whitespace-nowrap">NOT STARTED</span>
                 )}
               </div>
-              <p onClick={toggle} className="py-3 border-t border-white/[0.06] text-xs text-neutral-200 tabular-nums text-center whitespace-nowrap cursor-pointer">
+              <p onClick={toggle} className="py-3 px-4 border-t border-white/[0.06] text-xs text-neutral-200 tabular-nums text-center whitespace-nowrap cursor-pointer">
                 {a.answered} / {totalQuestions}
               </p>
-              <p onClick={toggle} className="py-3 border-t border-white/[0.06] text-xs text-neutral-200 tabular-nums text-center whitespace-nowrap cursor-pointer">
+              <p onClick={toggle} className="py-3 px-4 border-t border-white/[0.06] text-xs text-neutral-200 tabular-nums text-center whitespace-nowrap cursor-pointer">
                 {a.status === "SUBMITTED" ? `${a.earned.toFixed(0)} / ${totalMarks}` : a.answered > 0 ? `${a.earned.toFixed(0)} / ${a.answered}` : "—"}
               </p>
-              <p onClick={toggle} className="py-3 border-t border-white/[0.06] text-center cursor-pointer">
+              <p onClick={toggle} className="py-3 px-4 border-t border-white/[0.06] text-center cursor-pointer">
                 {a.flags > 0 ? (
                   <span className="text-[11px] font-bold text-[#f2a488] whitespace-nowrap">{a.flags} flag{a.flags === 1 ? "" : "s"}</span>
                 ) : (
                   <span className="text-[11px] text-neutral-500 whitespace-nowrap">0 flags</span>
                 )}
               </p>
-              <div className="py-3 border-t border-white/[0.06] flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <div className="py-3 px-4 border-t border-white/[0.06] flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                 {blocked.has(a.userEmail.toLowerCase()) ? (
                   <>
                     <span className="text-[9px] font-black tracking-wider text-red-300 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5 whitespace-nowrap">BLOCKED</span>
@@ -371,7 +368,7 @@ export function CandidateTable({
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between text-[10px] text-neutral-600">
-        <span>Sorted by recent activity · Page {page + 1} of {pages}</span>
+        <span>Sorted by recent activity</span>
         <span className="flex gap-1.5">
           <button disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="px-2.5 py-1 rounded-md border border-white/10 text-neutral-300 disabled:opacity-40 hover:bg-white/5">← Previous</button>
           <button disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)} className="px-2.5 py-1 rounded-md border border-white/10 text-neutral-300 disabled:opacity-40 hover:bg-white/5">Next →</button>
@@ -444,6 +441,7 @@ export function ResultReleaseControl({
   initialGamified,
   resultVisibility,
   submittedCount,
+  children,
 }: {
   sessionId: string;
   initialReleased: boolean;
@@ -451,6 +449,7 @@ export function ResultReleaseControl({
   initialGamified?: boolean;
   resultVisibility: string;
   submittedCount: number;
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const [released, setReleased] = useState(initialReleased);
@@ -544,30 +543,26 @@ export function ResultReleaseControl({
 
   return (
     <div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Box 1: Result release */}
-        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-4 flex flex-col justify-between gap-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 uppercase whitespace-nowrap">
-              Result release
+      <div className="flex items-stretch justify-between gap-2 overflow-x-auto pb-1">
+        {/* Result release */}
+        <span className="rounded-xl border border-white/10 bg-[#0e0f13] px-3 py-1.5 flex items-center gap-2 shrink-0 whitespace-nowrap">
+          <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-400 uppercase">Result release</span>
+          {released ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-300 text-black text-[9px] font-black tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
+              RELEASED
             </span>
-            {released ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-300 text-black text-[9px] font-black tracking-wide whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
-                RELEASED
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400 text-black text-[9px] font-black tracking-wide whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
-                WITHHELD
-              </span>
-            )}
-          </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400 text-black text-[9px] font-black tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
+              WITHHELD
+            </span>
+          )}
           <button
             type="button"
             disabled={busy}
             onClick={() => handleToggle(!released)}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap self-start ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap ${
               released
                 ? "bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white"
                 : "bg-lime-300 hover:bg-lime-200 text-black"
@@ -575,30 +570,26 @@ export function ResultReleaseControl({
           >
             {busy ? "Updating..." : released ? "Withhold" : "Release"}
           </button>
-        </div>
+        </span>
 
-        {/* Box 2: Podium reveal */}
-        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-4 flex flex-col justify-between gap-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 uppercase whitespace-nowrap">
-              Podium
+        {/* Podium reveal */}
+        <span className="rounded-xl border border-white/10 bg-[#0e0f13] px-3 py-1.5 flex items-center gap-2 shrink-0 whitespace-nowrap">
+          <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-400 uppercase">Podium</span>
+          {podiumRevealed ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500 text-white text-[9px] font-black tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-white/70" />
+              REVEALED
             </span>
-            {podiumRevealed ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500 text-white text-[9px] font-black tracking-wide whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-white/70" />
-                REVEALED
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-600 text-white text-[9px] font-black tracking-wide whitespace-nowrap">
-                HIDDEN
-              </span>
-            )}
-          </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-600 text-white text-[9px] font-black tracking-wide">
+              HIDDEN
+            </span>
+          )}
           <button
             type="button"
             disabled={podiumBusy}
             onClick={() => handleTogglePodium(!podiumRevealed)}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap self-start ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap ${
               podiumRevealed
                 ? "bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white"
                 : "bg-purple-500 hover:bg-purple-400 text-white"
@@ -606,30 +597,26 @@ export function ResultReleaseControl({
           >
             {podiumBusy ? "Updating..." : podiumRevealed ? "Hide" : "Reveal"}
           </button>
-        </div>
+        </span>
 
-        {/* Box 3: Gamified mode */}
-        <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-4 flex flex-col justify-between gap-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-300 uppercase whitespace-nowrap">
-              Gamified mode
+        {/* Gamified mode */}
+        <span className="rounded-xl border border-white/10 bg-[#0e0f13] px-3 py-1.5 flex items-center gap-2 shrink-0 whitespace-nowrap">
+          <span className="text-[10px] font-bold tracking-[0.14em] text-neutral-400 uppercase">Gamified mode</span>
+          {gamified ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-300 text-black text-[9px] font-black tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
+              ON
             </span>
-            {gamified ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-300 text-black text-[9px] font-black tracking-wide whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full bg-black/60" />
-                ON
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-600 text-white text-[9px] font-black tracking-wide whitespace-nowrap">
-                OFF
-              </span>
-            )}
-          </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-600 text-white text-[9px] font-black tracking-wide">
+              OFF
+            </span>
+          )}
           <button
             type="button"
             disabled={gamifiedBusy}
             onClick={() => handleToggleGamified(!gamified)}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap self-start ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap ${
               gamified
                 ? "bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white"
                 : "bg-lime-300 hover:bg-lime-200 text-black"
@@ -637,7 +624,10 @@ export function ResultReleaseControl({
           >
             {gamifiedBusy ? "Updating..." : gamified ? "Disable" : "Enable"}
           </button>
-        </div>
+        </span>
+
+        {/* Trailing inline controls (e.g. global time extension) */}
+        {children}
       </div>
 
       {statusMsg && (

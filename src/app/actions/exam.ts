@@ -251,6 +251,7 @@ export async function submitExamAction(
   const auth = await requireAuth();
   if ("error" in auth || !auth.user) return { error: "Not logged in" };
   const userId = auth.user.id;
+  console.log("[submitExamAction] received:", attemptId);
 
   {
     const _att = await prisma.candidateAttempt.findUnique({ where: { id: attemptId }, select: { examSessionId: true } });
@@ -342,6 +343,7 @@ export async function submitExamAction(
     await computeSessionAnalytics(attempt.session.id).catch(e => console.error("Late analytics error:", e));
   }
 
+  console.log("[submitExamAction] complete:", attemptId);
   return { success: true };
 }
 

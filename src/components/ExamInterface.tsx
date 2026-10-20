@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { submitExamAction, saveDraftAnswerAction, batchSyncDraftAnswersAction } from "@/app/actions/exam";
 import { logCheatSignalAction } from "@/app/actions/cheat";
-import { getAttemptStatusAction } from "@/app/actions/attempt";
+import { getAttemptStatusAction, getAttemptDeadlineAction } from "@/app/actions/attempt";
+import { setCachedAttemptStatus, getCachedAttemptStatus } from "@/lib/exam-cache";
 import { useServerTime } from "@/hooks/useServerTime";
 import { saveDraftAnswersToIndexedDB, getDraftAnswersFromIndexedDB, clearDraftAnswersFromIndexedDB } from "@/lib/indexed-db";
 import { detectVirtualMachine, createExtensionGuardian } from "@/lib/anti-cheat-detector";
@@ -53,6 +54,16 @@ export function ExamInterface({
   const [secureStep, setSecureStep] = useState(0);
   const [secureError, setSecureError] = useState<string | null>(null);
   const [rulesAccepted, setRulesAccepted] = useState(false);
+  const [proctorArming, setProctorArming] = useState(true);
+  const [armedAt, setArmedAt] = useState<string | null>(null);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setProctorArming(false);
+      setArmedAt(new Date().toLocaleTimeString("en-GB", { hour12: false }));
+    }, 2800);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>(initialAnswers);
@@ -75,6 +86,12 @@ export function ExamInterface({
   const [tabSwitchWarning, setTabSwitchWarning] = useState<string | null>(null);
   const [isSubmittingExam, setIsSubmittingExam] = useState(false);
   const [submittingReason, setSubmittingReason] = useState<string>("");
+  // Submission delivery diagnostics: rendered on the submitting screen itself
+  // so a stalled/hanging upload is visible without opening DevTools.
+  const [submitStage, setSubmitStage] = useState<"sending" | "failed">("sending");
+  const [submitErrorCode, setSubmitErrorCode] = useState<string>("");
+  const [submitSeconds, setSubmitSeconds] = useState(0);
+  const submitResendRef = useRef<(() => Promise<{ delivered: boolean; detail: string }>) | null>(null);
   
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [finalTotalMarks, setFinalTotalMarks] = useState<number | null>(null);
@@ -173,6 +190,22 @@ export function ExamInterface({
     };
 
     runDiagnostics();
+
+    // ── Owner "Reset exam" generation check ────────────────────────────────
+    // A reset re-shuffles the seed on the SAME attempt id, so any browser cache
+    // (IndexedDB drafts / localStorage crash buffer / start stamp) written
+    // BEFORE the reset is stale and must be discarded.
+    const currentSeed = String(attempt.shuffleSeed ?? "");
+    const genKey = `aptix_attempt_gen_${attempt.id}`;
+    try {
+      const recorded = localStorage.getItem(genKey);
+      if (recorded && currentSeed && recorded !== currentSeed) {
+        clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
+        localStorage.removeItem(`aptix_attempt_${attempt.id}`);
+        localStorage.removeItem(`aptix_attempt_start_${attempt.id}`);
+      }
+      if (currentSeed) localStorage.setItem(genKey, currentSeed);
+    } catch {}
 
     // 2. Load cached draft answers from IndexedDB for crash recovery
     getDraftAnswersFromIndexedDB(attempt.id).then((offlineData) => {
@@ -323,6 +356,17 @@ export function ExamInterface({
     setQuestions(finalQuestions);
 
     // Check Local Storage Crash Buffer
+    // Same generation check as above: discard the localStorage crash buffer
+    // written before an owner reset (fresh shuffle seed on the same attempt).
+    try {
+      const genKey2 = `aptix_attempt_gen_${attempt.id}`;
+      const recorded2 = localStorage.getItem(genKey2);
+      const seed2 = String(attempt.shuffleSeed ?? "");
+      if (recorded2 && seed2 && recorded2 !== seed2) {
+        localStorage.removeItem(`aptix_attempt_${attempt.id}`);
+        localStorage.removeItem(`aptix_attempt_start_${attempt.id}`);
+      }
+    } catch {}
     let localSaved: Record<string, any> = {};
     const localKey = `aptix_attempt_${attempt.id}`;
     try {
@@ -584,6 +628,119 @@ export function ExamInterface({
     return () => clearInterval(timer);
   }, [session, currentExtendedUntil, isFinished, hasStarted, isForcedLive, sessionStatus, synced, getServerTime, attempt.id]);
 
+  // ── Submission watchdog + dual transports ────────────────────────────────
+  // Never let the submit screen spin forever: every delivery attempt is raced
+  // against a hard timeout. The action is idempotent (re-submitting an already
+  // SUBMITTED attempt just returns isSubmitted:true), and abandoned attempts
+  // are auto-closed by the server-side sweeper, so a failure can be retried.
+  const SUBMIT_TIMEOUT_MS = 45_000;
+
+  const sendSubmission = useCallback(async (
+    attemptId: string,
+    answersPayload: Record<string, string>,
+    timeSpentPayload: Record<string, number>,
+    clientStartedAtMs?: number
+  ): Promise<{ delivered: boolean; detail: string }> => {
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+        ),
+      ]);
+    const inspect = (r: any): { delivered: boolean; detail: string } => {
+      if (!r) return { delivered: true, detail: "" };
+      if (r.success) return { delivered: true, detail: "" };
+      if (r.isSubmitted) return { delivered: true, detail: r.error || "Assessment already closed." };
+      if (r.error) return { delivered: false, detail: r.error };
+      return { delivered: true, detail: "" };
+    };
+
+    // Transport 1: Next server action.
+    let firstDetail = "";
+    try {
+      const r = await withTimeout(
+        submitExamAction(attemptId, answersPayload, timeSpentPayload, clientStartedAtMs),
+        SUBMIT_TIMEOUT_MS,
+        "Submission (server action)"
+      );
+      const v = inspect(r);
+      if (v.delivered) return v;
+      firstDetail = v.detail;
+    } catch (err1) {
+      console.error("[submit] server action transport failed, trying HTTP fallback...", err1);
+    }
+
+    // Transport 2: plain HTTP POST route (bypasses the server-action transport).
+    try {
+      const res = await withTimeout(
+        fetch("/api/exam/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ attemptId, answers: answersPayload, timeSpent: timeSpentPayload, clientStartedAtMs }),
+          keepalive: true,
+        }),
+        SUBMIT_TIMEOUT_MS,
+        "Submission (HTTP fallback)"
+      );
+      const r = await res.json().catch(() => null);
+      if (!res.ok && !r) throw new Error(`HTTP fallback responded ${res.status}`);
+      return inspect(r);
+    } catch (err2) {
+      console.error("[submit] HTTP fallback also failed:", err2);
+      return {
+        delivered: false,
+        detail: firstDetail || (err2 instanceof Error ? err2.message : "network unreachable"),
+      };
+    }
+  }, []);
+
+  // Finishing sequence after a confirmed delivery (or a manual Continue):
+  // clear drafts, exit fullscreen, show the completion screen.
+  const completeSubmitFlow = useCallback(async () => {
+    clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
+
+    // Guaranteed sequence: SUBMIT FIRST, THEN EXIT FULLSCREEN
+    if (typeof document !== "undefined") {
+      const doc = document as any;
+      if (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement) {
+        try {
+          if (doc.exitFullscreen) {
+            await doc.exitFullscreen().catch(() => {});
+          } else if (doc.webkitExitFullscreen) {
+            await doc.webkitExitFullscreen();
+          } else if (doc.mozCancelFullScreen) {
+            await doc.mozCancelFullScreen();
+          } else if (doc.msExitFullscreen) {
+            await doc.msExitFullscreen();
+          }
+        } catch (e) {}
+      }
+    }
+    setIsFullscreen(false);
+    setIsFinished(true);
+    setIsSubmittingExam(false);
+    setSubmitStage("sending");
+    setSubmitErrorCode("");
+
+    if (canViewResults) {
+      const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
+      if (statusData && statusData.score !== null) {
+        setFinalScore(statusData.score);
+        setFinalTotalMarks(statusData.totalMarks);
+        if (statusData.detailedResults) {
+          setDetailedResults(statusData.detailedResults);
+        }
+        if (statusData.cohort) {
+          setCohortData(statusData.cohort);
+        }
+        if (statusData.timeTakenSeconds) {
+          setFinalTimeSpent(statusData.timeTakenSeconds);
+        }
+      }
+    }
+  }, [attempt.id, canViewResults]);
+
   const executeSubmit = useCallback(async (reasonMessage?: string) => {
     if (isFinishingRef.current || isFinished) return;
     // Always update the ref so anti-cheat listeners always call latest version
@@ -597,10 +754,18 @@ export function ExamInterface({
       debounceTimerRef.current = null;
     }
     try {
-      const { setCachedAttemptStatus } = await import("@/lib/exam-cache");
+      // Preserve the REAL deadline instead of stamping "now" — collapsing the
+      // timer would flip the render into the "Time Has Expired" branch.
+      const cached = getCachedAttemptStatus(attempt.id);
       setCachedAttemptStatus(attempt.id, {
         userId: attempt.userId,
-        effectiveEndMs: Date.now(),
+        effectiveEndMs: cached?.effectiveEndMs ?? (
+          currentExtendedUntil
+            ? new Date(currentExtendedUntil).getTime()
+            : (session.startTime && session.durationMinutes
+                ? new Date(session.startTime).getTime() + session.durationMinutes * 60_000
+                : Date.now() + 60_000)
+        ),
         isSubmitted: true,
       });
     } catch {}
@@ -628,57 +793,69 @@ export function ExamInterface({
       : (attempt.createdAt ? Math.round((Date.now() - new Date(attempt.createdAt).getTime()) / 1000) : 180);
     setFinalTimeSpent(finalElapsed);
 
-    try {
-      await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current, clientStartedAtMs);
-    } catch (err) {
-      console.error("Submission failed, retrying once...", err);
-      try {
-        await submitExamAction(attempt.id, stringifiedAnswers, timeSpentRef.current, clientStartedAtMs);
-      } catch (e) {}
+    setSubmitStage("sending");
+    setSubmitErrorCode("");
+    const delivery = await sendSubmission(attempt.id, stringifiedAnswers, timeSpentRef.current, clientStartedAtMs);
+    submitResendRef.current = () =>
+      sendSubmission(attempt.id, stringifiedAnswers, timeSpentRef.current, clientStartedAtMs);
+    if (!delivery.delivered) {
+      // Both transports failed — keep the diagnostic screen up with manual
+      // Resend / Continue controls instead of faking a completion.
+      console.error("[submit] delivery failed on both transports:", delivery.detail);
+      setSubmitErrorCode(delivery.detail || "Both submission transports failed.");
+      setSubmitStage("failed");
+      return;
     }
-    clearDraftAnswersFromIndexedDB(attempt.id).catch(() => {});
-
-    // Guaranteed sequence: SUBMIT FIRST, THEN EXIT FULLSCREEN
-    if (typeof document !== "undefined") {
-      const doc = document as any;
-      if (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement) {
-        try {
-          if (doc.exitFullscreen) {
-            await doc.exitFullscreen().catch(() => {});
-          } else if (doc.webkitExitFullscreen) {
-            await doc.webkitExitFullscreen();
-          } else if (doc.mozCancelFullScreen) {
-            await doc.mozCancelFullScreen();
-          } else if (doc.msExitFullscreen) {
-            await doc.msExitFullscreen();
-          }
-        } catch (e) {}
-      }
-    }
-    setIsFullscreen(false);
-    setIsFinished(true);
-    setIsSubmittingExam(false);
-
-    if (canViewResults) {
-      const statusData = await getAttemptStatusAction(attempt.id, clientDeviceIdRef.current);
-      if (statusData && statusData.score !== null) {
-        setFinalScore(statusData.score);
-        setFinalTotalMarks(statusData.totalMarks);
-        if (statusData.detailedResults) {
-          setDetailedResults(statusData.detailedResults);
-        }
-        if (statusData.cohort) {
-          setCohortData(statusData.cohort);
-        }
-        if (statusData.timeTakenSeconds) {
-          setFinalTimeSpent(statusData.timeTakenSeconds);
-        }
-      }
-    }
-  }, [attempt.id, canViewResults, isFinished, session.durationMinutes, timeLeft, attempt.createdAt]);
+    await completeSubmitFlow();
+  }, [attempt.id, canViewResults, isFinished, session.durationMinutes, timeLeft, attempt.createdAt, sendSubmission, completeSubmitFlow]);
 
   // Always keep ref in sync so stale closure never prevents auto-submit
   useEffect(() => { executeSubmitRef.current = executeSubmit; }, [executeSubmit]);
+
+  // Elapsed-seconds ticker for the submitting screen (visible time diagnostics).
+  useEffect(() => {
+    if (!isSubmittingExam) {
+      setSubmitSeconds(0);
+      return;
+    }
+    const t = setInterval(() => setSubmitSeconds(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [isSubmittingExam]);
+
+  // ── Deadline re-sync ─────────────────────────────────────────────────────
+  // Extensions applied by the owner while this tab is open never reach the
+  // initially server-rendered props, so the candidate countdown would drift
+  // from the owner monitor (e.g. monitor 25:03 vs exam 10:xx). Re-sync the
+  // effective deadline every 30 seconds; the timer effect below reacts to
+  // any currentExtendedUntil change instantly.
+  useEffect(() => {
+    if (!hasStarted) return;
+    const poll = async () => {
+      // Only skip while a submission is genuinely in flight. isFinishingRef
+      // stays true forever after a finished submit, so guarding on it here
+      // would block the reset-recovery check below on the finished screen.
+      if (isSubmittingExam) return;
+      try {
+        const res = await getAttemptDeadlineAction(attempt.id);
+        if (!res || res.error || res.isSubmitted) return;
+        // Owner re-opened this attempt after "Reset exam": the client showing a
+        // finished screen must follow the server and run the fresh attempt.
+        if (isFinished) {
+          window.location.reload();
+          return;
+        }
+        if (res.extendedUntil) {
+          const nextMs = new Date(res.extendedUntil).getTime();
+          setCurrentExtendedUntil(prev =>
+            !prev || new Date(prev).getTime() < nextMs ? new Date(nextMs) : prev
+          );
+        }
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 30_000);
+    return () => clearInterval(t);
+  }, [hasStarted, isFinished, isSubmittingExam, attempt.id]);
 
   useEffect(() => {
     if (shouldAutoSubmit && !isFinishingRef.current) {
@@ -768,7 +945,7 @@ export function ExamInterface({
           }
         } else {
           setTabSwitchWarning(
-            `⚠️ Focus Warning: Focus loss ${tabSwitchCount}/${tabLimit} recorded. ` +
+            `Focus Warning: Focus loss ${tabSwitchCount}/${tabLimit} recorded. ` +
             `Reaching ${tabLimit} will automatically submit your exam.`
           );
         }
@@ -1540,8 +1717,10 @@ export function ExamInterface({
     );
   }
 
-  // 5. If allotted time has expired (whether started or not)
-  if (timeLeft <= 0) {
+  // 5. If allotted time has expired (whether started or not) — but never while
+  // a submission is in flight: the deadline-cache freeze legitimately zeroes
+  // the local timer, and the submitting/finished screens must win instead.
+  if (timeLeft <= 0 && !isFinishingRef.current) {
     return (
       <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 selection:bg-white selection:text-black">
         <div className="bg-[#0a0c10] p-10 rounded-3xl shadow-2xl max-w-md w-full text-center border border-neutral-800">
@@ -1579,7 +1758,7 @@ export function ExamInterface({
     const startLabel = session.startTime
       ? new Date(session.startTime).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })
       : "Window opens at launch";
-    const negLine = config.negativeMarkingEnabled
+    const negLine = config.negativeMarkingEnabled && (config.negativeMarksValue ?? 0.25) > 0
       ? `-${config.negativeMarksValue ?? 0.25} negative marking`
       : "No negative marking";
     const rollId = attempt.id ? `ID-${String(attempt.id).slice(-8).toUpperCase()}` : "CANDIDATE";
@@ -1590,23 +1769,18 @@ export function ExamInterface({
       { label: "Single-device session", sub: "Lease verified on start", state: "READY" },
       { label: "Local recovery storage", sub: typeof indexedDB !== "undefined" ? "IndexedDB available" : "Memory buffer only", state: typeof indexedDB !== "undefined" ? "READY" : "LIMITED" },
       { label: "Multiple displays", sub: diagnostics.isSingleScreen === null ? "Unknown on this browser" : diagnostics.isSingleScreen ? "Single display detected" : "Extended displays detected", state: diagnostics.isSingleScreen === null ? "LIMITED" : diagnostics.isSingleScreen ? "READY" : "LIMITED" },
-      { label: "Hardware / virtualization", sub: !diagnostics.vmKnown ? "Unknown on this browser" : diagnostics.isVM ? `Virtualized (${diagnostics.vmRenderer || "unknown"})` : "Physical host", state: !diagnostics.vmKnown ? "LIMITED" : diagnostics.isVM ? "LIMITED" : "READY" },
     ];
     return (
-      <div className="min-h-screen bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
+      <div className="min-h-[111vh] bg-[#060607] text-neutral-100 flex flex-col font-sans select-none">
         <CandidateTopbar candidateName={candidateName} roll={rollId} />
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-4">
-          <div className="flex items-start justify-between gap-6 px-1 pt-1">
+          <div className="flex items-center justify-between gap-6 px-1 pt-1">
             <div>
-              <p className="text-[10px] font-bold tracking-[0.22em] text-lime-200/80 mb-3">
-                YOUR ASSESSMENT / {(session.exam?.subject || "ENG-26").toString().toUpperCase()}
-              </p>
               <h1 className="text-3xl sm:text-[40px] font-black text-white tracking-tight leading-none">
                 Ready when you are<span className="text-lime-300">.</span>
               </h1>
-              <p className="text-[13px] text-neutral-400 mt-2.5">A quick check now. A focused hour ahead.</p>
             </div>
-            <Flower className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 mt-1" />
+            <Flower className="w-10 h-10 sm:w-12 sm:h-12 shrink-0" />
           </div>
 
           <div className="grid lg:grid-cols-[1fr_320px] gap-4 items-start">
@@ -1639,7 +1813,7 @@ export function ExamInterface({
                 </div>
 
                 {/* Meta details strip */}
-                <div className="mt-4 pt-3.5 border-t border-white/[0.06] space-y-2.5">
+                <div className="mt-4 space-y-2.5">
                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-neutral-400">
                     <span className="text-neutral-300 font-medium">{startLabel}</span>
                     <span className="text-neutral-600">·</span>
@@ -1662,42 +1836,6 @@ export function ExamInterface({
                       <p className="text-xs text-neutral-200 leading-relaxed whitespace-pre-line">
                         {session.exam.instructions}
                       </p>
-                    </div>
-                  ) : null}
-
-                  {chosenMascot ? (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-lime-400/[0.08] via-white/[0.02] to-transparent border border-lime-400/25">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-black/50 border border-lime-400/30 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
-                          {chosenMascot.gifUrl ? (
-                            <img
-                              src={chosenMascot.gifUrl}
-                              alt={chosenMascot.name}
-                              className="w-8 h-8 object-contain filter drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]"
-                              style={{
-                                transform: chosenMascot.imgZoom ? `scale(${chosenMascot.imgZoom})` : undefined,
-                                transformOrigin: chosenMascot.imgOrigin || "center",
-                              }}
-                            />
-                          ) : (
-                            <span className="text-xl">{chosenMascot.emoji}</span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-lime-300 bg-lime-400/15 border border-lime-400/30 px-2 py-0.5 rounded-full">
-                              Spirit Companion
-                            </span>
-                            <span className="text-xs font-bold text-white truncate">{chosenMascot.name}</span>
-                          </div>
-                          <p className="text-[10px] text-neutral-400 mt-0.5 truncate">
-                            {chosenMascot.tagline || "Active companion for this examination session"}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-mono text-lime-200/80 px-2 py-1 rounded bg-lime-400/10 border border-lime-400/20 hidden sm:inline-block">
-                        {chosenMascot.emoji} Ready
-                      </span>
                     </div>
                   ) : null}
                 </div>
@@ -1736,21 +1874,33 @@ export function ExamInterface({
               <div className="rounded-2xl border border-white/10 bg-[#0e0f13] p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-[13px] font-bold text-white">System readiness</h3>
-                  <span className="text-[9px] font-bold tracking-[0.14em] text-neutral-600">CHECKED 09:57:12</span>
+                  <span className={`text-[9px] font-bold tracking-[0.14em] ${proctorArming ? "text-neutral-500 animate-pulse" : "text-neutral-600"}`}>
+                    {proctorArming ? "ARMING PROCTORS" : `CHECKED ${armedAt ?? "--:--:--"}`}
+                  </span>
                 </div>
-                <div className="space-y-2.5">
-                  {readiness.map((r) => (
-                    <div key={r.label} className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-bold text-neutral-200">{r.label}</p>
-                        <p className="text-[10px] text-neutral-500 truncate">{r.sub}</p>
+                {proctorArming ? (
+                  <div className="py-10 flex flex-col items-center justify-center text-center gap-3">
+                    <span className="w-8 h-8 rounded-full border-2 border-white/10 border-t-lime-300 animate-spin" />
+                    <p className="text-[13px] font-black text-white tracking-tight">Preparing proctoring…</p>
+                    <p className="text-[11px] text-neutral-400 max-w-[240px] leading-relaxed">
+                      Arming the tab-switch guard, single-device lease and integrity monitor. Every attempt in this room is recorded and reviewed.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {readiness.map((r) => (
+                      <div key={r.label} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-bold text-neutral-200">{r.label}</p>
+                          <p className="text-[10px] text-neutral-500 truncate">{r.sub}</p>
+                        </div>
+                        <span className={`text-[9px] font-black tracking-wider px-2 py-0.5 rounded shrink-0 ${r.state === "READY" ? "text-lime-200 bg-lime-300/10" : r.state === "OPEN" ? "text-neutral-300 bg-white/[0.06]" : "text-[#f2a488] bg-[#f2a488]/10"}`}>
+                          {r.state === "READY" ? "READY" : r.state === "OPEN" ? "OPEN" : "CHECK"}
+                        </span>
                       </div>
-                      <span className={`text-[9px] font-black tracking-wider px-2 py-0.5 rounded shrink-0 ${r.state === "READY" ? "text-lime-200 bg-lime-300/10" : r.state === "OPEN" ? "text-neutral-300 bg-white/[0.06]" : "text-[#f2a488] bg-[#f2a488]/10"}`}>
-                        {r.state === "READY" ? "READY" : r.state === "OPEN" ? "OPEN" : "CHECK"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Cleared */}
@@ -1780,17 +1930,73 @@ export function ExamInterface({
   }
 
   if (isSubmittingExam || (isFinishingRef.current && !isFinished)) {
+    const failed = submitStage === "failed";
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center p-6 selection:bg-lime-400 selection:text-black">
         <div className="bg-[#0a0c10] p-10 rounded-3xl max-w-lg w-full text-center shadow-2xl border border-white/10 animate-in fade-in zoom-in duration-200">
-          <div className="w-16 h-16 border-4 border-lime-400/20 border-t-lime-400 rounded-full animate-spin mx-auto mb-6" />
-          <h2 className="text-2xl font-black text-white mb-2 tracking-tight">Submitting Assessment</h2>
-          <p className="text-neutral-400 text-sm mb-4 leading-relaxed">
-            {submittingReason || "Finalizing responses and securely synchronizing with examination servers..."}
-          </p>
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-neutral-400 font-mono">
-            <span>Submitting exam securely before exiting fullscreen...</span>
-          </div>
+          {failed ? (
+            <div className="w-16 h-16 bg-rose-950/60 text-rose-400 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-rose-500/30">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+          ) : (
+            <div className="w-16 h-16 border-4 border-lime-400/20 border-t-lime-400 rounded-full animate-spin mx-auto mb-6" />
+          )}
+          <h2 className="text-2xl font-black text-white mb-2 tracking-tight">
+            {failed ? "Submission could not reach the server" : "Submitting Assessment"}
+          </h2>
+          {failed ? (
+            <>
+              <p className="text-neutral-400 text-sm mb-3 leading-relaxed">
+                Your answers are locked for this attempt. The server auto-closes this attempt at the deadline, so no time is lost.
+              </p>
+              {submitErrorCode ? (
+                <p className="text-[11px] font-mono text-rose-300/80 bg-rose-500/5 border border-rose-500/20 rounded-lg px-3 py-2 mb-5 break-words">
+                  {submitErrorCode}
+                </p>
+              ) : null}
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSubmitStage("sending");
+                    setSubmitErrorCode("");
+                    const result = submitResendRef.current ? await submitResendRef.current() : { delivered: false, detail: "" };
+                    if (result.delivered) {
+                      await completeSubmitFlow();
+                    } else {
+                      setSubmitStage("failed");
+                      setSubmitErrorCode("Resend failed too. Your answers stay locked; the server auto-closes this attempt at the deadline.");
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-lime-300 hover:bg-lime-200 text-black font-extrabold text-xs transition-all"
+                >
+                  Resend submission
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { completeSubmitFlow(); }}
+                  className="px-5 py-2.5 rounded-xl border border-white/10 bg-[#0c0d12] hover:bg-white/5 text-neutral-300 font-bold text-xs transition-all"
+                >
+                  Continue
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-neutral-400 text-sm mb-4 leading-relaxed">
+                {submittingReason || "Finalizing responses and securely synchronizing with examination servers..."}
+              </p>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-neutral-400 font-mono">
+                <span>
+                  {submitSeconds > 15
+                    ? `Still finalizing — ${submitSeconds}s elapsed. A retry panel appears if the server can't be reached.`
+                    : "Submitting exam securely before exiting fullscreen..."}
+                </span>
+            </div>
+            </>
+          )}
         </div>
       </main>
     );
@@ -1875,8 +2081,19 @@ export function ExamInterface({
         <header className="h-14 shrink-0 border-b border-white/10 bg-[#060607] px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30">
           {/* Left: Branding */}
           <div className="flex items-center gap-2.5">
+            <div className="relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center overflow-hidden shrink-0 rounded-lg bg-black/40 ring-1 ring-white/10">
+              <video
+                src="/aptix-logo-anim.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                poster="/logo-preview-frame.jpg"
+                className="w-full h-full object-cover mix-blend-screen scale-125 pointer-events-none"
+              />
+            </div>
             <span className="font-black text-[18px] tracking-tight text-white leading-none uppercase">
-              APTIX <span className="text-lime-300">✳</span>
+              APTIX
             </span>
             <span className="w-px h-4 bg-white/15 mx-1" />
             <span className="hidden sm:inline text-[11px] font-medium text-neutral-400">Assessment Platform</span>
@@ -1965,54 +2182,6 @@ export function ExamInterface({
                 {formatTime(timeLeft)}
               </span>
             </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div className="text-[11px] text-neutral-400 leading-tight">
-              <span className="block font-medium">Server-calibrated</span>
-              <span className="block text-neutral-500 font-mono text-[10px]">
-                ends {new Date(Date.now() + timeLeft * 1000).toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: "Asia/Kolkata" })} IST
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Telemetry Autosave Banner ─────────────────────── */}
-        <div className="max-w-7xl mx-auto w-full px-4 md:px-8 mb-6">
-          <div className="bg-[#0c0d12] border border-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-3">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-black uppercase tracking-wider border ${
-                syncStatus === "saved" && isOnline
-                  ? "bg-lime-400/10 border-lime-400/30 text-lime-300"
-                  : "bg-amber-400/10 border-amber-400/30 text-amber-300"
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === "saved" && isOnline ? "bg-lime-400" : "bg-amber-400 animate-pulse"}`} />
-                {syncStatus === "saved" && isOnline ? "SAVED TO CLOUD" : "SAVED LOCALLY"}
-              </span>
-              <span className="text-neutral-400 text-xs">
-                {lastSyncedAt ? (
-                  <>All answers synced · <span className="font-mono text-neutral-300">{lastSyncedAt.toLocaleTimeString("en-GB", { hour12: false, timeZone: "Asia/Kolkata" })} IST</span></>
-                ) : (
-                  <>Answer buffer ready · <span className="font-mono text-neutral-300">syncs on select</span></>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] font-mono">
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
-                syncStatus === "syncing"
-                  ? "bg-lime-400/15 text-lime-300 border-lime-400/40"
-                  : "bg-white/5 text-neutral-500 border-transparent"
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === "syncing" ? "bg-lime-400 animate-ping" : "bg-neutral-600"}`} />
-                SYNCING
-              </span>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
-                !isOnline
-                  ? "bg-amber-400/15 text-amber-300 border-amber-400/40"
-                  : "bg-white/5 text-neutral-500 border-transparent"
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${!isOnline ? "bg-amber-400 animate-pulse" : "bg-neutral-600"}`} />
-                OFFLINE
-              </span>
-            </div>
           </div>
         </div>
 
@@ -2053,11 +2222,24 @@ export function ExamInterface({
                 )}
 
                 <p className="text-xs text-neutral-400 font-medium mb-5">
-                  Select one answer.
+                  {(() => {
+                    const t = questions[currentQuestion].type || "MCQ_SINGLE";
+                    return t === "MCQ_MULTI" ? "Select all that apply." : "Select one answer.";
+                  })()}
                 </p>
 
                 {/* Question Options */}
-                <div className="space-y-3 mb-8">
+                <div
+                  className={`mb-8 ${(() => {
+                    const t = questions[currentQuestion].type || "MCQ_SINGLE";
+                    const isChoice = t === "MCQ_SINGLE" || t === "MCQ_MULTI";
+                    // Auto-grid: choice questions with an illustration flow into
+                    // two columns so the options stay visible without scrolling.
+                    const hasImage = Boolean(questions[currentQuestion].imageUrl);
+                    if (isChoice && hasImage) return "grid grid-cols-1 sm:grid-cols-2 gap-3 items-start";
+                    return "space-y-3";
+                  })()}`}
+                >
                   {(() => {
                     const q = questions[currentQuestion];
                     const qType = q.type || "MCQ_SINGLE";
@@ -2208,10 +2390,6 @@ export function ExamInterface({
                 </button>
               ) : <div />}
 
-              <p className="text-[11px] text-neutral-400 text-center hidden sm:block">
-                Responses save automatically when you select an option.
-              </p>
-
               {currentQuestion === questions.length - 1 ? (
                 <button
                   type="button"
@@ -2230,11 +2408,6 @@ export function ExamInterface({
                 </button>
               )}
             </div>
-
-            {/* Footnote reassurance */}
-            <p className="text-[10px] text-neutral-500 mt-4 leading-relaxed">
-              If disconnected, answers queue in memory + IndexedDB and retry on reconnect. Refresh restores your saved state; the server deadline does not change.
-            </p>
           </div>
 
           {/* Right Column: Question Navigator */}
@@ -2260,9 +2433,9 @@ export function ExamInterface({
 
                     let tileStyle = "bg-white/[0.02] border-white/10 text-neutral-400 hover:border-white/20";
                     if (isMrk) {
-                      tileStyle = "bg-[#2c1d42] border-purple-500/70 text-purple-200 font-bold";
+                      tileStyle = "bg-purple-600 border-purple-500 text-white font-bold hover:bg-purple-500";
                     } else if (isAns) {
-                      tileStyle = "bg-[#182618] border-lime-500/50 text-lime-400 font-bold";
+                      tileStyle = "bg-green-600 border-green-500 text-white font-bold hover:bg-green-500";
                     } else if (isVis) {
                       tileStyle = "bg-neutral-900 border-neutral-700 text-neutral-300";
                     }
@@ -2285,11 +2458,11 @@ export function ExamInterface({
                 {/* Legend below grid */}
                 <div className="mt-6 pt-5 border-t border-white/10 space-y-2 text-[11px] font-medium text-neutral-400">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-lime-400" />
+                    <span className="w-2 h-2 rounded-full bg-green-500" />
                     <span>Answered · {answeredCount + ansMarkedCount}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-purple-400" />
+                    <span className="w-2 h-2 rounded-full bg-purple-500" />
                     <span>Marked for review · {markedCount + ansMarkedCount}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2300,9 +2473,6 @@ export function ExamInterface({
                     <span className="w-2 h-2 rounded-full border border-neutral-600" />
                     <span>Unvisited · {Math.max(0, questions.length - (visited.size || 0))}</span>
                   </div>
-                  <p className="text-[10px] text-neutral-500 pt-1 leading-tight">
-                    Review markers can overlap answered or visited questions.
-                  </p>
                 </div>
               </div>
 
@@ -2315,9 +2485,6 @@ export function ExamInterface({
                 >
                   <span>→ Review & submit</span>
                 </button>
-                <p className="text-[10px] text-neutral-500 text-center mt-2 leading-tight">
-                  At the deadline, the server closes this attempt and enforces final submission.
-                </p>
               </div>
             </div>
           </aside>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { setSessionStatusAction } from "@/app/actions/session";
@@ -46,7 +46,32 @@ export function ScoreDistributionPanel({
   defaultId: string;
 }) {
   const [sel, setSel] = useState(defaultId);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const opt = options.find((o) => o.id === sel) || options[0];
+
+  // Click outside & Escape key listeners
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setDropdownOpen(false);
+    }
+
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [dropdownOpen]);
+
   if (!opt) return null;
   const max = Math.max(...opt.tierCounts, 1);
 
@@ -55,29 +80,80 @@ export function ScoreDistributionPanel({
       title="Score Distribution"
       className="h-full flex flex-col justify-between"
       action={
-        <div className="relative group">
-          <div className="bg-white text-black pl-3.5 pr-8 py-1.5 sm:py-2 rounded-xl flex items-center shadow-md select-none pointer-events-none transition-colors group-hover:bg-neutral-100">
-            <span className="text-left font-bold text-xs text-neutral-900 leading-tight max-w-[130px] sm:max-w-[160px] truncate block">
+        <div className="relative" ref={dropdownRef}>
+          {/* Custom Trigger Button */}
+          <button
+            type="button"
+            onClick={() => setDropdownOpen((prev) => !prev)}
+            className="bg-white text-black pl-3.5 pr-8 py-1.5 sm:py-2 rounded-xl flex items-center shadow-md select-none transition-all hover:bg-neutral-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/50"
+            aria-expanded={dropdownOpen}
+            aria-haspopup="listbox"
+          >
+            <span className="text-left font-bold text-xs text-neutral-900 leading-tight max-w-[130px] sm:max-w-[170px] truncate block">
               {opt.examTitle}
             </span>
-            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-900 pointer-events-none">
+            <div
+              className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-900 pointer-events-none transition-transform duration-200 ${
+                dropdownOpen ? "rotate-180" : ""
+              }`}
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
-          </div>
-          <select
-            value={opt.id}
-            onChange={(e) => setSel(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full text-black bg-white"
-            aria-label="Select Assessment"
-          >
-            {options.map((o) => (
-              <option key={o.id} value={o.id} className="text-black bg-white">
-                {o.examTitle}
-              </option>
-            ))}
-          </select>
+          </button>
+
+          {/* Custom Dark Popover Dropdown matching Aptix styling */}
+          {dropdownOpen && (
+            <div
+              className="absolute right-0 top-full mt-2 z-50 w-72 sm:w-80 rounded-2xl bg-[#0c0f17]/95 backdrop-blur-2xl border border-neutral-700/80 shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150"
+              role="listbox"
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800/80 text-[11px] font-bold text-neutral-400">
+                <span className="uppercase tracking-wider flex items-center gap-1.5 text-neutral-300">
+                  <svg className="w-3.5 h-3.5 text-lime-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                  </svg>
+                  Select Assessment
+                </span>
+                <span className="font-mono text-[10px] text-neutral-400">
+                  {options.length} Options
+                </span>
+              </div>
+
+              <div className="max-h-60 overflow-y-auto space-y-1 py-1 pr-1 custom-scrollbar">
+                {options.map((o) => {
+                  const isSelected = o.id === sel;
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => {
+                        setSel(o.id);
+                        setDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl transition flex items-center justify-between gap-2 cursor-pointer ${
+                        isSelected
+                          ? "bg-white/[0.12] border border-white/20 text-white font-bold"
+                          : "hover:bg-neutral-800/60 text-neutral-300 hover:text-white"
+                      }`}
+                      role="option"
+                      aria-selected={isSelected}
+                    >
+                      <span className="text-xs truncate block font-medium">
+                        {o.examTitle}
+                      </span>
+                      {isSelected && (
+                        <svg className="w-4 h-4 text-lime-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       }
     >
