@@ -13,6 +13,7 @@
     <img src="https://img.shields.io/badge/Upstash-Redis_RateLimiting-00E599?style=for-the-badge&logo=redis&logoColor=white" alt="Upstash Redis" />
     <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma&logoColor=white" alt="Prisma" />
     <img src="https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="TailwindCSS" />
+    <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
     <img src="https://img.shields.io/badge/Tests-105%20%2F%20105%20Passing-brightgreen?style=for-the-badge&logo=jest&logoColor=white" alt="Tests" />
   </p>
 
@@ -222,13 +223,36 @@ Aptix incorporates an automated critical-path invariant testing harness (`npm te
 
 ## 🏁 Quickstart & Local Setup
 
-### Prerequisites
+### Option A: 🐳 Docker & Docker Compose (Recommended)
+
+Run the entire Aptix platform—including PostgreSQL 16, automatic schema synchronization, and default owner bootstrap—with zero local Node/PostgreSQL installations:
+
+```bash
+# 1. Clone repository
+git clone https://github.com/yashsinghal1234/Aptix.git
+cd Aptix
+
+# 2. Build and start with Docker Compose
+docker compose up --build
+```
+*(Add `-d` to run in detached background mode)*
+
+* **Web Application**: [http://localhost:3000](http://localhost:3000)
+* **PostgreSQL Port**: `5432` (User: `postgres`, Password: `postgres`, DB: `aptix`)
+* **Default Owner Account**: `admin@aptix.com` / `SecureAdmin123!`
+* **Configuration**: Customize database credentials, JWT secrets, or Google SSO in `.env` (refer to `.env.docker.example`).
+
+---
+
+### Option B: 💻 Standard Node.js Setup
+
+#### Prerequisites
 * **Node.js**: `v18.17.0` or higher
 * **npm** or **pnpm**
 * **PostgreSQL Database** (e.g., [Neon Serverless](https://neon.tech))
 * **Upstash Redis Instance** (Free tier from [Upstash](https://upstash.com))
 
-### 1. Clone & Install
+#### 1. Clone & Install
 ```bash
 git clone https://github.com/yashsinghal1234/Aptix.git
 cd Aptix
@@ -284,6 +308,12 @@ Aptix is optimized for zero-configuration deployment on **Vercel**:
 3. Configure the environment variables (`DATABASE_URL`, `JWT_SECRET`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `CRON_SECRET`).
 4. Click **Deploy**.
 
+### Self-Hosted / Docker Deployment
+Deploy Aptix anywhere Docker is supported (AWS ECS/EC2, DigitalOcean, Hetzner, GCP Cloud Run, or on-premise servers):
+* **Multi-stage standalone build**: Only copies required production dependencies, yielding an ultralight container (~150MB).
+* **Enterprise security**: Runs as non-root user `nextjs:nodejs` with strict CSP headers and built-in health monitoring.
+* **Auto-healing & resilience**: Automated database synchronization (`docker-entrypoint.sh`) and container restart policies.
+
 ### Automated Sweeper (Cron Schedule)
 Aptix includes an automated exam deadline sweeper at `/api/cron/sweep` that marks overdue attempts as submitted.
 * **Vercel Cron**: Configured via `vercel.json` to trigger every minute.
@@ -311,6 +341,11 @@ aptix/
 │   ├── components/             # Reusable UI components & modals
 │   └── lib/                    # Security, auth, redis, db client, and utilities
 ├── tests/                      # 105 automated critical invariant test suites
+├── Dockerfile                  # Multi-stage production container build (Debian Slim + Next.js Standalone)
+├── docker-compose.yml          # Full-stack composition (Aptix + PostgreSQL 16)
+├── docker-entrypoint.sh        # Startup script for automated Prisma sync & seeding
+├── .dockerignore               # Container build context optimization
+├── .env.docker.example         # Docker environment template
 ├── .env.example                # Example environment configuration
 └── README.md                   # Platform documentation
 ```

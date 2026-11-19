@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aptix-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-aptix}
+    ports:
+      - "5432:5432"
+    volumes:
+      - aptix_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-aptix}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aptix-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aptix-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-aptix}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-4iU1OzS3r5MTL4nFVokLpxdOK+qarwFYY8xNDho2skufJfFK+2AXSw3QHmUg9ap6}
+      AUTH_SECRET: ${AUTH_SECRET:-HcnaTrYpEUbwa4Yxa0EW+tphWUNeBmYpEpfn57UabltUS15cmOF+rSl6PeKPR8+y}
+      CRON_SECRET: ${CRON_SECRET:-1SKdjkm18ZO/XegqX0k8eNlJNxaunXlNOfCcc0SVOW0ofiX+7yXPNm8AIFeZrSap}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SSO_ALLOWED_DOMAINS: ${SSO_ALLOWED_DOMAINS:-kiet.edu}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      OWNER_BOOTSTRAP_EMAILS: ${OWNER_BOOTSTRAP_EMAILS:-admin@aptix.com}
+      OWNER_INITIAL_PASSWORD: ${OWNER_INITIAL_PASSWORD:-SecureAdmin123!}
+      AUTO_SEED: ${AUTO_SEED:-true}
+    networks:
+      - aptix-network
+
+volumes:
+  aptix_pgdata:
+
+networks:
+  aptix-network:
+    driver: bridge
