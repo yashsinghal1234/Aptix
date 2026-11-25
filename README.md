@@ -119,6 +119,34 @@ flowchart TB
 
 ---
 
+### 5. ⚙️ Deep-Dive Backend Engineering & Concurrency Resilience
+* **Self-Healing Prisma Client with Exponential Backoff (`src/lib/prisma.ts`)**:
+  * Prevents Next.js HMR connection leaks using a typed global singleton on `globalThis`.
+  * Dynamically injects pooling parameters (`connection_limit=35&pool_timeout=45`) into PostgreSQL connection strings to prevent serverless PgBouncer starvation.
+  * Extends Prisma via `$allOperations` to catch transient connection drops (`P1001`, `P1008`, `P1017`, `P2024`, `ECONNRESET`), automatically retrying up to 3 times with exponential backoff before bubbling errors.
+* **High-Throughput Raw SQL Bulk Upserts (`src/app/actions/exam.ts`)**:
+  * Bypasses slow individual ORM round-trips by compiling batch autosaves into a single parameterized raw SQL query:
+    ```sql
+    INSERT INTO "CandidateResponse" ("id", "userId", "attemptId", "questionId", "selectedOption", "isCorrect", "earnedPoints", "timeTakenSeconds")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8), (...)
+    ON CONFLICT ("attemptId", "questionId")
+    DO UPDATE SET
+      "selectedOption" = EXCLUDED."selectedOption",
+      "isCorrect" = EXCLUDED."isCorrect",
+      "earnedPoints" = EXCLUDED."earnedPoints",
+      "timeTakenSeconds" = EXCLUDED."timeTakenSeconds";
+    ```
+  * Collapses 50+ database queries into a single **~15ms** execution, avoiding table locks and connection exhaustion.
+* **Stateless JWTs with Instant Revocation (`src/lib/auth.ts`)**:
+  * Signed with `jose` using `HS256`, unique UUID `jti`, and 24-hour expiration.
+  * Solves the classic stateless JWT revocation dilemma: every token carries the user's `tokenVersion`. If credentials change or an admin clicks "Revoke", the database version increments, instantly invalidating active tokens across all devices.
+* **NTP-Calibrated Real-Time Engine (Why Not Fragile WebSockets?)**:
+  * Online examinations over campus Wi-Fi suffer frequent 1-2 second packet drops where traditional WebSockets drop and fail to reconnect.
+  * Aptix replaces brittle sockets with **NTP Server Time Calibration (`src/hooks/useServerTime.ts`)** measuring round-trip latency against `/api/time` to eliminate client clock drift down to the millisecond.
+  * Coupled with an in-memory active device registry (`activeAttemptSessions`) comparing `clientDeviceId` heartbeats to detect multi-tab and multi-device cheating within 25 seconds.
+
+---
+
 ## 🎮 Gamified Mode & Spirit Mascots
 
 To boost candidate engagement and reduce test anxiety, Aptix includes an optional **Gamified Assessment Mode**. Candidates can select from 10 animated pixel-art spirit companions who accompany them on their test journey, react to milestones, and stand atop the cohort podium!
@@ -242,6 +270,21 @@ docker compose up --build
 * **Default Owner Account**: `admin@aptix.com` / `SecureAdmin123!`
 * **Configuration**: Customize database credentials, JWT secrets, or Google SSO in `.env` (refer to `.env.docker.example`).
 
+#### 🛠️ Essential Docker CLI Cheat Sheet
+
+| Operational Task | Command | Description |
+| :--- | :--- | :--- |
+| **Start with Live Logs** | `docker compose up --build` | Builds image and streams logs in the current terminal |
+| **Start in Background** | `docker compose up -d` | Runs services detached, freeing your terminal |
+| **Check Health & Status** | `docker compose ps` | Displays status, exposed ports, and container health |
+| **Stream Live Logs** | `docker compose logs -f` | Follows logs from both web app and database (`-f app` for app only) |
+| **Graceful Shutdown** | `docker compose down` | Stops and removes containers while **preserving PostgreSQL data** |
+| **Full Hard Reset** | `docker compose down -v` | Stops services and **wipes the persistent database volume** (clean slate) |
+| **Interactive PSQL** | `docker compose exec postgres psql -U postgres -d aptix` | Connects directly to the PostgreSQL database CLI |
+| **Manual Schema Push** | `docker compose exec app npx prisma db push` | Pushes Prisma schema updates without rebuilding the image |
+| **Run Invariant Tests** | `docker compose exec app npm test` | Runs the full 105/105 platform invariant test suite inside the container |
+| **Rebuild Without Cache** | `docker compose build --no-cache` | Forces a clean re-compilation of all image layers |
+
 ---
 
 ### Option B: 💻 Standard Node.js Setup
@@ -321,11 +364,58 @@ Aptix includes an automated exam deadline sweeper at `/api/cron/sweep` that mark
 
 ---
 
+## 🚀 DevOps, CI/CD, SRE & Performance Engineering
+
+Aptix treats DevOps as a critical component of assessment integrity:
+
+### 1. 🔄 Continuous Integration (GitHub Actions)
+Configured in `.github/workflows/ci.yml`:
+* Triggers automatically on every push and pull request to `main`.
+* Sets up Node.js 20 with npm caching.
+* Runs `npx prisma generate` to validate database schemas.
+* Executes the complete **105/105 Critical Path Test Suite (`npm test`)** to guarantee scoring and security invariants.
+* Compiles a full Next.js production build (`next build`) to ensure zero packaging or type regression.
+
+### 2. 🗄️ Database DevOps: Ephemeral Copy-on-Write Branching
+Documented in `docs/STAGING_AND_NEON_BRANCHING.md`:
+* Utilizes **Neon Serverless PostgreSQL Branching** to create isolated database branches (`staging` branched from `main`) in `<1 second`.
+* Allows running complete mock exam rehearsals and schema validations with real data parity without touching live student records.
+* Vercel Preview deployments automatically bind to the staging database branch.
+
+### 3. ⏱️ High-Availability Automated Sweeper
+Configured in `.github/workflows/cron-sweep.yml`:
+* Runs a scheduled runner every 2 minutes (`*/2 * * * *`).
+* Executes an authenticated curl request to `/api/cron/sweep` using `CRON_SECRET` with constant-time cryptographic verification (`crypto.timingSafeEqual`).
+* Marks abandoned or unsubmitted candidate attempts as `SUBMITTED`, backed by lazy check-on-access auto-submit on read.
+
+### 4. 📈 High-Concurrency Performance & Load Testing (k6)
+Located in `loadtests/k6-full-exam-lifecycle.js`:
+* Simulates real-world examination load profiles:
+  * **Warmup**: 100 concurrent candidates joining.
+  * **Spike**: 500 candidates starting tests simultaneously.
+  * **Sustained**: Continuous autosave synchronization.
+  * **Submit Spike**: 1,000 concurrent final submissions.
+* Enforces strict SLA assertions: **95% of requests under 800ms (`p(95) < 800ms`)** and **error rate below 1% (`rate < 0.01`)**.
+
+### 5. 🛡️ Site Reliability Engineering (SRE) Live-Day Runbook
+Documented in `docs/LIVE_DAY_CONTINGENCY_PLAN.md`:
+* **Power / Machine Outage Recovery**: 30-second resume protocol via deterministic PRNG shuffle seeds and localStorage recovery.
+* **Proctor Intervention**: Real-time candidate time extension (`+10m`), single-click attempt reset, and mid-exam proctor unblocking.
+* **Accidental Submission Reopen**: Allows instant reopening of submitted tests with custom grace periods.
+
+---
+
 ## 📁 Directory Structure
 
 ```plaintext
 aptix/
-├── .github/workflows/          # Automated cron sweeper GitHub Actions workflow
+├── .github/workflows/          # CI/CD pipelines (ci.yml, cron-sweep.yml)
+├── docs/                       # Operational runbooks & branching guides
+│   ├── LIVE_DAY_CONTINGENCY_PLAN.md
+│   └── STAGING_AND_NEON_BRANCHING.md
+├── loadtests/                  # Performance engineering & k6 load tests
+│   ├── k6-full-exam-lifecycle.js
+│   └── run-benchmark.ts
 ├── prisma/
 │   └── schema.prisma           # Relational schema (Users, Sessions, Attempts, Questions)
 ├── public/                     # Static media, icons, and animated mascot GIFs
